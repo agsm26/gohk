@@ -730,6 +730,7 @@
   .eta-route { display:inline-block; min-width:60px; font-weight:800; color:var(--red); font-size:1.4118rem; }
   .eta-dest { color:#222; font-size:1rem; }
   .eta-times { font-weight:800; font-size:1.5294rem; color:#111; display:block; margin-top:2px; }
+  .eta-arrive { display:block; flex-basis:100%; font-size:0.94rem; font-weight:700; color:var(--green); margin-top:2px; }
   .eta-fare { display:inline-block; margin-left:8px; padding:1px 7px; border-radius:12px;
               background:var(--red-tint); color:var(--red); font-weight:800; font-size:1rem; vertical-align:2px; }
   .eta-note { color:#444; font-size:1rem; }
@@ -1042,8 +1043,9 @@
 </div>
 
 <nav id="bottombar">
-  <button class="bnav on" data-nav="bus"><span class="bicon">🚌</span><span class="blabel"></span></button>
-  <button class="bnav"    data-nav="stop"><span class="bicon">🚏</span><span class="blabel"></span></button>
+  <!-- 車站 first: "which bus is coming to take me there" is the daily question. -->
+  <button class="bnav on" data-nav="stop"><span class="bicon">🚏</span><span class="blabel"></span></button>
+  <button class="bnav"    data-nav="bus"><span class="bicon">🚌</span><span class="blabel"></span></button>
   <button class="bnav"    data-nav="mtr"><span class="bicon">🚇</span><span class="blabel"></span></button>
   <button class="bnav"    data-nav="fav"><span class="bicon">⭐</span><span class="blabel"></span></button>
   <button class="bnav"    data-nav="set"><span class="bicon">⚙️</span><span class="blabel"></span></button>
@@ -1101,10 +1103,11 @@ const TEXT = {
     stopTapRoute:'Tap a route to see all its stops. Tap ☆ to keep that bus in SAVED.',
     favStops:'MY STOPS', noStopsLong:'No stops saved. On the STOPS tab, open a stop and tap ☆ Save stop.',
     favStopOpen:'Show buses here', stopSavedMsg:'Saved {s}', stopRemovedMsg:'Removed {s}',
-    stopFull:'Saved stops are full (8) — remove one first.',
+    stopFull:'Saved stops are full (5) — remove one first.',
     stopDestSaved:'Places you go', stopDestStar:'Save this place', stopDestUnstar:'Saved — tap to remove',
     stopBays:'{n} bays',
-    stopDestFull:'Saved places are full (8) — remove one first.',
+    stopDestFull:'Saved places are full (5) — remove one first.',
+    etaArrive:'about {n} stops · reach {d} around {t}',
     stopDestSavedMsg:'Saved "{d}" to places you go.', stopDestRemovedMsg:'Removed "{d}".',
     stopDestPh:'Going to… (type a place)',
     stopDestNeedLoc:'Allow location to find which nearby stops have a direct bus.',
@@ -1189,7 +1192,7 @@ const TEXT = {
     rsOneStopAway:'1 stop from your stop', rsBefore:'before your stop',
     rsCheckingEta:'checking…', rsNoEta:'no times listed',
     rsEtaFailed:'times unavailable', rsClose:'Close the stop list',
-    rsBoardAuto:'● GETTING ON HERE (you are nearby)', rsAlight:'▼ GETTING OFF HERE',
+    rsBoardAuto:'● GETTING ON HERE (you are nearby)', rsBoardNear:'● Nearest stop to you (about {m} m)', rsAlight:'▼ GETTING OFF HERE',
     rsAfterAlight:'after your stop', rsStops:'{n} stops', rsOneStop:'1 stop',
     rsRemaining:'{n} stops to go', rsNextStop:'Next stop — get off!', rsArrived:'This is your stop',
     rsNearNow:'You are near {s}', rsNotOnRoute:'You are not near this route yet',
@@ -1268,10 +1271,11 @@ const TEXT = {
     stopTapRoute:'按路線可查看該線所有車站。按 ☆ 可把該班巴士加入「收藏」。',
     favStops:'常用車站', noStopsLong:'尚未收藏車站。在「車站」打開車站後，按「☆ 收藏此站」。',
     favStopOpen:'查看此站班次', stopSavedMsg:'已收藏 {s}', stopRemovedMsg:'已移除 {s}',
-    stopFull:'常用車站已滿（8 個），請先移除一個。',
+    stopFull:'常用車站已滿（5 個），請先移除一個。',
     stopDestSaved:'常去的目的地', stopDestStar:'收藏此目的地', stopDestUnstar:'已收藏，按此移除',
     stopBays:'{n} 個站位',
-    stopDestFull:'常去目的地已滿（8 個），請先移除一個。',
+    stopDestFull:'常去目的地已滿（5 個），請先移除一個。',
+    etaArrive:'約 {n} 個站，預計 {t} 到 {d}',
     stopDestSavedMsg:'已收藏目的地「{d}」。', stopDestRemovedMsg:'已移除「{d}」。',
     stopDestPh:'我要去…（輸入目的地）',
     stopDestNeedLoc:'允許使用位置，才可找出附近哪個站有直達巴士。',
@@ -1356,7 +1360,7 @@ const TEXT = {
     rsOneStopAway:'距離上車站 1 個站', rsBefore:'在上車站之前',
     rsCheckingEta:'查詢中…', rsNoEta:'沒有班次資料',
     rsEtaFailed:'無法取得班次', rsClose:'關閉車站列表',
-    rsBoardAuto:'● 在此上車（你在附近）', rsAlight:'▼ 在此下車',
+    rsBoardAuto:'● 在此上車（你在附近）', rsBoardNear:'● 最近的車站（約 {m} 米）', rsAlight:'▼ 在此下車',
     rsAfterAlight:'在下車站之後', rsStops:'{n} 個站', rsOneStop:'1 個站',
     rsRemaining:'還有 {n} 個站', rsNextStop:'下一站下車！', rsArrived:'已到達下車站',
     rsNearNow:'你正接近 {s}', rsNotOnRoute:'你尚未接近此路線',
@@ -1604,6 +1608,8 @@ loadOnce('kmb-stops', 'https://data.etabus.gov.hk/v1/transport/kmb/stop',
     addStationsToSearch();           // ...so the stations have to go back in
     drawStops();
     status.textContent = T('readyZoom');
+    // The app opens on the 車站 tab, usually before this list has arrived.
+    if (typeof activeMode !== 'undefined' && activeMode === 'stop' && typeof renderStopView === 'function') renderStopView();
   });
 loadOnce('kmb-routes', 'https://data.etabus.gov.hk/v1/transport/kmb/route/', data => { allRoutes = data; });
 loadOnce('ctb-routes', CTB_BASE + '/route/CTB', data => { ctbRoutes = data; });
@@ -2194,7 +2200,7 @@ let departures = [];
 
 // SAVED STOPS: a pole, kept whole (id, both names, position) so the tab can
 // open it without looking anything up.
-const MAX_STOPS = 8;
+const MAX_STOPS = 5;
 let stopFavs = [];
 function loadStopFavs() {
   try { stopFavs = JSON.parse(localStorage.getItem('hkfast-stops') || '[]'); } catch (e) { stopFavs = []; }
@@ -2208,7 +2214,7 @@ function isSavedStop(stopId) { return stopFavs.some(f => f.stop === stopId); }
 // Places people go, for the 車站 tab's 我要去 box — names, not poles, because
 // "屯門轉車站" is the thing a rider knows; which pole they leave from depends
 // on where they are standing today. Max 8, newest first.
-const MAX_DESTS = 8;
+const MAX_DESTS = 5;
 let stopDests = [];
 try { stopDests = JSON.parse(localStorage.getItem('hkfast-stopdests') || '[]').filter(d => typeof d === 'string'); } catch (e) { stopDests = []; }
 function saveStopDests() { try { localStorage.setItem('hkfast-stopdests', JSON.stringify(stopDests)); } catch (e) {} }
@@ -5755,7 +5761,7 @@ async function loadKmbArrivals(stop, marker) {
   }
 }
 
-function formatArrivals(entries) {
+function formatArrivals(entries, opts) {
   if (!entries || entries.length === 0) return '<div class="eta-note">' + T('noBusesListed') + '</div>';
   const now = Date.now(), byRoute = new Map();
 
@@ -5802,11 +5808,20 @@ function formatArrivals(entries) {
         ' title="' + T('saveDeparture') + '">' + (saved ? '★' : '☆') + '</button>'
       : '';
 
+    // With a place set on the 車站 tab: how many stops, and roughly when the
+    // first bus gets there. MINUTES_PER_STOP is the planner's own rough figure.
+    let arriveTag = '';
+    const stopsAway = opts && opts.arrive ? opts.arrive.get(routeKeyForRow(sample)) : undefined;
+    if (stopsAway !== undefined) {
+      const at = new Date(now + (group.minutes[0] + stopsAway * MINUTES_PER_STOP) * 60000);
+      const hhmm = at.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+      arriveTag = '<span class="eta-arrive">🏁 ' + T('etaArrive').replace('{n}', stopsAway).replace('{t}', hhmm).replace('{d}', esc(opts.destName || '')) + '</span>';
+    }
     html += '<div class="eta-row">' + star + '<span class="eta-route">' + route + '</span>' +
             '<span class="eta-dest">' + dest + '</span>' + fareTag +
             '<span class="eta-times">' +
             group.minutes.slice(0,3).map(m => m === 0 ? T('due') : m + T('min')).join(', ') +
-            '</span></div>';
+            '</span>' + arriveTag + '</div>';
   }
   return html;
 }
@@ -6440,7 +6455,10 @@ function stopSetStop(stop) {
 
 // One tap on a saved stop is this screen with the stop already chosen.
 function stopOpenSaved(sf) {
-  stopState = Object.assign(freshStopState(), { locateTried: true, stop: sf, group: poleGroup(sf) });
+  // The place typed above stays with you: it becomes the 往… filter here.
+  const dest = String(stopState.destQuery || '').trim();
+  stopState = Object.assign(freshStopState(), { locateTried: true, stop: sf, group: poleGroup(sf),
+                                                destQuery: dest, destFilter: dest, indexing: stopState.indexing });
   if (activeMode !== 'stop') { showMode('stop'); return; }
   renderStopView(); stopLoadRows();
 }
@@ -6543,6 +6561,13 @@ function renderStopView() {
           stopDests.map(d => '<button class="destchip' + (d === destTyped ? ' on' : '') + '" data-stop-act="dest" data-name="' + esc(d) + '">' + (d === destTyped ? '★ ' : '') + esc(d) + '</button>').join('') +
           '</div>';
       }
+      // Saved poles as one-tap pills, same shape as the saved places above.
+      const savedShown = stopFavs.filter(keep).slice(0, MAX_STOPS);
+      if (savedShown.length) {
+        html += '<div class="mtrsub">' + T('stopSavedPicks') + '</div><div class="destchips">' +
+          savedShown.map(f => '<button class="destchip" data-stop-act="fav" data-index="' + stopFavs.indexOf(f) + '">📍 ' + esc(stopName(f)) +
+            (poleCodeOf(f) ? ' <small>' + esc(poleCodeOf(f)) + '</small>' : '') + '</button>').join('') + '</div>';
+      }
       if (st.destQuery && destIds && !destIds.size)
         html += '<div class="favempty">' + T('stopDestNoName').replace('{d}', esc(st.destQuery)) + '</div>';
       if (filtering) html += '<div class="rshint">' + T('stopShowingTo').replace('{d}', esc(st.destQuery)) + '</div>';
@@ -6553,12 +6578,6 @@ function renderStopView() {
           html += '<div class="mtrsub">' + T('stopNearby') + '</div><div class="mtrpick">' + near.map(n => poleButton(n.group, n.metres)).join('') + '</div>';
         else
           html += '<div class="favempty">' + (filtering ? T('stopNearNoneTo').replace('{d}', esc(st.destQuery)) : T('stopNoneNear')) + '</div>';
-      }
-      const savedShown = stopFavs.filter(keep);
-      if (savedShown.length) {
-        html += '<div class="mtrsub">' + T('stopSavedPicks') + '</div><div class="mtrpick">' +
-          savedShown.map(f => '<button data-stop-act="fav" data-index="' + stopFavs.indexOf(f) + '"><span class="pickmain">★ ' + esc(stopName(f)) +
-            poleRoutesLine(f.stop, 4, filtering ? destIds : null) + '</span></button>').join('') + '</div>';
       }
       html += '<div class="mtrsub">' + T('stopSearchPh').replace('…', '') + '</div>' +
               '<div class="frow"><input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off"></div>' +
@@ -6616,18 +6635,22 @@ function stopRowsHtml() {
   }
   if (st.rows) {
     let rows = st.rows;
+    let arrive = null;
     if (destIds) {
+      arrive = new Map();                       // route key → stops from here to the place
       rows = rows.filter(row => {
         const key = routeKeyForRow(row);
         const seq = Number(row.seq) || (routesServing(row.stop || stop.stop).find(r => r.key === key) || {}).seq || 0;
-        return !!routeReaches(key, seq, destIds);
+        const reach = routeReaches(key, seq, destIds);
+        if (reach) arrive.set(key, reach.stopsAway);
+        return !!reach;
       });
       if (!rows.length) return '<div class="favempty">' + T('stopFilterNone').replace('{d}', esc(st.destFilter)) + '</div>';
       html += '<div class="rshint">' + T('stopFilterOn').replace('{d}', esc(st.destFilter)) + '</div>';
     } else {
       html += '<div class="rshint">' + T('stopTapRoute') + '</div>';
     }
-    html += formatArrivals(rows);
+    html += formatArrivals(rows, arrive ? { arrive, destName: st.destFilter } : null);
     if (stamp) html += '<div class="mtrupdated">' + T('updatedAt').replace('{t}', stamp) + '</div>';
   }
   return html;
@@ -6710,7 +6733,7 @@ document.getElementById('stopview').addEventListener('click', event => {
       renderStopView();
       break;
     }
-    case 'fav':     stopOpenSaved(stopFavs[Number(el.dataset.index)]); if (stopState.destQuery) { stopState.destFilter = stopState.destQuery; renderStopView(); } break;
+    case 'fav':     stopOpenSaved(stopFavs[Number(el.dataset.index)]); break;
     case 'star': {
       const result = toggleStopFav(stopState.stop);
       if (result === null) { status.textContent = T('stopFull'); break; }
@@ -7483,9 +7506,13 @@ function renderRouteStops(context, stops) {
   // certainly getting on there. Mark it, and say why it was marked.
   if (routeStopsState.boardAt === null && herePoint) {
     const near = nearestRouteStop(herePoint);
-    if (near && near.metres <= RS_AUTO_BOARD_M) {
+    // Within RS_AUTO_BOARD_M you are at the stop. Further out, up to a real
+    // walk, it is still "your nearest stop on this route" — marked, scrolled
+    // to, and labelled with the distance so nobody thinks they are there.
+    if (near && near.metres <= RS_NEAREST_MARK_M) {
       routeStopsState.boardAt = near.index;
       routeStopsState.autoBoard = true;
+      routeStopsState.autoMetres = near.metres;
     }
   }
 
@@ -7537,7 +7564,9 @@ function paintStopCounts() {
 
     if (index === board) {
       note.className = 'rsboardtag';
-      note.textContent = T(routeStopsState.autoBoard ? 'rsBoardAuto' : 'rsBoarding');
+      const st = routeStopsState;
+      note.textContent = !st.autoBoard ? T('rsBoarding')
+        : (st.autoMetres > RS_AUTO_BOARD_M ? T('rsBoardNear').replace('{m}', Math.round(st.autoMetres)) : T('rsBoardAuto'));
     } else if (alight !== null && index === alight) {
       note.className = 'rsalighttag';
       note.textContent = T('rsAlight');
@@ -7558,6 +7587,7 @@ function paintStopCounts() {
 }
 
 const RS_AUTO_BOARD_M = 250;    // "standing at the stop", give or take a road
+const RS_NEAREST_MARK_M = 1500; // beyond this the nearest stop is not "yours"
 const RS_RIDE_NEAR_M  = 600;    // a moving bus is "at" the nearest stop
 
 function rsStopName(index) {
@@ -7858,6 +7888,8 @@ function resetTrip() {
 renderWeatherBar();
 loadWeather();
 setInterval(loadWeather, WEATHER_REFRESH_MS);
+// Open on 車站. The trip planner is one tap away under 巴士.
+showMode('stop');
 </script>
 </body>
 </html>
