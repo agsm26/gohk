@@ -372,6 +372,23 @@
   .mtralert { border:2px solid var(--amber); background:var(--amber-tint); color:var(--amber);
               border-radius:10px; padding:10px 12px; font-weight:700; line-height:1.4; margin:8px 0; }
 
+  /* GETTING OFF. The second mark, in the destination colour, and the ride
+     banner that counts down from where the phone actually is. */
+  .rsrow.alight { background:var(--red-tint); border-radius:8px; }
+  .rsrow.alight .rsnum { background:var(--red); color:white; }
+  .rsalighttag { font-size:0.94rem; font-weight:800; color:var(--red); margin-top:2px; }
+  .rsride { border:2px solid var(--navy); border-radius:12px; padding:12px 14px;
+            margin-bottom:10px; background:var(--navy-tint); }
+  .rsridehead { font-size:1rem; font-weight:800; color:var(--ink-2); overflow-wrap:anywhere; }
+  .rsridebig { font-size:1.88rem; font-weight:800; color:var(--navy); margin-top:4px; line-height:1.15; }
+  .rsridebig.soon { color:var(--red); }
+  .rsridebig.arrived { color:var(--green); }
+  .rsridesub { font-size:0.94rem; font-weight:700; color:var(--ink-3); margin-top:4px; }
+  /* A saved bus on the bus tab opens its route — the card says so. */
+  .livecard.tap { cursor:pointer; }
+  .livecard.tap:active { filter:brightness(.95); }
+  .livefoot { font-size:0.94rem; font-weight:800; color:var(--blue); margin-top:6px; }
+
   /* THE TOAST. Fixed under the bars, so it is in view whatever the sheet is
      doing. Dark on light, not a coloured pill: it carries errors, "ready",
      "saved" — all of them — and one plain style keeps it readable for all. */
@@ -1112,11 +1129,19 @@ const TEXT = {
     someDataFailed:'Some bus data could not load:',
     loadingNetwork:'Loading the bus network… first time only, then it is saved', lookingFor:'Looking for buses…',
     stopsOnRoute:'{n} stops on this route', cleared:'Cleared.',
-    rsHint:'Tap a stop to mark where you get on — the stops after it are then counted for you. Tap ☆ to keep a stop and see its live times in FAVOURITES.',
+    rsHint:'Tap where you get on, then tap where you get off — the app counts the stops down as you ride. Tap ☆ to keep a stop in FAVOURITES with live times.',
     rsBoarding:'● GETTING ON HERE', rsStopsAway:'{n} stops from your stop',
     rsOneStopAway:'1 stop from your stop', rsBefore:'before your stop',
     rsCheckingEta:'checking…', rsNoEta:'no times listed',
     rsEtaFailed:'times unavailable', rsClose:'Close the stop list',
+    rsBoardAuto:'● GETTING ON HERE (you are nearby)', rsAlight:'▼ GETTING OFF HERE',
+    rsAfterAlight:'after your stop', rsStops:'{n} stops', rsOneStop:'1 stop',
+    rsRemaining:'{n} stops to go', rsNextStop:'Next stop — get off!', rsArrived:'This is your stop',
+    rsNearNow:'You are near {s}', rsNotOnRoute:'You are not near this route yet',
+    rsNeedLocation:'Allow location to count down as you ride',
+    favTrains:'MY TRAINS', noTrainsLong:'No trains saved. On the MTR tab, choose a station and direction, then tap ☆.',
+    favTrainOpen:'Show next trains', mtrSavedTrains:'Your saved trains',
+    trainSaved:'Saved {s}', trainRemoved:'Removed {s}', liveOpenRoute:'Show all stops ›',
     findingYou:'Finding you…', tapMapNow:'Now tap anywhere on the map to set your',
     mergedStops:'{n} stop codes here',
     fromStart:'from your start', fromDest:'from your destination',
@@ -1251,11 +1276,19 @@ const TEXT = {
     someDataFailed:'部分巴士資料未能載入：',
     loadingNetwork:'正在載入巴士路線網絡…只需一次，之後會自動儲存', lookingFor:'正在搜尋巴士…',
     stopsOnRoute:'此路線共 {n} 個站', cleared:'已清除。',
-    rsHint:'按車站設定上車位置，之後的車站便會自動計算距離。按 ☆ 收藏車站，可在「收藏」查看實時班次。',
+    rsHint:'先按上車站，再按下車站，乘車時會自動倒數剩餘車站。按 ☆ 收藏車站，可在「收藏」查看實時班次。',
     rsBoarding:'● 在此上車', rsStopsAway:'距離上車站 {n} 個站',
     rsOneStopAway:'距離上車站 1 個站', rsBefore:'在上車站之前',
     rsCheckingEta:'查詢中…', rsNoEta:'沒有班次資料',
     rsEtaFailed:'無法取得班次', rsClose:'關閉車站列表',
+    rsBoardAuto:'● 在此上車（你在附近）', rsAlight:'▼ 在此下車',
+    rsAfterAlight:'在下車站之後', rsStops:'{n} 個站', rsOneStop:'1 個站',
+    rsRemaining:'還有 {n} 個站', rsNextStop:'下一站下車！', rsArrived:'已到達下車站',
+    rsNearNow:'你正接近 {s}', rsNotOnRoute:'你尚未接近此路線',
+    rsNeedLocation:'允許使用位置，乘車時會自動倒數',
+    favTrains:'我的列車', noTrainsLong:'尚未收藏列車。在「港鐵」選好車站及方向後，按 ☆ 收藏。',
+    favTrainOpen:'查看下班列車', mtrSavedTrains:'你收藏的列車',
+    trainSaved:'已收藏 {s}', trainRemoved:'已移除 {s}', liveOpenRoute:'查看所有車站 ›',
     findingYou:'正在定位…', tapMapNow:'請在地圖上點選以設定',
     mergedStops:'此處有 {n} 個站牌',
     fromStart:'距離起點', fromDest:'距離目的地',
@@ -2084,6 +2117,32 @@ const GEO_CHOICE = 'hkfast-geo';
 const MAX_DEPARTURES = 6;
 let departures = [];
 
+// SAVED TRAINS: a station, a line and a direction — the three things the MTR
+// screen asks for — kept so the next time is one tap.
+const MAX_TRAINS = 6;
+let trainFavs = [];
+function loadTrainFavs() {
+  try { trainFavs = JSON.parse(localStorage.getItem('hkfast-trains') || '[]'); } catch (e) { trainFavs = []; }
+}
+function saveTrainFavs() {
+  try { localStorage.setItem('hkfast-trains', JSON.stringify(trainFavs)); } catch (e) {}
+  if (typeof paintBottomBar === 'function') paintBottomBar();
+}
+function trainFavKey(t) { return t.station + '|' + t.line + '|' + t.dir; }
+function isSavedTrain(station, line, dir) {
+  const key = station + '|' + line + '|' + dir;
+  return trainFavs.some(t => trainFavKey(t) === key);
+}
+function toggleTrainFav(entry) {
+  const key = trainFavKey(entry);
+  const at = trainFavs.findIndex(t => trainFavKey(t) === key);
+  if (at >= 0) { trainFavs.splice(at, 1); saveTrainFavs(); return false; }
+  trainFavs.unshift(entry);
+  if (trainFavs.length > MAX_TRAINS) trainFavs.pop();
+  saveTrainFavs();
+  return true;
+}
+
 // Attribute values are built into an HTML string, so anything from the feed
 // has to be neutralised before it goes in.
 function esc(text) {
@@ -2333,9 +2392,10 @@ function applyLanguage() {
   // rebuilt rather than patched — every string in it comes from T().
   if (routeStopsState) {
     const keep = { context: routeStopsState.context, stops: routeStopsState.stops,
-                   boardAt: routeStopsState.boardAt };
+                   boardAt: routeStopsState.boardAt, alightAt: routeStopsState.alightAt,
+                   autoBoard: routeStopsState.autoBoard };
     renderRouteStops(keep.context, keep.stops);
-    if (routeStopsState) { routeStopsState.boardAt = keep.boardAt; paintStopCounts(); }
+    if (routeStopsState) { Object.assign(routeStopsState, { boardAt: keep.boardAt, alightAt: keep.alightAt, autoBoard: keep.autoBoard }); paintStopCounts(); syncRideWatch(); }
   }
 
   document.querySelector('.flabel.start').innerHTML = '● ' + T('start');
@@ -2441,6 +2501,7 @@ document.getElementById('end-save').addEventListener('click', () => {
 
 loadFavourites();
 loadDepartures();
+loadTrainFavs();
 applyLanguage();
 loadMtr();      // stations join the search list straight away
 askAboutLocation();   // ask in our own words before the browser asks in its
@@ -4149,7 +4210,7 @@ function paintBottomBar() {
   const labels = { bus: withCount(T('tabBus'), busPicks.length),
                    mtr: withCount(T('tabMtr'), railPicks.length),
                    fav: T('tabFav') + ' (' +
-                        (favStart.length + favEnd.length + departures.length) + ')',
+                        (favStart.length + favEnd.length + departures.length + trainFavs.length) + ')',
                    set: T('tabSet') };
 
   for (const button of bar.querySelectorAll('.bnav')) {
@@ -4508,13 +4569,23 @@ function appendHTML(parent, html) {
   return box;
 }
 
-function liveCard(title, subtitle, id) {
-  return '<div class="livecard">' +
+function liveCard(title, subtitle, id, attrs, footer) {
+  return '<div class="livecard' + (attrs ? ' tap' : '') + '"' + (attrs || '') + '>' +
            '<div class="livetitle">' + esc(title) + '</div>' +
            (subtitle ? '<div class="livesub">' + esc(subtitle) + '</div>' : '') +
            '<div class="livetimes" id="' + id + '">…</div>' +
+           (footer ? '<div class="livefoot">' + footer + '</div>' : '') +
          '</div>';
 }
+
+// The saved-bus cards are rebuilt on every redraw, so one listener on the
+// strip rather than one per card.
+document.getElementById('livestrip').addEventListener('click', event => {
+  const card = event.target.closest('.livecard[data-dep]');
+  if (!card) return;
+  const dep = departures[Number(card.dataset.dep)];
+  if (dep) openSavedDepartureRoute(dep);
+});
 
 function renderLiveStrip(mode) {
   const strip = document.getElementById('livestrip');
@@ -4535,7 +4606,8 @@ function renderLiveStrip(mode) {
         const stopName = lang === 'zh' ? (dep.stopName_tc || dep.stopName_en) : dep.stopName_en;
         const dest = lang === 'zh' ? (dep.dest_tc || dep.dest_en) : dep.dest_en;
         return liveCard(dep.route + '  →  ' + (dest || ''),
-                        plainStopName(stopName), 'live-bus-' + i);
+                        plainStopName(stopName), 'live-bus-' + i,
+                        ' data-dep="' + i + '" role="button"', '🚌 ' + T('liveOpenRoute'));
       }).join('');
     departures.forEach((dep, i) => loadLiveBus(dep, 'live-bus-' + i));
     renderNearbyBuses(strip);
@@ -4913,7 +4985,6 @@ function renderFavouriteList() {
 
   if (departures.length === 0) {
     appendHTML(deps, '<div class="favempty">' + T('noDepsLong') + '</div>');
-    return;
   }
 
   departures.forEach((dep, index) => {
@@ -4951,6 +5022,38 @@ function renderFavouriteList() {
   });
 
   departures.forEach((dep, index) => loadDepartureEta(dep, index));
+
+  // ---- SAVED TRAINS ----
+  heading('🚇', T('favTrains'), trainFavs.length + '/' + MAX_TRAINS);
+  const trains = document.createElement('div');
+  view.appendChild(trains);
+  if (trainFavs.length === 0) {
+    appendHTML(trains, '<div class="favempty">' + T('noTrainsLong') + '</div>');
+  } else if (!mtrData) {
+    appendHTML(trains, '<div class="favempty">' + T('loading') + '</div>');
+  } else {
+    trainFavs.forEach((t, index) => {
+      const row = document.createElement('div');
+      row.className = 'deprow';
+      row.style.borderLeft = '8px solid ' + (MTR_LINE_COLOURS[t.line] || '#999');
+      row.innerHTML =
+        '<div class="depmain"><span class="deproute">' + esc(stationName(t.station)) + '</span>' +
+          '<span class="depdest">' + esc(railLineName(t.line)) + ' · ' + T('towards') + ' ' + esc(stationName(t.dest)) + '</span></div>' +
+        '<div class="depeta" id="trainfav-eta-' + index + '">…</div>';
+      const del = document.createElement('button');
+      del.className = 'go-del depdel'; del.textContent = '✕';
+      del.setAttribute('aria-label', 'Remove ' + stationName(t.station));
+      del.addEventListener('click', () => { trainFavs.splice(index, 1); saveTrainFavs(); renderFavouriteList(); });
+      row.appendChild(del);
+      const open = document.createElement('button');
+      open.className = 'depopen';
+      open.textContent = '🚇 ' + T('favTrainOpen');
+      open.addEventListener('click', () => mtrOpenSaved(t));
+      row.appendChild(open);
+      trains.appendChild(row);
+    });
+    trainFavs.forEach((t, index) => loadTrainFavEta(t, index));
+  }
 }
 
 // Open the whole line for a saved bus. The saved entry already knows the
@@ -6031,6 +6134,40 @@ function mtrOrderFor(line, station, alsoWith) {
       || variants.find(v => v.includes(station)) || variants[0] || [];
 }
 
+// A saved train is the MTR screen with its three answers already given.
+function mtrOpenSaved(t) {
+  if (!t) return;
+  mtrState = Object.assign(freshMtrState(), { locateTried: true, station: t.station, line: t.line, dir: t.dir });
+  if (activeMode !== 'mtr') { showMode('mtr'); return; }   // openMtrView keeps a preset station
+  renderMtrView(); mtrLoadBlock();
+}
+
+// The feed for one line at one station, both directions, or null.
+async function fetchTrainBlock(line, station) {
+  const url = MTR_ETA_URL + '?line=' + encodeURIComponent(line) +
+              '&sta=' + encodeURIComponent(station) + '&lang=' + (lang === 'zh' ? 'TC' : 'EN');
+  const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  if (!response.ok) throw new Error('server said ' + response.status);
+  const data = await response.json();
+  if (data.status === 0) return { alert: data.message || T('trainAlert') };
+  return (data.data || {})[line + '-' + station] || {};
+}
+
+async function loadTrainFavEta(t, index) {
+  const cell = document.getElementById('trainfav-eta-' + index);
+  if (!cell) return;
+  try {
+    const block = await fetchTrainBlock(t.line, t.station);
+    if (!document.getElementById('trainfav-eta-' + index)) return;
+    if (block.alert) { cell.textContent = block.alert; cell.classList.add('quiet'); return; }
+    const mins = (block[t.dir] || []).filter(x => x.valid !== 'N').map(x => Number(x.ttnt))
+      .filter(n => isFinite(n) && n >= 0).slice(0, 3);
+    if (!mins.length) { cell.textContent = T('noneDue'); cell.classList.add('quiet'); return; }
+    cell.textContent = mins.map(n => n === 0 ? T('due') : n + T('min')).join(' · ');
+    cell.classList.remove('quiet');
+  } catch (error) { cell.textContent = T('etaOffline'); cell.classList.add('quiet'); }
+}
+
 function openMtrView() {
   const panel = document.getElementById('panel');
   const view  = document.getElementById('mtrview');
@@ -6190,6 +6327,12 @@ function renderMtrView() {
         html += '<div class="mtrsub">' + T('mtrSaved') + '</div><div class="mtrpick">' +
           saved.map(sv => '<button data-mtr-station="' + sv.code + '">⭐ ' + esc(stationName(sv.code)) + '</button>').join('') + '</div>';
       }
+      if (trainFavs.length) {
+        html += '<div class="mtrsub">' + T('mtrSavedTrains') + '</div><div class="mtrpick">' +
+          trainFavs.map((t, i) => '<button data-mtr-act="train" data-index="' + i + '" style="border-left:12px solid ' +
+            (MTR_LINE_COLOURS[t.line] || '#999') + '">★ ' + esc(stationName(t.station)) + ' · ' +
+            T('towards') + ' ' + esc(stationName(t.dest)) + '</button>').join('') + '</div>';
+      }
       html += '<div class="mtrsub">' + T('mtrSearchPh').replace('…', '') + '</div>' +
               '<div class="frow"><input id="mtr-search" type="text" placeholder="' + esc(T('mtrSearchPh')) + '" autocomplete="off"></div>' +
               '<div class="mtrpick" id="mtr-search-results"></div>';
@@ -6237,8 +6380,12 @@ function renderMtrView() {
   // ---- 4. NEXT TRAINS HERE ----
   const trains = mtrTrains(st.dir).slice(0, 4);
   const stamp = new Date(st.fetchedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const headDest = trains[0] ? trains[0].dest : dirs.find(d => d.key === st.dir).dest;
+  const saved = isSavedTrain(st.station, st.line, st.dir);
   html += '<div class="mtrhead"><div class="mtrsub">' + T('mtrNextTrains') + ' · ' + T('towards') + ' ' +
-          esc(stationName(trains[0] ? trains[0].dest : dirs.find(d => d.key === st.dir).dest)) + '</div>' +
+          esc(stationName(headDest)) + '</div>' +
+          '<button class="rsstar' + (saved ? ' on' : '') + '" data-mtr-act="star" data-dest="' + headDest +
+          '" aria-label="' + T('favTrains') + '">' + (saved ? '★' : '☆') + '</button>' +
           '<button class="refreshbtn" data-mtr-act="refresh"' + (st.loading ? ' disabled' : '') + '>' +
           T(st.loading ? 'refreshing' : 'refresh') + '</button></div>';
   html += trains.map((t, i) => '<div class="mtrtrain' + (i === 0 ? ' hero' : '') + '">' +
@@ -6322,6 +6469,14 @@ document.getElementById('mtrview').addEventListener('click', event => {
     case 'geo-yes': rememberGeoChoice('yes'); mtrLocate(); break;
     case 'geo-no':  rememberGeoChoice('no'); renderMtrView(); break;
     case 'trips':   showRailResults(); break;
+    case 'star': {
+      const entry = { station: mtrState.station, line: mtrState.line, dir: mtrState.dir, dest: d.dest };
+      const added = toggleTrainFav(entry);
+      status.textContent = T(added ? 'trainSaved' : 'trainRemoved').replace('{s}', stationName(entry.station));
+      renderMtrView();
+      break;
+    }
+    case 'train': mtrOpenSaved(trainFavs[Number(d.index)]); break;
   }
 });
 document.getElementById('mtrview').addEventListener('input', event => {
@@ -6561,6 +6716,8 @@ function hideWeatherBar() {
 // both slow for the user and rude to the service.
 function clearRouteStops() {
   if (routeStopsState && routeStopsState.observer) routeStopsState.observer.disconnect();
+  if (routeStopsState && routeStopsState.watchId != null && navigator.geolocation)
+    navigator.geolocation.clearWatch(routeStopsState.watchId);
   routeStopsState = null;
   const box = document.getElementById('routestops');
   if (box) box.innerHTML = '';
@@ -6571,7 +6728,8 @@ function renderRouteStops(context, stops) {
   const box = document.getElementById('routestops');
   if (!box || !stops.length) return;
 
-  routeStopsState = { context, stops, boardAt: null, observer: null, inFlight: 0, queue: [] };
+  routeStopsState = { context, stops, boardAt: null, alightAt: null, autoBoard: false,
+                      watchId: null, observer: null, inFlight: 0, queue: [] };
 
   const head = document.createElement('div');
   head.className = 'rshead';
@@ -6596,11 +6754,12 @@ function renderRouteStops(context, stops) {
   refresh.addEventListener('click', () => {
     if (!routeStopsState) return;
     const keep = { context: routeStopsState.context, stops: routeStopsState.stops,
-                   boardAt: routeStopsState.boardAt };
+                   boardAt: routeStopsState.boardAt, alightAt: routeStopsState.alightAt,
+                   autoBoard: routeStopsState.autoBoard };
     const panel = document.getElementById('panel');
     const scrollWas = panel ? panel.scrollTop : 0;
     renderRouteStops(keep.context, keep.stops);
-    if (routeStopsState) { routeStopsState.boardAt = keep.boardAt; paintStopCounts(); }
+    if (routeStopsState) { Object.assign(routeStopsState, { boardAt: keep.boardAt, alightAt: keep.alightAt, autoBoard: keep.autoBoard }); paintStopCounts(); syncRideWatch(); }
     if (panel) panel.scrollTop = scrollWas;
     status.textContent = T('refreshing');
   });
@@ -6611,6 +6770,11 @@ function renderRouteStops(context, stops) {
   hint.className = 'rshint';
   hint.textContent = T('rsHint');
   box.appendChild(hint);
+
+  // The ride banner: filled in once both marks are set, hidden otherwise.
+  const ride = document.createElement('div');
+  ride.id = 'rsride'; ride.className = 'rsride'; ride.style.display = 'none';
+  box.appendChild(ride);
 
   stops.forEach((stop, index) => {
     const row = document.createElement('div');
@@ -6633,11 +6797,23 @@ function renderRouteStops(context, stops) {
     eta.textContent = T('rsCheckingEta');
     pick.appendChild(name); pick.appendChild(note); pick.appendChild(eta);
 
-    // Tapping a stop marks where you get on, and puts it on the map. Tapping
-    // the marked one again clears the mark.
+    // First tap: where you get on. A later stop: where you get off. Tapping a
+    // mark again clears it; tapping an earlier stop moves the boarding mark.
     pick.addEventListener('click', () => {
-      routeStopsState.boardAt = (routeStopsState.boardAt === index) ? null : index;
+      const st = routeStopsState;
+      st.autoBoard = false;
+      if (st.boardAt === null || index < st.boardAt) {
+        st.boardAt = index;
+        if (st.alightAt !== null && st.alightAt <= index) st.alightAt = null;
+      } else if (index === st.boardAt) {
+        st.boardAt = null; st.alightAt = null;
+      } else if (index === st.alightAt) {
+        st.alightAt = null;
+      } else {
+        st.alightAt = index;
+      }
       paintStopCounts();
+      syncRideWatch();
       const lat = Number(stop.lat), lng = Number(stop.long);
       if (isFinite(lat) && isFinite(lng)) map.setView([lat, lng], 17);
     });
@@ -6669,6 +6845,16 @@ function renderRouteStops(context, stops) {
     box.appendChild(row);
   });
 
+  // Standing within a short walk of a stop on this route, you are almost
+  // certainly getting on there. Mark it, and say why it was marked.
+  if (routeStopsState.boardAt === null && herePoint) {
+    const near = nearestRouteStop(herePoint);
+    if (near && near.metres <= RS_AUTO_BOARD_M) {
+      routeStopsState.boardAt = near.index;
+      routeStopsState.autoBoard = true;
+    }
+  }
+
   paintStopCounts();
   watchForVisibleRows();
 
@@ -6678,8 +6864,14 @@ function renderRouteStops(context, stops) {
   if (panel.classList.contains('routemode')) {
     // In route mode the list is already the only thing under the search box,
     // and the box is sticky — scrolling would slide the list's own heading
-    // underneath it.
+    // underneath it. Unless a stop was marked for the rider: then that row
+    // is what they need, and it may be forty stops down.
     panel.scrollTop = 0;
+    if (routeStopsState.autoBoard) {
+      const row = box.querySelector('.rsrow[data-index="' + routeStopsState.boardAt + '"]');
+      const field = document.getElementById('routefield');
+      if (row) panel.scrollTop = Math.max(0, row.offsetTop - (field ? field.offsetHeight : 0) - 12);
+    }
     // The blue banner says route, from, to and stop count; so does the header
     // three lines above. On a phone the duplicate costs a third of the screen,
     // and the list is what the rider came for.
@@ -6696,12 +6888,13 @@ function renderRouteStops(context, stops) {
 function paintStopCounts() {
   if (!routeStopsState) return;
   const box = document.getElementById('routestops');
-  const board = routeStopsState.boardAt;
+  const board = routeStopsState.boardAt, alight = routeStopsState.alightAt;
 
   for (const row of box.querySelectorAll('.rsrow')) {
     const index = Number(row.dataset.index);
     row.classList.toggle('board', board !== null && index === board);
-    row.classList.toggle('after', board !== null && index > board);
+    row.classList.toggle('alight', alight !== null && index === alight);
+    row.classList.toggle('after', board !== null && index > board && (alight === null || index < alight));
 
     const note = row.noteCell;
     note.className = '';
@@ -6710,7 +6903,13 @@ function paintStopCounts() {
 
     if (index === board) {
       note.className = 'rsboardtag';
-      note.textContent = T('rsBoarding');
+      note.textContent = T(routeStopsState.autoBoard ? 'rsBoardAuto' : 'rsBoarding');
+    } else if (alight !== null && index === alight) {
+      note.className = 'rsalighttag';
+      note.textContent = T('rsAlight');
+    } else if (alight !== null && index > alight) {
+      note.className = 'rseta quiet';
+      note.textContent = T('rsAfterAlight');
     } else if (index > board) {
       const away = index - board;
       note.className = 'rscount';
@@ -6720,6 +6919,77 @@ function paintStopCounts() {
       note.className = 'rseta quiet';
       note.textContent = T('rsBefore');
     }
+  }
+  paintRideBanner();
+}
+
+const RS_AUTO_BOARD_M = 250;    // "standing at the stop", give or take a road
+const RS_RIDE_NEAR_M  = 600;    // a moving bus is "at" the nearest stop
+
+function rsStopName(index) {
+  const stop = routeStopsState && routeStopsState.stops[index];
+  if (!stop) return '';
+  return plainStopName(lang === 'zh' ? (stop.name_tc || stop.name_en) : stop.name_en);
+}
+
+// The stop on this route closest to a point.
+function nearestRouteStop(point) {
+  if (!routeStopsState || !point) return null;
+  let best = null;
+  routeStopsState.stops.forEach((stop, index) => {
+    const lat = Number(stop.lat), lng = Number(stop.long);
+    if (!isFinite(lat) || !isFinite(lng)) return;
+    const metres = metresBetween(point.lat, point.lng, lat, lng);
+    if (!best || metres < best.metres) best = { index, metres };
+  });
+  return best;
+}
+
+// "How many more?" — answered from where the phone is, not from a guess.
+function paintRideBanner() {
+  const st = routeStopsState;
+  const el = document.getElementById('rsride');
+  if (!st || !el) return;
+  if (st.boardAt === null || st.alightAt === null) { el.style.display = 'none'; el.innerHTML = ''; return; }
+
+  const total = st.alightAt - st.boardAt;
+  let html = '<div class="rsridehead">🚌 ' + esc(rsStopName(st.boardAt)) + ' → ▼ ' + esc(rsStopName(st.alightAt)) +
+             ' · ' + (total === 1 ? T('rsOneStop') : T('rsStops').replace('{n}', total)) + '</div>';
+  if (!herePoint) {
+    html += '<div class="rsridesub">' + T('rsNeedLocation') + '</div>';
+  } else {
+    const near = nearestRouteStop(herePoint);
+    if (!near || near.metres > RS_RIDE_NEAR_M) {
+      html += '<div class="rsridesub">' + T('rsNotOnRoute') + '</div>';
+    } else {
+      const remaining = st.alightAt - near.index;
+      if (remaining <= 0)      html += '<div class="rsridebig arrived">' + T('rsArrived') + '</div>';
+      else if (remaining === 1) html += '<div class="rsridebig soon">' + T('rsNextStop') + '</div>';
+      else                      html += '<div class="rsridebig">' + T('rsRemaining').replace('{n}', remaining) + '</div>';
+      html += '<div class="rsridesub">' + T('rsNearNow').replace('{s}', esc(rsStopName(near.index))) + '</div>';
+    }
+  }
+  el.innerHTML = html;
+  el.style.display = 'block';
+}
+
+// Watch the phone's position only while a ride is marked and the list is
+// open. It is the phone talking to its own GPS — no network, no timer of
+// ours — and it is cleared the moment the list closes.
+function syncRideWatch() {
+  const st = routeStopsState;
+  const wanted = !!(st && st.boardAt !== null && st.alightAt !== null && navigator.geolocation);
+  if (wanted && st.watchId == null) {
+    st.watchId = navigator.geolocation.watchPosition(
+      position => {
+        herePoint = { lat: position.coords.latitude, lng: position.coords.longitude };
+        paintRideBanner();
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
+  } else if (!wanted && st && st.watchId != null) {
+    navigator.geolocation.clearWatch(st.watchId);
+    st.watchId = null;
   }
 }
 
