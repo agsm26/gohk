@@ -407,6 +407,21 @@
                border-radius:12px; padding:12px; margin:8px 0; }
   .stoproute .rt { font-size:1.41rem; font-weight:800; color:var(--blue); }
   .stoproute .quiet { color:var(--ink-3); font-weight:700; font-size:0.94rem; }
+  /* What leaves from a pole, under its name — the line that tells MK751 from
+     MK752 without knowing either code. */
+  .pickmain { flex:1; min-width:0; }
+  .poleroutes { display:block; font-size:0.94rem; font-weight:700; color:var(--ink-3);
+                margin-top:3px; overflow-wrap:anywhere; }
+  .poleroutes b { color:var(--blue); }
+  .destgroup { border:2px solid var(--line-soft); border-radius:12px; padding:10px 12px; margin:8px 0;
+               cursor:pointer; }
+  .destgroup .dg-head { display:flex; align-items:center; gap:8px; font-size:1.06rem; font-weight:800;
+                        color:var(--ink); }
+  .destgroup .dg-dist { margin-left:auto; color:var(--ink-3); font-weight:700; white-space:nowrap; }
+  .destgroup .dg-routes { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .destgroup .dg-route { background:var(--navy-tint); color:var(--blue); border-radius:8px;
+                         padding:6px 10px; font-size:1.06rem; font-weight:800; }
+  .destgroup .dg-route small { display:block; font-size:0.94rem; color:var(--ink-3); font-weight:700; }
 
   /* THE TOAST. Fixed under the bars, so it is in view whatever the sheet is
      doing. Dark on light, not a coloured pill: it carries errors, "ready",
@@ -1068,6 +1083,11 @@ const TEXT = {
     favStops:'MY STOPS', noStopsLong:'No stops saved. On the STOPS tab, open a stop and tap ☆ Save stop.',
     favStopOpen:'Show buses here', stopSavedMsg:'Saved {s}', stopRemovedMsg:'Removed {s}',
     stopFull:'Saved stops are full (8) — remove one first.',
+    stopDestPh:'Going to… (type a place)', stopDestHead:'Buses from nearby stops that reach {d}',
+    stopDestNone:'No direct bus to {d} from any stop within 600 m.',
+    stopDestNeedLoc:'Allow location to find which nearby stops have a direct bus.',
+    stopFilterPh:'Only buses towards…', stopFilterNone:'No bus from this stop towards {d}.',
+    stopFilterOn:'Showing buses towards {d}', stopsAwayShort:'{n} stops', stopMore:'+{n} more',
     dataLoading:'Still loading the bus data — try again in a moment.',
     nearestStop:'Nearest bus stop', getOn:'GET ON', getOff:'GET OFF',
     getOffAndArrive:'GET OFF · ARRIVE',
@@ -1221,6 +1241,11 @@ const TEXT = {
     favStops:'常用車站', noStopsLong:'尚未收藏車站。在「車站」打開車站後，按「☆ 收藏此站」。',
     favStopOpen:'查看此站班次', stopSavedMsg:'已收藏 {s}', stopRemovedMsg:'已移除 {s}',
     stopFull:'常用車站已滿（8 個），請先移除一個。',
+    stopDestPh:'我要去…（輸入目的地）', stopDestHead:'附近車站可直達 {d} 的巴士',
+    stopDestNone:'附近 600 米內沒有直達 {d} 的巴士。',
+    stopDestNeedLoc:'允許使用位置，才可找出附近哪個站有直達巴士。',
+    stopFilterPh:'只顯示往…', stopFilterNone:'此站沒有往 {d} 的巴士。',
+    stopFilterOn:'只顯示往 {d} 的巴士', stopsAwayShort:'{n} 個站', stopMore:'另有 {n} 條',
     dataLoading:'巴士資料仍在載入，請稍候再試。',
     nearestStop:'最近巴士站', getOn:'上車', getOff:'下車',
     getOffAndArrive:'下車 · 到達',
@@ -6091,7 +6116,7 @@ const STOP_NEAR_M = 500;
 let stopState = freshStopState();
 function freshStopState() {
   return { stop:null, rows:null, noLive:false, loading:false, alert:null,
-           fetchedAt:0, locating:false, locateTried:false };
+           fetchedAt:0, locating:false, locateTried:false, destFilter:'' };
 }
 
 // Which company runs the buses at this pole, from the planner's own index.
@@ -6119,6 +6144,70 @@ function poleCodeOf(stop) {
   const found = /\(([A-Z]{2}\d{3}[A-Za-z]?)\)\s*$/.exec(stop.name_en || '');
   return found ? found[1] : '';
 }
+// The far end of a route is its last stop. The trimmed data carries no
+// destination names, but it carries every route's stop order, and the last
+// stop IS the destination — for all four companies alike, with no fetch.
+function routeTerminus(routeKey) {
+  const entries = (typeof routeIndex !== 'undefined' && routeIndex && routeIndex.get(routeKey)) || [];
+  if (!entries.length) return '';
+  const last = entries.reduce((a, b) => (b.seq > a.seq ? b : a));
+  const stop = lookupStop(last.stopId);
+  return stop ? stopName(stop) : '';
+}
+function lookupStop(id) {
+  if (typeof stopById !== 'undefined' && stopById && stopById.get(id)) return stopById.get(id);
+  return allPlannableStops().find(x => x.stop === id) || null;
+}
+// Every route leaving a pole, with where it ends up.
+function routesServing(stopId) {
+  const out = []; const seen = new Set();
+  for (const k of ((typeof stopIndex !== 'undefined' && stopIndex && stopIndex.get(stopId)) || [])) {
+    const [route, bound, type, co] = String(k.routeKey).split('|');
+    const id = route + '|' + bound + '|' + co;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({ route, bound, type, co: (co || '').toUpperCase(), key: k.routeKey, seq: k.seq, dest: routeTerminus(k.routeKey) });
+  }
+  return out;
+}
+function poleRoutesLine(stopId, max) {
+  const list = routesServing(stopId);
+  if (!list.length) return '';
+  const shown = list.slice(0, max || 4).map(r => '<b>' + esc(r.route) + '</b>' + (r.dest ? ' ' + T('towards') + esc(r.dest) : ''));
+  const more = list.length - shown.length;
+  return '<small class="poleroutes">' + shown.join(' · ') + (more > 0 ? ' · ' + T('stopMore').replace('{n}', more) : '') + '</small>';
+}
+// Stop ids whose name contains what was typed — "the place I am going to".
+function stopIdsMatching(q) {
+  const ids = new Set(); const needle = String(q || '').trim().toLowerCase();
+  if (!needle) return ids;
+  for (const stop of allPlannableStops()) {
+    if (stop.isStation) continue;
+    if ((stop.name_tc && stop.name_tc.includes(needle)) || String(stop.name_en || '').toLowerCase().includes(needle)) ids.add(stop.stop);
+  }
+  return ids;
+}
+// Does this route, from this pole onwards, stop at any of these places?
+function routeReaches(routeKey, fromSeq, destIds) {
+  const entries = (typeof routeIndex !== 'undefined' && routeIndex && routeIndex.get(routeKey)) || [];
+  let best = null;
+  for (const e of entries) {
+    if (e.seq > fromSeq && destIds.has(e.stopId) && (!best || e.seq < best.seq)) best = e;
+  }
+  return best ? { stopsAway: best.seq - fromSeq, stopId: best.stopId } : null;
+}
+// The routeKey for a live arrival row: exact match on service type first,
+// then any variant of the same route and direction.
+function routeKeyForRow(row) {
+  const co = String(row.co || 'KMB').toLowerCase();
+  const dir = row.dir || 'O';
+  const exact = row.route + '|' + dir + '|' + (row.service_type || '1') + '|' + co;
+  if (typeof routeIndex !== 'undefined' && routeIndex && routeIndex.has(exact)) return exact;
+  const head = row.route + '|' + dir + '|';
+  for (const k of (routeIndex ? routeIndex.keys() : [])) if (k.startsWith(head) && k.endsWith('|' + co)) return k;
+  return exact;
+}
+
 function findStopById(id) {
   return allPlannableStops().find(x => x.stop === id) || stopFavs.find(x => x.stop === id) || null;
 }
@@ -6154,7 +6243,7 @@ function stopLocate() {
 }
 
 function stopSetStop(stop) {
-  stopState = Object.assign(freshStopState(), { locateTried: true, stop });
+  stopState = Object.assign(freshStopState(), { locateTried: true, stop, destQuery: stopState.destQuery });
   renderStopView();
   stopLoadRows();
 }
@@ -6200,7 +6289,9 @@ async function stopLoadRows(force) {
     stopState.rows = []; stopState.alert = T('etaOffline');
   }
   stopState.fetchedAt = Date.now(); stopState.loading = false;
-  renderStopView();
+  const rowsBox = document.getElementById('stop-rows');
+  if (rowsBox && document.activeElement && document.activeElement.id === 'stop-filter') rowsBox.innerHTML = stopRowsHtml();
+  else renderStopView();
 }
 
 function renderStopView() {
@@ -6208,6 +6299,12 @@ function renderStopView() {
   if (!view) return;
   const st = stopState;
   let html = '<div class="favhead">🚏 ' + T('stopTitle') + '</div>';
+
+  const poleButton = (stop, metres, extraAttr) =>
+    '<button data-stop-id="' + esc(stop.stop) + '"' + (extraAttr || '') + '><span class="pickmain">📍 ' + esc(stopName(stop)) +
+    (poleCodeOf(stop) ? ' <span class="polecode">' + esc(poleCodeOf(stop)) + '</span>' : '') +
+    poleRoutesLine(stop.stop) + '</span>' +
+    (metres != null ? '<span class="mtrdist">' + Math.round(metres) + ' m</span>' : '') + '</button>';
 
   // ---- 1. WHICH STOP ----
   if (!st.stop) {
@@ -6222,26 +6319,27 @@ function renderStopView() {
       } else if (navigator.geolocation && !herePoint) {
         html += '<div class="mtrpick"><button data-stop-act="geo-yes">' + T('myLocation') + '</button></div>';
       }
+      // Where are you going? Answered from the poles around you.
+      html += '<div class="mtrsub">' + T('stopDestPh').replace(/[（(].*$/, '') + '</div>' +
+              '<div class="frow"><input id="stop-dest" type="text" placeholder="' + esc(T('stopDestPh')) + '" autocomplete="off" value="' + esc(st.destQuery || '') + '"></div>' +
+              '<div id="stop-dest-results"></div>';
       if (herePoint) {
         const near = stopsNear(herePoint.lat, herePoint.lng, STOP_NEAR_M).filter(n => !n.stop.isStation).slice(0, 4);
-        if (near.length) {
-          html += '<div class="mtrsub">' + T('stopNearby') + '</div><div class="mtrpick">' +
-            near.map(n => '<button data-stop-id="' + esc(n.stop.stop) + '">📍 ' + esc(stopName(n.stop)) +
-              (poleCodeOf(n.stop) ? ' <span class="polecode">' + esc(poleCodeOf(n.stop)) + '</span>' : '') +
-              '<span class="mtrdist">' + Math.round(n.metres) + ' m</span></button>').join('') + '</div>';
-        } else {
-          html += '<div class="favempty">' + T('stopNoneNear') + '</div>';
-        }
+        html += near.length
+          ? '<div class="mtrsub">' + T('stopNearby') + '</div><div class="mtrpick">' + near.map(n => poleButton(n.stop, n.metres)).join('') + '</div>'
+          : '<div class="favempty">' + T('stopNoneNear') + '</div>';
       }
       if (stopFavs.length) {
         html += '<div class="mtrsub">' + T('stopSavedPicks') + '</div><div class="mtrpick">' +
-          stopFavs.map((f, i) => '<button data-stop-act="fav" data-index="' + i + '">★ ' + esc(stopName(f)) + '</button>').join('') + '</div>';
+          stopFavs.map((f, i) => '<button data-stop-act="fav" data-index="' + i + '"><span class="pickmain">★ ' + esc(stopName(f)) +
+            poleRoutesLine(f.stop) + '</span></button>').join('') + '</div>';
       }
       html += '<div class="mtrsub">' + T('stopSearchPh').replace('…', '') + '</div>' +
               '<div class="frow"><input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off"></div>' +
               '<div class="mtrpick" id="stop-search-results"></div>';
     }
     view.innerHTML = html;
+    if (st.destQuery) stopRenderDest(st.destQuery);
     return;
   }
 
@@ -6252,30 +6350,87 @@ function renderStopView() {
   const code = poleCodeOf(stop);
   html += '<div class="mtrsta"><div class="mtrname">🚏 ' + esc(stopName(stop)) +
           (code ? ' <span class="polecode">' + esc(code) + '</span>' : '') +
-          (here !== null ? '<small>' + T('mtrAway').replace('{m}', here) + '</small>' : '') + '</div>' +
+          (here !== null ? '<small>' + T('mtrAway').replace('{m}', here) + '</small>' : '') +
+          poleRoutesLine(stop.stop, 6) + '</div>' +
           '<button class="refreshbtn" data-stop-act="change">' + T('mtrChange') + '</button></div>' +
           '<div class="mtrpick"><button class="' + (saved ? 'rsstar on' : 'rsstar') + '" style="flex:none;width:100%;height:auto;min-height:48px" data-stop-act="star">' +
           T(saved ? 'stopSavedBtn' : 'stopSaveBtn') + '</button></div>';
 
-  // ---- 3. EVERY BUS FROM IT ----
-  const stamp = st.fetchedAt ? new Date(st.fetchedAt).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }) : '';
+  // ---- 3. EVERY BUS FROM IT, narrowed to a direction if asked ----
   html += '<div class="mtrhead"><div class="mtrsub">' + T('stopRoutesHere') + '</div>' +
           '<button class="refreshbtn" data-stop-act="refresh"' + (st.loading ? ' disabled' : '') + '>' +
-          T(st.loading ? 'refreshing' : 'refresh') + '</button></div>';
-  if (st.loading && !st.rows) {
-    html += '<div class="favempty">' + T('rsCheckingEta') + '</div>';
-  } else if (st.alert) {
-    html += '<div class="mtralert">⚠ ' + esc(st.alert) + '</div>';
-  } else if (st.noLive) {
-    const routes = routesAtStop(stop.stop);
-    html += '<div class="rshint">' + T('stopNoLive') + '</div>' +
+          T(st.loading ? 'refreshing' : 'refresh') + '</button></div>' +
+          '<div class="frow"><input id="stop-filter" type="text" placeholder="' + esc(T('stopFilterPh')) + '" autocomplete="off" value="' + esc(st.destFilter || '') + '"></div>' +
+          '<div id="stop-rows">' + stopRowsHtml() + '</div>';
+  view.innerHTML = html;
+}
+
+// The route rows for the chosen pole, filtered by destination when one is
+// typed. Kept separate so typing in the filter redraws only this part and
+// the box keeps focus.
+function stopRowsHtml() {
+  const st = stopState, stop = st.stop;
+  if (!stop) return '';
+  const stamp = st.fetchedAt ? new Date(st.fetchedAt).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }) : '';
+  const destIds = st.destFilter ? stopIdsMatching(st.destFilter) : null;
+  const mySeq = (routesServing(stop.stop)[0] || {}).seq;   // not used for KMB rows: they carry seq
+  let html = '';
+  if (st.loading && !st.rows) return '<div class="favempty">' + T('rsCheckingEta') + '</div>';
+  if (st.alert) return '<div class="mtralert">⚠ ' + esc(st.alert) + '</div>';
+  if (st.noLive) {
+    let routes = routesServing(stop.stop);
+    if (destIds) routes = routes.filter(r => routeReaches(r.key, r.seq, destIds));
+    if (!routes.length && destIds) return '<div class="favempty">' + T('stopFilterNone').replace('{d}', esc(st.destFilter)) + '</div>';
+    return '<div class="rshint">' + T('stopNoLive') + '</div>' +
       routes.map(r => '<div class="stoproute"><span class="rt">' + esc(r.route) + '</span>' +
-        '<span class="quiet">' + esc(r.co) + '</span></div>').join('');
-  } else if (st.rows) {
-    html += '<div class="rshint">' + T('stopTapRoute') + '</div>' + formatArrivals(st.rows);
+        '<span class="quiet">' + (r.dest ? T('towards') + ' ' + esc(r.dest) + ' · ' : '') + esc(r.co) + '</span></div>').join('');
+  }
+  if (st.rows) {
+    let rows = st.rows;
+    if (destIds) {
+      rows = rows.filter(row => {
+        const key = routeKeyForRow(row);
+        const seq = Number(row.seq) || (routesServing(stop.stop).find(r => r.key === key) || {}).seq || 0;
+        return !!routeReaches(key, seq, destIds);
+      });
+      if (!rows.length) return '<div class="favempty">' + T('stopFilterNone').replace('{d}', esc(st.destFilter)) + '</div>';
+      html += '<div class="rshint">' + T('stopFilterOn').replace('{d}', esc(st.destFilter)) + '</div>';
+    } else {
+      html += '<div class="rshint">' + T('stopTapRoute') + '</div>';
+    }
+    html += formatArrivals(rows);
     if (stamp) html += '<div class="mtrupdated">' + T('updatedAt').replace('{t}', stamp) + '</div>';
   }
-  view.innerHTML = html;
+  return html;
+}
+
+// "I want to go to X": every pole within 600 m, and every bus from it that
+// stops at X further down its route. Grouped by pole, nearest first, so the
+// answer is "cross to MK752 and take the 60X", not a list of route numbers.
+function stopRenderDest(query) {
+  const box = document.getElementById('stop-dest-results');
+  if (!box) return;
+  stopState.destQuery = query;
+  const q = String(query || '').trim();
+  box.innerHTML = '';
+  if (q.length < 1) return;
+  if (!herePoint) { box.innerHTML = '<div class="favempty">' + T('stopDestNeedLoc') + '</div>'; return; }
+  const destIds = stopIdsMatching(q);
+  if (!destIds.size) { box.innerHTML = '<div class="favempty">' + T('noMatch') + '</div>'; return; }
+  const groups = [];
+  for (const n of stopsNear(herePoint.lat, herePoint.lng, 600).filter(x => !x.stop.isStation).slice(0, 10)) {
+    const hits = routesServing(n.stop.stop).map(r => ({ r, reach: routeReaches(r.key, r.seq, destIds) })).filter(x => x.reach);
+    if (hits.length) groups.push({ stop: n.stop, metres: n.metres, hits });
+  }
+  if (!groups.length) { box.innerHTML = '<div class="favempty">' + T('stopDestNone').replace('{d}', esc(q)) + '</div>'; return; }
+  box.innerHTML = '<div class="mtrsub">' + T('stopDestHead').replace('{d}', esc(q)) + '</div>' +
+    groups.map(g => '<div class="destgroup" data-stop-id="' + esc(g.stop.stop) + '" data-filter="' + esc(q) + '">' +
+      '<div class="dg-head">📍 ' + esc(stopName(g.stop)) +
+        (poleCodeOf(g.stop) ? ' <span class="polecode">' + esc(poleCodeOf(g.stop)) + '</span>' : '') +
+        '<span class="dg-dist">' + Math.round(g.metres) + ' m</span></div>' +
+      '<div class="dg-routes">' + g.hits.map(h => '<span class="dg-route">' + esc(h.r.route) +
+        '<small>' + T('stopsAwayShort').replace('{n}', h.reach.stopsAway) + (h.r.dest ? ' · ' + T('towards') + esc(h.r.dest) : '') + '</small></span>').join('') +
+      '</div></div>').join('');
 }
 
 function stopRenderSearch(query) {
@@ -6293,8 +6448,9 @@ function stopRenderSearch(query) {
     }
   }
   box.innerHTML = hits.length
-    ? hits.map(stop => '<button data-stop-id="' + esc(stop.stop) + '">🚏 ' + esc(stopName(stop)) +
-        (poleCodeOf(stop) ? ' <span class="polecode">' + esc(poleCodeOf(stop)) + '</span>' : '') + '</button>').join('')
+    ? hits.map(stop => '<button data-stop-id="' + esc(stop.stop) + '"><span class="pickmain">🚏 ' + esc(stopName(stop)) +
+        (poleCodeOf(stop) ? ' <span class="polecode">' + esc(poleCodeOf(stop)) + '</span>' : '') +
+        poleRoutesLine(stop.stop) + '</span></button>').join('')
     : '<div class="favempty">' + T('noMatch') + '</div>';
 }
 
@@ -6303,7 +6459,11 @@ document.getElementById('stopview').addEventListener('click', event => {
   if (event.target.closest('[data-star]')) return;
   const el = event.target.closest('[data-stop-id],[data-stop-act],.eta-row');
   if (!el) return;
-  if (el.dataset.stopId) { const stop = findStopById(el.dataset.stopId); if (stop) stopSetStop(stop); return; }
+  if (el.dataset.stopId) {
+    const stop = findStopById(el.dataset.stopId);
+    if (stop) { stopSetStop(stop); if (el.dataset.filter) { stopState.destFilter = el.dataset.filter; renderStopView(); } }
+    return;
+  }
   if (el.classList.contains('eta-row')) {
     // The row's own star carries route, direction, type and company.
     const star = el.querySelector('[data-star]');
@@ -6312,7 +6472,7 @@ document.getElementById('stopview').addEventListener('click', event => {
     return;
   }
   switch (el.dataset.stopAct) {
-    case 'change':  stopState = Object.assign(freshStopState(), { locateTried: true }); renderStopView(); break;
+    case 'change':  stopState = Object.assign(freshStopState(), { locateTried: true, destQuery: stopState.destQuery }); renderStopView(); break;
     case 'refresh': stopLoadRows(true); break;
     case 'geo-yes': rememberGeoChoice('yes'); stopLocate(); break;
     case 'geo-no':  rememberGeoChoice('no'); renderStopView(); break;
@@ -6328,6 +6488,12 @@ document.getElementById('stopview').addEventListener('click', event => {
 });
 document.getElementById('stopview').addEventListener('input', event => {
   if (event.target.id === 'stop-search') stopRenderSearch(event.target.value);
+  if (event.target.id === 'stop-dest')   stopRenderDest(event.target.value);
+  if (event.target.id === 'stop-filter') {
+    stopState.destFilter = event.target.value;
+    const rows = document.getElementById('stop-rows');
+    if (rows) rows.innerHTML = stopRowsHtml();
+  }
 });
 
 // ============================================================
