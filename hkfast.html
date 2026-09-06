@@ -413,15 +413,6 @@
   .poleroutes { display:block; font-size:0.94rem; font-weight:700; color:var(--ink-3);
                 margin-top:3px; overflow-wrap:anywhere; }
   .poleroutes b { color:var(--blue); }
-  .destgroup { border:2px solid var(--line-soft); border-radius:12px; padding:10px 12px; margin:8px 0;
-               cursor:pointer; }
-  .destgroup .dg-head { display:flex; align-items:center; gap:8px; font-size:1.06rem; font-weight:800;
-                        color:var(--ink); }
-  .destgroup .dg-dist { margin-left:auto; color:var(--ink-3); font-weight:700; white-space:nowrap; }
-  .destgroup .dg-routes { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
-  .destgroup .dg-route { background:var(--navy-tint); color:var(--blue); border-radius:8px;
-                         padding:6px 10px; font-size:1.06rem; font-weight:800; }
-  .destgroup .dg-route small { display:block; font-size:0.94rem; color:var(--ink-3); font-weight:700; }
 
   /* THE TOAST. Fixed under the bars, so it is in view whatever the sheet is
      doing. Dark on light, not a coloured pill: it carries errors, "ready",
@@ -1083,11 +1074,15 @@ const TEXT = {
     favStops:'MY STOPS', noStopsLong:'No stops saved. On the STOPS tab, open a stop and tap ☆ Save stop.',
     favStopOpen:'Show buses here', stopSavedMsg:'Saved {s}', stopRemovedMsg:'Removed {s}',
     stopFull:'Saved stops are full (8) — remove one first.',
-    stopDestPh:'Going to… (type a place)', stopDestHead:'Buses from nearby stops that reach {d}',
-    stopDestNone:'No direct bus to {d} from any stop within 600 m.',
+    stopDestPh:'Going to… (type a place)',
     stopDestNeedLoc:'Allow location to find which nearby stops have a direct bus.',
     stopFilterPh:'Only buses towards…', stopFilterNone:'No bus from this stop towards {d}.',
     stopFilterOn:'Showing buses towards {d}', stopsAwayShort:'{n} stops', stopMore:'+{n} more',
+    stopIndexing:'Loading the bus network — first time only…',
+    stopDestNoName:'No stop called "{d}" — try a shorter name.',
+    stopNearNoneTo:'No nearby stop has a direct bus to {d}.',
+    stopSearchNoneTo:'No stop with that name has a direct bus to {d}.',
+    stopShowingTo:'Showing only stops with a direct bus to {d}',
     dataLoading:'Still loading the bus data — try again in a moment.',
     nearestStop:'Nearest bus stop', getOn:'GET ON', getOff:'GET OFF',
     getOffAndArrive:'GET OFF · ARRIVE',
@@ -1241,11 +1236,15 @@ const TEXT = {
     favStops:'常用車站', noStopsLong:'尚未收藏車站。在「車站」打開車站後，按「☆ 收藏此站」。',
     favStopOpen:'查看此站班次', stopSavedMsg:'已收藏 {s}', stopRemovedMsg:'已移除 {s}',
     stopFull:'常用車站已滿（8 個），請先移除一個。',
-    stopDestPh:'我要去…（輸入目的地）', stopDestHead:'附近車站可直達 {d} 的巴士',
-    stopDestNone:'附近 600 米內沒有直達 {d} 的巴士。',
+    stopDestPh:'我要去…（輸入目的地）',
     stopDestNeedLoc:'允許使用位置，才可找出附近哪個站有直達巴士。',
     stopFilterPh:'只顯示往…', stopFilterNone:'此站沒有往 {d} 的巴士。',
     stopFilterOn:'只顯示往 {d} 的巴士', stopsAwayShort:'{n} 個站', stopMore:'另有 {n} 條',
+    stopIndexing:'正在載入巴士路線網絡（只需一次）…',
+    stopDestNoName:'找不到叫「{d}」的車站，試試較短的名稱。',
+    stopNearNoneTo:'附近沒有直達 {d} 的車站。',
+    stopSearchNoneTo:'沒有名稱相符而又直達 {d} 的車站。',
+    stopShowingTo:'只顯示有巴士直達 {d} 的車站',
     dataLoading:'巴士資料仍在載入，請稍候再試。',
     nearestStop:'最近巴士站', getOn:'上車', getOff:'下車',
     getOffAndArrive:'下車 · 到達',
@@ -6116,7 +6115,7 @@ const STOP_NEAR_M = 500;
 let stopState = freshStopState();
 function freshStopState() {
   return { stop:null, rows:null, noLive:false, loading:false, alert:null,
-           fetchedAt:0, locating:false, locateTried:false, destFilter:'' };
+           fetchedAt:0, locating:false, locateTried:false, destFilter:'', destQuery:'', indexing:false };
 }
 
 // Which company runs the buses at this pole, from the planner's own index.
@@ -6170,22 +6169,51 @@ function routesServing(stopId) {
   }
   return out;
 }
-function poleRoutesLine(stopId, max) {
-  const list = routesServing(stopId);
-  if (!list.length) return '';
-  const shown = list.slice(0, max || 4).map(r => '<b>' + esc(r.route) + '</b>' + (r.dest ? ' ' + T('towards') + esc(r.dest) : ''));
-  const more = list.length - shown.length;
-  return '<small class="poleroutes">' + shown.join(' · ') + (more > 0 ? ' · ' + T('stopMore').replace('{n}', more) : '') + '</small>';
-}
-// Stop ids whose name contains what was typed — "the place I am going to".
-function stopIdsMatching(q) {
-  const ids = new Set(); const needle = String(q || '').trim().toLowerCase();
-  if (!needle) return ids;
-  for (const stop of allPlannableStops()) {
-    if (stop.isStation) continue;
-    if ((stop.name_tc && stop.name_tc.includes(needle)) || String(stop.name_en || '').toLowerCase().includes(needle)) ids.add(stop.stop);
+function poleRoutesLine(stopId, max, destIds) {
+  let items;
+  if (destIds && destIds.size) {
+    items = reachingRoutes(stopId, destIds).map(x => '<b>' + esc(x.r.route) + '</b> ' +
+      T('stopsAwayShort').replace('{n}', x.reach.stopsAway) + (x.r.dest ? ' · ' + T('towards') + esc(x.r.dest) : ''));
+  } else {
+    items = routesServing(stopId).map(r => '<b>' + esc(r.route) + '</b>' + (r.dest ? ' ' + T('towards') + esc(r.dest) : ''));
   }
+  if (!items.length) return '';
+  const shown = items.slice(0, max || 4);
+  const more = items.length - shown.length;
+  const sep = destIds && destIds.size ? '<br>' : ' · ';   // one reaching route per line — easier to read
+  return '<small class="poleroutes">' + shown.join(sep) + (more > 0 ? sep + T('stopMore').replace('{n}', more) : '') + '</small>';
+}
+// Does a stop name match what was typed? Exact substring first. Failing
+// that, the typed characters in order with gaps allowed — 屯門轉車站 finds
+// 屯門公路轉車站, which is how people actually say it. Spaces and punctuation
+// are ignored on both sides.
+function tidyName(text) { return String(text || '').toLowerCase().replace(/[\s,，()（）\-–—·.]/g, ''); }
+function nameMatches(stop, needle, loose) {
+  const tc = tidyName(stop.name_tc), en = tidyName(stop.name_en);
+  if (tc.includes(needle) || en.includes(needle)) return true;
+  if (!loose) return false;
+  let i = 0;
+  for (const ch of tc) if (ch === needle[i]) { i++; if (i === needle.length) return true; }
+  return false;
+}
+// Stop ids whose name matches what was typed — "the place I am going to".
+function stopIdsMatching(q) {
+  const ids = new Set(); const needle = tidyName(q);
+  if (!needle) return ids;
+  const stops = allPlannableStops().filter(st => !st.isStation);
+  for (const stop of stops) if (nameMatches(stop, needle, false)) ids.add(stop.stop);
+  if (!ids.size && needle.length >= 2) for (const stop of stops) if (nameMatches(stop, needle, true)) ids.add(stop.stop);
   return ids;
+}
+// The routes from a pole that stop at any of these places further on.
+function reachingRoutes(stopId, destIds) {
+  return routesServing(stopId).map(r => ({ r, reach: routeReaches(r.key, r.seq, destIds) })).filter(x => x.reach);
+}
+// The destination typed on the picker, as stop ids — null when none typed.
+function destIdsNow() {
+  const q = String(stopState.destQuery || '').trim();
+  if (!q) return null;
+  return stopIdsMatching(q);
 }
 // Does this route, from this pole onwards, stop at any of these places?
 function routeReaches(routeKey, fromSeq, destIds) {
@@ -6220,6 +6248,15 @@ function openStopView() {
   view.style.display = 'block';
   panel.classList.add('stopmode');
   panel.scrollTop = 0;
+  // The planner builds the route index the first time a trip is searched.
+  // This tab reads the same index, so it has to be built here too — without
+  // it no pole can say where its buses go and the destination search has
+  // nothing to walk. Cached after the first time, so this is a one-off wait.
+  if (!stopIndex && !stopState.indexing) {
+    stopState.indexing = true;
+    buildIndexes().catch(error => console.warn('Index unavailable:', error))
+      .then(() => { stopState.indexing = false; if (activeMode === 'stop') renderStopView(); });
+  }
   if (!stopState.stop && !herePoint && navigator.geolocation && geoChoice() === 'yes'
       && !stopState.locating && !stopState.locateTried) {
     stopState.locateTried = true;
@@ -6243,7 +6280,7 @@ function stopLocate() {
 }
 
 function stopSetStop(stop) {
-  stopState = Object.assign(freshStopState(), { locateTried: true, stop, destQuery: stopState.destQuery });
+  stopState = Object.assign(freshStopState(), { locateTried: true, stop, destQuery: stopState.destQuery, indexing: stopState.indexing });
   renderStopView();
   stopLoadRows();
 }
@@ -6300,13 +6337,19 @@ function renderStopView() {
   const st = stopState;
   let html = '<div class="favhead">🚏 ' + T('stopTitle') + '</div>';
 
+  // The typed destination, if any, narrows every list on this screen to
+  // poles that have a direct bus there — and each pole's line to just those
+  // buses. A pole that cannot take you where you said is not an option.
+  const destIds = destIdsNow();
+  const filtering = !!(destIds && destIds.size);
+  const keep = stop => !filtering || reachingRoutes(stop.stop, destIds).length > 0;
+
   const poleButton = (stop, metres, extraAttr) =>
     '<button data-stop-id="' + esc(stop.stop) + '"' + (extraAttr || '') + '><span class="pickmain">📍 ' + esc(stopName(stop)) +
     (poleCodeOf(stop) ? ' <span class="polecode">' + esc(poleCodeOf(stop)) + '</span>' : '') +
-    poleRoutesLine(stop.stop) + '</span>' +
+    poleRoutesLine(stop.stop, 4, filtering ? destIds : null) + '</span>' +
     (metres != null ? '<span class="mtrdist">' + Math.round(metres) + ' m</span>' : '') + '</button>';
 
-  // ---- 1. WHICH STOP ----
   if (!st.stop) {
     if (st.locating) {
       html += '<div class="favempty">' + T('findingYou') + '</div>';
@@ -6319,20 +6362,27 @@ function renderStopView() {
       } else if (navigator.geolocation && !herePoint) {
         html += '<div class="mtrpick"><button data-stop-act="geo-yes">' + T('myLocation') + '</button></div>';
       }
+      if (st.indexing || !stopIndex) html += '<div class="rshint">' + T('stopIndexing') + '</div>';
       // Where are you going? Answered from the poles around you.
       html += '<div class="mtrsub">' + T('stopDestPh').replace(/[（(].*$/, '') + '</div>' +
               '<div class="frow"><input id="stop-dest" type="text" placeholder="' + esc(T('stopDestPh')) + '" autocomplete="off" value="' + esc(st.destQuery || '') + '"></div>' +
               '<div id="stop-dest-results"></div>';
+      if (st.destQuery && destIds && !destIds.size)
+        html += '<div class="favempty">' + T('stopDestNoName').replace('{d}', esc(st.destQuery)) + '</div>';
+      if (filtering) html += '<div class="rshint">' + T('stopShowingTo').replace('{d}', esc(st.destQuery)) + '</div>';
       if (herePoint) {
-        const near = stopsNear(herePoint.lat, herePoint.lng, STOP_NEAR_M).filter(n => !n.stop.isStation).slice(0, 4);
-        html += near.length
-          ? '<div class="mtrsub">' + T('stopNearby') + '</div><div class="mtrpick">' + near.map(n => poleButton(n.stop, n.metres)).join('') + '</div>'
-          : '<div class="favempty">' + T('stopNoneNear') + '</div>';
+        const nearAll = stopsNear(herePoint.lat, herePoint.lng, filtering ? 600 : STOP_NEAR_M).filter(n => !n.stop.isStation);
+        const near = nearAll.filter(n => keep(n.stop)).slice(0, filtering ? 6 : 4);
+        if (near.length)
+          html += '<div class="mtrsub">' + T('stopNearby') + '</div><div class="mtrpick">' + near.map(n => poleButton(n.stop, n.metres)).join('') + '</div>';
+        else
+          html += '<div class="favempty">' + (filtering ? T('stopNearNoneTo').replace('{d}', esc(st.destQuery)) : T('stopNoneNear')) + '</div>';
       }
-      if (stopFavs.length) {
+      const savedShown = stopFavs.filter(keep);
+      if (savedShown.length) {
         html += '<div class="mtrsub">' + T('stopSavedPicks') + '</div><div class="mtrpick">' +
-          stopFavs.map((f, i) => '<button data-stop-act="fav" data-index="' + i + '"><span class="pickmain">★ ' + esc(stopName(f)) +
-            poleRoutesLine(f.stop) + '</span></button>').join('') + '</div>';
+          savedShown.map(f => '<button data-stop-act="fav" data-index="' + stopFavs.indexOf(f) + '"><span class="pickmain">★ ' + esc(stopName(f)) +
+            poleRoutesLine(f.stop, 4, filtering ? destIds : null) + '</span></button>').join('') + '</div>';
       }
       html += '<div class="mtrsub">' + T('stopSearchPh').replace('…', '') + '</div>' +
               '<div class="frow"><input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off"></div>' +
@@ -6414,44 +6464,28 @@ function stopRenderDest(query) {
   const q = String(query || '').trim();
   box.innerHTML = '';
   if (q.length < 1) return;
+  if (!stopIndex) { box.innerHTML = '<div class="rshint">' + T('stopIndexing') + '</div>'; return; }
   if (!herePoint) { box.innerHTML = '<div class="favempty">' + T('stopDestNeedLoc') + '</div>'; return; }
-  const destIds = stopIdsMatching(q);
-  if (!destIds.size) { box.innerHTML = '<div class="favempty">' + T('noMatch') + '</div>'; return; }
-  const groups = [];
-  for (const n of stopsNear(herePoint.lat, herePoint.lng, 600).filter(x => !x.stop.isStation).slice(0, 10)) {
-    const hits = routesServing(n.stop.stop).map(r => ({ r, reach: routeReaches(r.key, r.seq, destIds) })).filter(x => x.reach);
-    if (hits.length) groups.push({ stop: n.stop, metres: n.metres, hits });
-  }
-  if (!groups.length) { box.innerHTML = '<div class="favempty">' + T('stopDestNone').replace('{d}', esc(q)) + '</div>'; return; }
-  box.innerHTML = '<div class="mtrsub">' + T('stopDestHead').replace('{d}', esc(q)) + '</div>' +
-    groups.map(g => '<div class="destgroup" data-stop-id="' + esc(g.stop.stop) + '" data-filter="' + esc(q) + '">' +
-      '<div class="dg-head">📍 ' + esc(stopName(g.stop)) +
-        (poleCodeOf(g.stop) ? ' <span class="polecode">' + esc(poleCodeOf(g.stop)) + '</span>' : '') +
-        '<span class="dg-dist">' + Math.round(g.metres) + ' m</span></div>' +
-      '<div class="dg-routes">' + g.hits.map(h => '<span class="dg-route">' + esc(h.r.route) +
-        '<small>' + T('stopsAwayShort').replace('{n}', h.reach.stopsAway) + (h.r.dest ? ' · ' + T('towards') + esc(h.r.dest) : '') + '</small></span>').join('') +
-      '</div></div>').join('');
+  // The picker itself now narrows every list to poles that reach the place typed.
 }
 
 function stopRenderSearch(query) {
   const box = document.getElementById('stop-search-results');
   if (!box) return;
-  const q = String(query || '').trim().toLowerCase();
+  const needle = tidyName(query);
   box.innerHTML = '';
-  if (q.length < 1) return;
-  const hits = [];
-  for (const stop of allPlannableStops()) {
-    if (stop.isStation) continue;
-    if ((stop.name_tc && stop.name_tc.includes(q)) || String(stop.name_en || '').toLowerCase().includes(q)) {
-      hits.push(stop);
-      if (hits.length === 8) break;
-    }
-  }
+  if (needle.length < 1) return;
+  const destIds = destIdsNow();
+  const filtering = !!(destIds && destIds.size);
+  const stops = allPlannableStops().filter(st => !st.isStation);
+  let named = stops.filter(stop => nameMatches(stop, needle, false));
+  if (!named.length && needle.length >= 2) named = stops.filter(stop => nameMatches(stop, needle, true));
+  const hits = named.filter(stop => !filtering || reachingRoutes(stop.stop, destIds).length > 0).slice(0, 8);
   box.innerHTML = hits.length
     ? hits.map(stop => '<button data-stop-id="' + esc(stop.stop) + '"><span class="pickmain">🚏 ' + esc(stopName(stop)) +
         (poleCodeOf(stop) ? ' <span class="polecode">' + esc(poleCodeOf(stop)) + '</span>' : '') +
-        poleRoutesLine(stop.stop) + '</span></button>').join('')
-    : '<div class="favempty">' + T('noMatch') + '</div>';
+        poleRoutesLine(stop.stop, 4, filtering ? destIds : null) + '</span></button>').join('')
+    : '<div class="favempty">' + (filtering && named.length ? T('stopSearchNoneTo').replace('{d}', esc(stopState.destQuery)) : T('noMatch')) + '</div>';
 }
 
 document.getElementById('stopview').addEventListener('click', event => {
@@ -6461,7 +6495,11 @@ document.getElementById('stopview').addEventListener('click', event => {
   if (!el) return;
   if (el.dataset.stopId) {
     const stop = findStopById(el.dataset.stopId);
-    if (stop) { stopSetStop(stop); if (el.dataset.filter) { stopState.destFilter = el.dataset.filter; renderStopView(); } }
+    if (stop) {
+      stopSetStop(stop);
+      const carry = el.dataset.filter || stopState.destQuery;
+      if (carry) { stopState.destFilter = carry; renderStopView(); }
+    }
     return;
   }
   if (el.classList.contains('eta-row')) {
@@ -6472,11 +6510,11 @@ document.getElementById('stopview').addEventListener('click', event => {
     return;
   }
   switch (el.dataset.stopAct) {
-    case 'change':  stopState = Object.assign(freshStopState(), { locateTried: true, destQuery: stopState.destQuery }); renderStopView(); break;
+    case 'change':  stopState = Object.assign(freshStopState(), { locateTried: true, destQuery: stopState.destQuery, indexing: stopState.indexing }); renderStopView(); break;
     case 'refresh': stopLoadRows(true); break;
     case 'geo-yes': rememberGeoChoice('yes'); stopLocate(); break;
     case 'geo-no':  rememberGeoChoice('no'); renderStopView(); break;
-    case 'fav':     stopOpenSaved(stopFavs[Number(el.dataset.index)]); break;
+    case 'fav':     stopOpenSaved(stopFavs[Number(el.dataset.index)]); if (stopState.destQuery) { stopState.destFilter = stopState.destQuery; renderStopView(); } break;
     case 'star': {
       const result = toggleStopFav(stopState.stop);
       if (result === null) { status.textContent = T('stopFull'); break; }
@@ -6488,7 +6526,14 @@ document.getElementById('stopview').addEventListener('click', event => {
 });
 document.getElementById('stopview').addEventListener('input', event => {
   if (event.target.id === 'stop-search') stopRenderSearch(event.target.value);
-  if (event.target.id === 'stop-dest')   stopRenderDest(event.target.value);
+  if (event.target.id === 'stop-dest') {
+    stopState.destQuery = event.target.value;
+    const pos = event.target.selectionStart;
+    renderStopView();                              // the lists themselves change
+    const again = document.getElementById('stop-dest');
+    if (again) { again.focus(); try { again.setSelectionRange(pos, pos); } catch (e) {} }
+    stopRenderDest(event.target.value);
+  }
   if (event.target.id === 'stop-filter') {
     stopState.destFilter = event.target.value;
     const rows = document.getElementById('stop-rows');
