@@ -361,15 +361,22 @@
   /* The line laid out sideways. Scrolls; the current station starts centred. */
   .mtrstrip { display:flex; align-items:center; gap:6px; overflow-x:auto; padding:6px 0 10px; margin-bottom:4px;
               scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
-  .mtrpad { flex:0 0 calc(50% - 60px); }   /* so the end stations can reach the middle */
+  .mtrpad { flex:0 0 calc(50% - 56px); }   /* so the end stations can reach the middle */
   .mtrstop { flex:0 0 auto; min-height:52px; padding:0 12px; border:2px solid var(--line); border-top:8px solid var(--line);
              border-radius:10px; background:white; font-weight:700; font-size:0.94rem; white-space:nowrap;
              color:var(--ink); scroll-snap-align:center; }
   /* The station you are at: the big one in the middle. */
   .mtrstop.here { background:var(--navy); border-color:var(--navy) !important; color:white;
-                  font-size:1.24rem; min-height:64px; padding:0 18px; }
-  .mtrstop.on { background:var(--red); border-color:var(--red) !important; color:white; }
-  .mtrstop.off { color:var(--ink-3); background:#f3f4f6; }
+                  font-size:1.41rem; min-height:76px; padding:0 22px; }
+  /* The stations ahead, one per line, numbered by stops away. */
+  .mtrnexts { display:flex; flex-direction:column; gap:4px; }
+  .mtrnext { display:flex; align-items:center; gap:10px; min-height:46px; padding:4px 12px; border:2px solid var(--line);
+             border-radius:10px; background:white; font-weight:700; font-size:1rem; color:var(--ink); text-align:left; cursor:pointer; }
+  .mtrnext .n { flex:0 0 32px; height:32px; border-radius:16px; background:var(--navy-tint); color:var(--navy);
+                display:flex; align-items:center; justify-content:center; font-weight:800; }
+  .mtrnext .nm { flex:1; min-width:0; }
+  .mtrnext.on { background:var(--red); border-color:var(--red); color:white; }
+  .mtrnext.on .n { background:white; color:var(--red); }
   /* Not a target, but a finger landing on it still slides the strip. */
   .mtrstop.dead { pointer-events:none; }
   .mtrtrain { display:flex; align-items:center; gap:12px; border:2px solid var(--line-soft);
@@ -378,10 +385,6 @@
   .mtrtrain .mtrmeta { flex:1; min-width:0; font-size:1rem; font-weight:700; color:var(--ink-2);
                        overflow-wrap:anywhere; }
   .mtrtrain.hero { border-color:var(--green); background:var(--green-tint); }
-  .mtrdest { flex:1 1 45%; min-height:48px; border:2px solid var(--line); border-radius:10px;
-             background:white; font-size:1rem; font-weight:700; color:var(--ink); cursor:pointer;
-             padding:6px 10px; overflow-wrap:anywhere; }
-  .mtrdest.on { background:var(--red); border-color:var(--red); color:white; }
   .mtrsummary { border:2px solid var(--red); border-left-width:12px; border-radius:12px;
                 padding:12px 14px; margin-top:10px; background:white; }
   .mtrsummary .big { font-size:1.29rem; font-weight:800; color:var(--ink); }
@@ -1118,11 +1121,10 @@ const TEXT = {
     mtrGeoBody:'If you allow it, the app finds the MTR station closest to you and shows the next trains. Your location stays on this phone.',
     mtrNearby:'Nearest stations', mtrNoneNear:'No MTR station within 1.5 km. Type a station name instead.',
     mtrSearchPh:'Type a station name…', mtrSaved:'Your saved stations', mtrChange:'Change',
-    mtrLineStrip:'Slide a line to change station · tap a station to go there',
+    mtrLineStrip:'Tap or slide a station to stand there', mtrNextStops:'Stations ahead — tap one for the arrival time',
     mtrAway:'about {m} m away', mtrNearestTag:'nearest station',
     mtrNextTrains:'Next trains',
-    mtrPlatform:'Platform {p}', mtrChooseDest:'Going to… (optional)',
-    mtrStops:'{n} stops', mtrOneStop:'1 stop', mtrRide:'about {m} min on the train',
+    mtrPlatform:'Platform {p}', mtrStops:'{n} stops', mtrOneStop:'1 stop', mtrRide:'about {m} min on the train',
     mtrArrive:'Take the train in {w} min — arrive about {t}',
     mtrArriveNow:'Take the train arriving now — arrive about {t}',
     mtrTrips:'Your planned trip', mtrShowTrips:'Show train options ({n})',
@@ -1288,11 +1290,10 @@ const TEXT = {
     mtrGeoBody:'允許後，本app會找出離你最近的港鐵站，並顯示下班列車。你的位置只留在這部手機。',
     mtrNearby:'最近的車站', mtrNoneNear:'1.5 公里內沒有港鐵站，請輸入車站名稱。',
     mtrSearchPh:'輸入車站名稱…', mtrSaved:'你收藏的車站', mtrChange:'更改',
-    mtrLineStrip:'滑動路綫可換站 · 按車站即選為目的地',
+    mtrLineStrip:'按一下或滑動車站即可換站', mtrNextStops:'沿途車站 — 按一下計算到達時間',
     mtrAway:'距離約 {m} 米', mtrNearestTag:'最近車站',
     mtrNextTrains:'下班列車',
-    mtrPlatform:'{p} 號月台', mtrChooseDest:'目的地站（可選）',
-    mtrStops:'{n} 個站', mtrOneStop:'1 個站', mtrRide:'車程約 {m} 分鐘',
+    mtrPlatform:'{p} 號月台', mtrStops:'{n} 個站', mtrOneStop:'1 個站', mtrRide:'車程約 {m} 分鐘',
     mtrArrive:'乘搭 {w} 分鐘後的班次，預計 {t} 到達',
     mtrArriveNow:'乘搭即將到達的班次，預計 {t} 到達',
     mtrTrips:'已規劃的行程', mtrShowTrips:'查看港鐵行程建議 ({n})',
@@ -7118,6 +7119,18 @@ function mtrSetDir(dir, line) {
   mtrState.dir = dir; mtrState.dest = null; renderMtrView();
 }
 function mtrSetDest(code) { mtrState.dest = (mtrState.dest === code ? null : code); renderMtrView(); }
+// Stand at another station on this line — a tap on its chip or a slide that
+// settles on it. The direction is kept when the new station has it, so a
+// rider moving along the line towards somewhere is not asked again.
+function mtrJumpTo(code, line) {
+  const keepDir = (line && mtrState.line === line) ? mtrState.dir : null;
+  mtrState = Object.assign(freshMtrState(), { locateTried: true, station: code, line: line || null, dir: keepDir });
+  const lines = whichLinesServe(code);
+  if (!mtrState.line && lines.length === 1) mtrState.line = lines[0];
+  if (mtrState.line && !lines.includes(mtrState.line)) { mtrState.line = lines.length === 1 ? lines[0] : null; mtrState.dir = null; }
+  renderMtrView();
+  mtrLoadBlocks();
+}
 
 // One request per line through the station, all at once: at an interchange
 // like 九龍塘 the rider sees both lines and all four directions in one go,
@@ -7224,7 +7237,7 @@ function mtrCentreStrip() {
         }
         const code = best && best.dataset.code;
         if (!code || code === mtrState.station) { mtrCentreStrip(); return; }
-        mtrSetStation(code);
+        mtrJumpTo(code, strip.dataset.line);
       }, 220);
     };
   }
@@ -7332,10 +7345,9 @@ function renderMtrView() {
     if (sides) {
       html += '<div class="mtrstrip" id="mtr-strip-' + line + '" data-line="' + line + '"><span class="mtrpad"></span>' +
         sides.order.map((code, j) => {
-          const side = j < sides.i ? sides.left : (j > sides.i ? sides.right : null);
-          const cls = 'mtrstop' + (j === sides.i ? ' here' : '') + (active && st.dest === code ? ' on' : '') + (j !== sides.i && !side ? ' off' : '');
-          return '<button class="' + cls + (side ? '' : ' dead') + '" data-code="' + code + '" style="border-top-color:' + colour + '"' +
-            (side ? ' data-mtr-jump="' + code + '" data-side="' + side.key + '" data-line="' + line + '"' : ' tabindex="-1" aria-disabled="true"') +
+          const here = j === sides.i;
+          return '<button class="mtrstop' + (here ? ' here dead' : '') + '" data-code="' + code + '" style="border-top-color:' + colour + '"' +
+            (here ? ' aria-current="true" tabindex="-1"' : ' data-mtr-jump="' + code + '" data-line="' + line + '"') +
             '>' + esc(stationName(code)) + '</button>';
         }).join('') + '<span class="mtrpad"></span></div>';
     }
@@ -7367,13 +7379,14 @@ function renderMtrView() {
           (t.plat ? '<br>' + T('mtrPlatform').replace('{p}', esc(t.plat)) : '') + '</div></div>').join('');
         html += '<div class="mtrupdated">' + T('updatedAt').replace('{t}', stamp) + '</div>';
 
+        // Every station ahead this way, in order, numbered by stops away.
+        // Tapping one gives the arrival time; the strip above stays "where
+        // I am" and never doubles as the place you are going.
         const ahead = mtrStationsAhead();
         if (ahead.length) {
-          if (!sides) {   // no strip drawn (order unknown): fall back to a plain list
-            html += '<div class="mtrsub">' + T('mtrChooseDest') + '</div><div class="mtrdests">' +
-              ahead.map(code => '<button class="mtrdest' + (st.dest === code ? ' on' : '') + '" data-mtr-dest="' + code + '">' +
-                esc(stationName(code)) + '</button>').join('') + '</div>';
-          }
+          html += '<div class="mtrsub">' + T('mtrNextStops') + '</div><div class="mtrnexts">' +
+            ahead.map((code, i) => '<button class="mtrnext' + (st.dest === code ? ' on' : '') + '" data-mtr-dest="' + code + '">' +
+              '<span class="n">' + (i + 1) + '</span><span class="nm">' + esc(stationName(code)) + '</span></button>').join('') + '</div>';
           if (st.dest && ahead.includes(st.dest)) {
             const stops = ahead.indexOf(st.dest) + 1;
             const route = railRoute(st.station, st.dest);
@@ -7438,13 +7451,7 @@ document.getElementById('mtrview').addEventListener('click', event => {
   const el = event.target.closest('[data-mtr-station],[data-mtr-dir],[data-mtr-dest],[data-mtr-jump],[data-mtr-act]');
   if (!el) return;
   const d = el.dataset;
-  if (d.mtrJump) {     // a station on a strip: its line, and the direction from its side
-    if (d.line) mtrState.line = d.line;
-    mtrState.dir = d.side;
-    mtrState.dest = mtrState.dest === d.mtrJump ? null : d.mtrJump;
-    renderMtrView();
-    return;
-  }
+  if (d.mtrJump) { mtrJumpTo(d.mtrJump, d.line); return; }   // a station on a strip: stand there
   if (d.mtrStation) return mtrSetStation(d.mtrStation);
   if (d.mtrDir)     return mtrSetDir(d.mtrDir, d.line);
   if (d.mtrDest)    return mtrSetDest(d.mtrDest);
