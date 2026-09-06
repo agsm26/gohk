@@ -260,14 +260,13 @@
      is measured from the real element rather than assumed — its height
      changes with the number of warnings. --toph is what everything below
      actually hangs from. */
-  :root { --navh:calc(62px + env(safe-area-inset-top, 0px));
+  :root { --navh:62px;
           --wxh:0px;
           --toph:calc(var(--navh) + var(--wxh)); }
   #bottombar {
     position:fixed; top:0; left:0; right:0; z-index:1400;
     display:flex; background:white; border-bottom:2px solid var(--line-soft);
     box-shadow:0 2px 12px rgba(0,0,0,.18);
-    padding-top:env(safe-area-inset-top, 0px);
   }
   /* border-box keeps the button exactly 60px including its underline, which
      is what --navh above assumes. Without it the 4px border is added on top
@@ -6546,7 +6545,7 @@ function renderStopView() {
   const view = document.getElementById('stopview');
   if (!view) return;
   const st = stopState;
-  let html = '<div class="favhead">🚏 ' + T('stopTitle') + '</div>';
+  let html = '';   // no heading: the tab is the heading, and the space is worth more
 
   // The typed destination, if any, narrows every list on this screen to
   // poles that have a direct bus there — and each pole's line to just those
