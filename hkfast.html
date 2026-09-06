@@ -5795,7 +5795,9 @@ function formatArrivals(entries, opts) {
   }
   if (byRoute.size === 0) return '<div class="eta-note">' + T('noBusDue') + '</div>';
 
-  let html = '';
+  // Soonest first: by arrival at the place when one is set, otherwise by the
+  // next bus. A bus due in 18 minutes that arrives last belongs last.
+  const items = [];
   for (const [label, group] of byRoute) {
     const route = label.split('|')[0];
     const sample = group.sample;
@@ -5835,13 +5837,16 @@ function formatArrivals(entries, opts) {
       const hhmm = at.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
       arriveTag = '<span class="eta-arrive">🏁 ' + T('etaArrive').replace('{n}', stopsAway).replace('{t}', hhmm).replace('{d}', esc(opts.destName || '')) + '</span>';
     }
-    html += '<div class="eta-row">' + star + '<span class="eta-route">' + route + '</span>' +
-            '<span class="eta-dest">' + dest + '</span>' + fareTag +
-            '<span class="eta-times">' +
-            group.minutes.slice(0,3).map(m => m === 0 ? T('due') : m + T('min')).join(', ') +
-            '</span>' + arriveTag + '</div>';
+    const sortKey = stopsAway !== undefined ? group.minutes[0] + stopsAway * MINUTES_PER_STOP : group.minutes[0];
+    items.push({ sortKey, html:
+      '<div class="eta-row">' + star + '<span class="eta-route">' + route + '</span>' +
+      '<span class="eta-dest">' + dest + '</span>' + fareTag +
+      '<span class="eta-times">' +
+      group.minutes.slice(0,3).map(m => m === 0 ? T('due') : m + T('min')).join(', ') +
+      '</span>' + arriveTag + '</div>' });
   }
-  return html;
+  items.sort((a, b) => a.sortKey - b.sortKey);
+  return items.map(x => x.html).join('');
 }
 
 
@@ -6618,8 +6623,7 @@ function renderStopView() {
   const chip = group.length > 1 ? T('stopBays').replace('{n}', group.length) : code;
   html += '<div class="mtrsta"><div class="mtrname">🚏 ' + esc(stopName(stop)) +
           (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
-          (here !== null ? '<small>' + T('mtrAway').replace('{m}', here) + '</small>' : '') +
-          poleRoutesLine(groupIds, 6) + '</div>' +
+          (here !== null ? '<small>' + T('mtrAway').replace('{m}', here) + '</small>' : '') + '</div>' +
           '<button class="refreshbtn" data-stop-act="change">' + T('mtrChange') + '</button></div>' +
           '<div class="mtrpick"><button class="' + (saved ? 'rsstar on' : 'rsstar') + '" style="flex:none;width:100%;height:auto;min-height:48px" data-stop-act="star">' +
           T(saved ? 'stopSavedBtn' : 'stopSaveBtn') + '</button></div>';
