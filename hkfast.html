@@ -506,6 +506,31 @@
              background:white; color:var(--ink-3); font-size:1rem; font-weight:800; cursor:pointer; }
 
   .rshint { font-size:0.94rem; color:var(--ink-3); line-height:1.45; margin-bottom:10px; }
+  /* Saved places on the 車站 tab: pill buttons, one tap each. */
+  .destchips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px; }
+  .destchip { min-height:44px; padding:0 16px; border-radius:22px; border:2px solid var(--line);
+              background:white; font-weight:700; font-size:1rem; color:var(--ink); }
+  .destchip.on { border-color:var(--amber); background:var(--amber-tint); color:var(--amber); }
+  /* The "which way?" sheet for a looked-up bus: one big button per direction. */
+  #dirsheet { display:none; position:fixed; inset:0; z-index:2000; background:rgba(15,23,42,.55);
+              align-items:flex-end; justify-content:center; padding:10px; }
+  #dirsheet.open { display:flex; }
+  .dircard { background:white; border-radius:16px; width:100%; max-width:460px; padding:16px 16px 14px;
+             max-height:85vh; overflow:auto; box-shadow:0 12px 40px rgba(0,0,0,.35); }
+  .dirhead { display:flex; align-items:baseline; gap:10px; margin-bottom:4px; }
+  .dirhead b { font-size:1.6rem; color:var(--blue); }
+  .dirhead span { font-size:1.06rem; font-weight:800; color:var(--ink-2); }
+  .dirbtn { display:block; width:100%; min-height:64px; text-align:left; border:2px solid var(--line);
+            border-radius:12px; background:white; padding:10px 14px; margin-top:10px; color:var(--ink); }
+  .dirbtn b { display:block; font-size:1.18rem; line-height:1.3; }
+  .dirbtn b i { font-style:normal; color:var(--blue); }
+  .dirbtn small { display:block; font-size:0.94rem; font-weight:700; color:var(--ink-3); margin-top:2px; }
+  .dirbtn .dirnote { color:var(--amber); }
+  .dirbtn:active { background:var(--blue-tint); }
+  .dirmore { width:100%; min-height:44px; margin-top:10px; border:none; background:transparent;
+             color:var(--blue); font-weight:800; font-size:0.94rem; text-decoration:underline; }
+  .dircancel { width:100%; min-height:48px; margin-top:12px; border-radius:12px; border:2px solid var(--line);
+               background:#f3f4f6; font-weight:800; font-size:1rem; color:var(--ink); }
 
   .rsrow { display:flex; align-items:center; gap:8px; padding:8px 6px;
            border-bottom:2px solid var(--surface-2); }
@@ -999,6 +1024,9 @@
 
 <div id="stopdetail"></div>
 
+<!-- "Which way?" for a looked-up bus. Filled by showDirections(). -->
+<div id="dirsheet" role="dialog" aria-modal="true"><div class="dircard" id="dircard"></div></div>
+
 <div id="routebanner">
   <button id="rb-close" title="Close">✕</button>
   <div id="rb-trip" style="display:none">
@@ -1074,6 +1102,9 @@ const TEXT = {
     favStops:'MY STOPS', noStopsLong:'No stops saved. On the STOPS tab, open a stop and tap ☆ Save stop.',
     favStopOpen:'Show buses here', stopSavedMsg:'Saved {s}', stopRemovedMsg:'Removed {s}',
     stopFull:'Saved stops are full (8) — remove one first.',
+    stopDestSaved:'Places you go', stopDestStar:'Save this place', stopDestUnstar:'Saved — tap to remove',
+    stopDestFull:'Saved places are full (8) — remove one first.',
+    stopDestSavedMsg:'Saved "{d}" to places you go.', stopDestRemovedMsg:'Removed "{d}".',
     stopDestPh:'Going to… (type a place)',
     stopDestNeedLoc:'Allow location to find which nearby stops have a direct bus.',
     stopFilterPh:'Only buses towards…', stopFilterNone:'No bus from this stop towards {d}.',
@@ -1131,9 +1162,10 @@ const TEXT = {
     checkingBus:'Checking next bus…', next:'Next', inTime:'in', then:'Then',
     checked:'Checked', noBusDue:'No bus due at this stop right now.',
     working:'Working it out…', whichDirection:'— which direction are you going?',
-    backToList:'← Back to route list', from:'FROM', to:'TO',
+    from:'FROM', to:'TO',
     directions:'directions — tap to choose', direction:'direction — tap to choose',
     special:'Special / peak-hour service', noMatch:'No route matches that.',
+    dirTitle:'Which way?', dirMore:'{n} special / peak-hour services ▾', dirLess:'Hide special services ▴', cancel:'Cancel',
     mustChange:'⚠ You must change bus once.',
     mustChangeTrain:'⚠ You must change line once, inside the station.',
     lotsWalking:'⚠ About {n} minutes of walking in total. Check the other options if that is too much.',
@@ -1236,6 +1268,9 @@ const TEXT = {
     favStops:'常用車站', noStopsLong:'尚未收藏車站。在「車站」打開車站後，按「☆ 收藏此站」。',
     favStopOpen:'查看此站班次', stopSavedMsg:'已收藏 {s}', stopRemovedMsg:'已移除 {s}',
     stopFull:'常用車站已滿（8 個），請先移除一個。',
+    stopDestSaved:'常去的目的地', stopDestStar:'收藏此目的地', stopDestUnstar:'已收藏，按此移除',
+    stopDestFull:'常去目的地已滿（8 個），請先移除一個。',
+    stopDestSavedMsg:'已收藏目的地「{d}」。', stopDestRemovedMsg:'已移除「{d}」。',
     stopDestPh:'我要去…（輸入目的地）',
     stopDestNeedLoc:'允許使用位置，才可找出附近哪個站有直達巴士。',
     stopFilterPh:'只顯示往…', stopFilterNone:'此站沒有往 {d} 的巴士。',
@@ -1293,9 +1328,10 @@ const TEXT = {
     checkingBus:'正在查詢下班車…', next:'下班', inTime:'還有', then:'之後',
     checked:'更新於', noBusDue:'此站現時沒有班次。',
     working:'正在計算…', whichDirection:'— 請選擇方向',
-    backToList:'← 返回路線列表', from:'由', to:'往',
+    from:'由', to:'往',
     directions:'個方向 — 點選以選擇', direction:'個方向 — 點選以選擇',
     special:'特別 / 繁忙時間班次', noMatch:'找不到相符的路線。',
+    dirTitle:'去邊個方向？', dirMore:'另有 {n} 條特別 / 繁忙時間班次 ▾', dirLess:'收起特別班次 ▴', cancel:'取消',
     mustChange:'⚠ 需轉乘一次巴士。',
     mustChangeTrain:'⚠ 需於站內轉綫一次。',
     lotsWalking:'⚠ 全程約需步行 {n} 分鐘。如太多，請考慮其他選擇。',
@@ -2166,6 +2202,23 @@ function saveStopFavs() {
   if (typeof paintBottomBar === 'function') paintBottomBar();
 }
 function isSavedStop(stopId) { return stopFavs.some(f => f.stop === stopId); }
+
+// Places people go, for the 車站 tab's 我要去 box — names, not poles, because
+// "屯門轉車站" is the thing a rider knows; which pole they leave from depends
+// on where they are standing today. Max 8, newest first.
+const MAX_DESTS = 8;
+let stopDests = [];
+try { stopDests = JSON.parse(localStorage.getItem('hkfast-stopdests') || '[]').filter(d => typeof d === 'string'); } catch (e) { stopDests = []; }
+function saveStopDests() { try { localStorage.setItem('hkfast-stopdests', JSON.stringify(stopDests)); } catch (e) {} }
+function isSavedDest(name) { return stopDests.includes(String(name || '').trim()); }
+function toggleStopDest(name) {
+  name = String(name || '').trim();
+  if (!name) return false;
+  const at = stopDests.indexOf(name);
+  if (at >= 0) { stopDests.splice(at, 1); saveStopDests(); return false; }
+  if (stopDests.length >= MAX_DESTS) return null;
+  stopDests.unshift(name); saveStopDests(); return true;
+}
 function toggleStopFav(stop) {
   const at = stopFavs.findIndex(f => f.stop === stop.stop);
   if (at >= 0) { stopFavs.splice(at, 1); saveStopFavs(); return false; }
@@ -5811,18 +5864,26 @@ routeInput.addEventListener('input', () => {
     kmbByNumber.get(route.route).push(route);
   }
 
-  for (const [routeNo, variants] of [...kmbByNumber].slice(0, 6)) {
+  const kmbRows = [...kmbByNumber].slice(0, 6);
+  const ctbRows = ctbRoutes.filter(r => r.route.toUpperCase().startsWith(typed)).slice(0, 4);
+
+  // Typed the whole number and it is the only match: no list to tap through,
+  // straight to "which way?". "60X" is one tap fewer; "6" still shows 6, 6C…
+  if (kmbRows.length + ctbRows.length === 1) {
+    const only = kmbRows[0] ? { no: kmbRows[0][0], variants: kmbRows[0][1], co: 'KMB' } : { no: ctbRows[0].route, variants: [ctbRows[0]], co: 'CITYBUS' };
+    if (only.no.toUpperCase() === typed) { showDirections(only.no, only.variants, only.co); return; }
+  }
+
+  for (const [routeNo, variants] of kmbRows) {
+    const n = kmbDirections(variants).main.length;
     const item = document.createElement('li');
     item.innerHTML = '<span class="badge badge-kmb">KMB</span>' +
                      '<span class="routeno">' + routeNo + '</span>' +
-                     '<span style="color:#4b5563">' + variants.length +
-                     ' ' + (variants.length > 1 ? T('directions') : T('direction')) + '</span>';
+                     '<span style="color:#4b5563">' + n + ' ' + (n > 1 ? T('directions') : T('direction')) + '</span>';
     item.addEventListener('click', () => showDirections(routeNo, variants, 'KMB'));
     routeList.appendChild(item);
   }
-
-  const ctbByNumber = ctbRoutes.filter(r => r.route.toUpperCase().startsWith(typed)).slice(0, 4);
-  for (const route of ctbByNumber) {
+  for (const route of ctbRows) {
     const item = document.createElement('li');
     item.innerHTML = '<span class="badge badge-ctb">CITYBUS</span>' +
                      '<span class="routeno">' + route.route + '</span>' +
@@ -5835,54 +5896,79 @@ routeInput.addEventListener('input', () => {
     routeList.innerHTML = '<li>' + T(allRoutes.length === 0 && ctbRoutes.length === 0 ? 'dataLoading' : 'noMatch') + '</li>';
 });
 
-// Step 2: which way is the bus going? Shown as big, plain "A → B" choices,
-// because "outbound" means nothing to most riders.
+// Step 2: which way is the bus going? One sheet, one big button per
+// direction, then the stop list. "Outbound" means nothing to most riders, so
+// each button says 開往 <terminus>. Peak-hour and special routings are folded
+// away behind one line — they are real, but they are not the question.
+function kmbDirections(variants) {
+  const byBound = new Map();
+  for (const v of variants) { if (!byBound.has(v.bound)) byBound.set(v.bound, []); byBound.get(v.bound).push(v); }
+  const main = [], special = [];
+  for (const list of byBound.values()) {
+    const normal = list.find(v => String(v.service_type) === '1') || list[0];
+    main.push(normal);
+    for (const v of list) if (v !== normal) special.push(v);
+  }
+  return { main, special };
+}
+
 function showDirections(routeNo, variants, company) {
   routeList.innerHTML = '';
+  routeInput.blur();                     // keyboard down before the sheet comes up
 
-  const back = document.createElement('li');
-  back.innerHTML = '<span style="color:#1e40af;font-weight:700">' + T('backToList') + '</span>';
-  back.addEventListener('click', () => routeInput.dispatchEvent(new Event('input')));
-  routeList.appendChild(back);
-
-  const heading = document.createElement('li');
-  heading.style.background = '#f3f4f6';
-  heading.innerHTML = '<b style="font-size:1.1765rem">' + routeNo +
-                      '</b> ' + T('whichDirection');
-  routeList.appendChild(heading);
-
+  let choices = [];                      // { from, to, note, go }
+  let extras  = [];
   if (company === 'CITYBUS') {
     const route = variants[0];
     for (const direction of ['outbound', 'inbound']) {
       const from = direction === 'outbound' ? endName(route, 'orig') : endName(route, 'dest');
       const to   = direction === 'outbound' ? endName(route, 'dest') : endName(route, 'orig');
-      routeList.appendChild(directionRow(from, to, null,
-        () => showCtbRoute(route, direction, from, to)));
+      choices.push({ from, to, note: null, go: () => showCtbRoute(route, direction, from, to) });
     }
-    return;
+  } else {
+    const { main, special } = kmbDirections(variants);
+    choices = main.map(r => ({ from: endName(r, 'orig'), to: endName(r, 'dest'), note: null, go: () => showKmbRoute(r) }));
+    extras  = special.map(r => ({ from: endName(r, 'orig'), to: endName(r, 'dest'), note: T('special'), go: () => showKmbRoute(r) }));
   }
 
-  for (const route of variants) {
-    // service_type 1 is the normal service; anything else is a variant
-    // (peak-hour, special routing), so we say so rather than hiding it.
-    const note = String(route.service_type) !== '1' ? T('special') : null;
-    routeList.appendChild(directionRow(endName(route, 'orig'), endName(route, 'dest'), note,
-      () => showKmbRoute(route)));
-  }
-}
+  // A circular route has one way to go: no question to ask.
+  if (choices.length === 1 && !extras.length) { choices[0].go(); return; }
 
-function directionRow(from, to, note, onClick) {
-  const item = document.createElement('li');
-  item.innerHTML =
-    '<div style="font-size:0.94rem;color:#166534;font-weight:800">' + T('from') + '</div>' +
-    '<div style="font-size:1rem;font-weight:700">' + esc(from) + '</div>' +
-    '<div style="font-size:1.2941rem;color:#1e40af;margin:2px 0">↓</div>' +
-    '<div style="font-size:0.94rem;color:#991b1b;font-weight:800">' + T('to') + '</div>' +
-    '<div style="font-size:1rem;font-weight:700">' + esc(to) + '</div>' +
-    (note ? '<div style="font-size:0.94rem;color:#92400e;margin-top:4px">⚠ ' + esc(note) + '</div>' : '');
-  item.addEventListener('click', onClick);
-  return item;
+  const sheet = document.getElementById('dirsheet');
+  const card  = document.getElementById('dircard');
+  const button = (c, i, cls) =>
+    '<button class="dirbtn' + (cls || '') + '" data-dir="' + i + '">' +
+    '<b>' + T('towards') + ' <i>' + esc(c.to) + '</i></b>' +
+    '<small>' + T('from') + ' ' + esc(c.from) + (c.note ? ' · <span class="dirnote">⚠ ' + esc(c.note) + '</span>' : '') + '</small></button>';
+  const all = choices.concat(extras);
+  card.innerHTML = '<div class="dirhead"><b>' + esc(routeNo) + '</b><span>' + T('dirTitle') + '</span></div>' +
+    choices.map((c, i) => button(c, i)).join('') +
+    (extras.length ? '<button class="dirmore" data-more="1">' + T('dirMore').replace('{n}', extras.length) + '</button>' +
+      '<div id="dirextras" hidden>' + extras.map((c, i) => button(c, choices.length + i)).join('') + '</div>' : '') +
+    '<button class="dircancel" data-cancel="1">' + T('cancel') + '</button>';
+  card.onclick = event => {
+    const more = event.target.closest('[data-more]');
+    if (more) {
+      const box = document.getElementById('dirextras');
+      box.hidden = !box.hidden;
+      more.textContent = T(box.hidden ? 'dirMore' : 'dirLess').replace('{n}', extras.length);
+      return;
+    }
+    if (event.target.closest('[data-cancel]')) { closeDirections(); return; }
+    const btn = event.target.closest('[data-dir]');
+    if (!btn) return;
+    closeDirections();
+    all[Number(btn.dataset.dir)].go();
+  };
+  sheet.classList.add('open');
 }
+function closeDirections() {
+  const sheet = document.getElementById('dirsheet');
+  sheet.classList.remove('open');
+  document.getElementById('dircard').innerHTML = '';
+}
+document.getElementById('dirsheet').addEventListener('click', event => { if (event.target.id === 'dirsheet') closeDirections(); });
+document.addEventListener('keydown', event => { if (event.key === 'Escape') closeDirections(); });
 
 // Terminus names in the reader's own language. The feeds carry both, so
 // showing the English one to a Chinese reader is a choice, not a limit.
@@ -6364,9 +6450,20 @@ function renderStopView() {
       }
       if (st.indexing || !stopIndex) html += '<div class="rshint">' + T('stopIndexing') + '</div>';
       // Where are you going? Answered from the poles around you.
+      const destTyped = String(st.destQuery || '').trim();
+      const destSaved = destTyped && isSavedDest(destTyped);
+      const canSaveDest = destTyped && (destSaved || filtering);   // only a name that names real stops
       html += '<div class="mtrsub">' + T('stopDestPh').replace(/[（(].*$/, '') + '</div>' +
-              '<div class="frow"><input id="stop-dest" type="text" placeholder="' + esc(T('stopDestPh')) + '" autocomplete="off" value="' + esc(st.destQuery || '') + '"></div>' +
+              '<div class="frow"><input id="stop-dest" type="text" placeholder="' + esc(T('stopDestPh')) + '" autocomplete="off" value="' + esc(st.destQuery || '') + '">' +
+              (canSaveDest ? '<button class="rsstar' + (destSaved ? ' on' : '') + '" data-stop-act="deststar" title="' + esc(T(destSaved ? 'stopDestUnstar' : 'stopDestStar')) + '" aria-label="' + esc(T(destSaved ? 'stopDestUnstar' : 'stopDestStar')) + '">' + (destSaved ? '★' : '☆') + '</button>' : '') +
+              '</div>' +
               '<div id="stop-dest-results"></div>';
+      if (stopDests.length) {
+        // One tap sets the place; tapping the lit one again clears it.
+        html += '<div class="mtrsub">' + T('stopDestSaved') + '</div><div class="destchips">' +
+          stopDests.map(d => '<button class="destchip' + (d === destTyped ? ' on' : '') + '" data-stop-act="dest" data-name="' + esc(d) + '">' + (d === destTyped ? '★ ' : '') + esc(d) + '</button>').join('') +
+          '</div>';
+      }
       if (st.destQuery && destIds && !destIds.size)
         html += '<div class="favempty">' + T('stopDestNoName').replace('{d}', esc(st.destQuery)) + '</div>';
       if (filtering) html += '<div class="rshint">' + T('stopShowingTo').replace('{d}', esc(st.destQuery)) + '</div>';
@@ -6514,6 +6611,20 @@ document.getElementById('stopview').addEventListener('click', event => {
     case 'refresh': stopLoadRows(true); break;
     case 'geo-yes': rememberGeoChoice('yes'); stopLocate(); break;
     case 'geo-no':  rememberGeoChoice('no'); renderStopView(); break;
+    case 'dest': {
+      const name = el.dataset.name || '';
+      stopState.destQuery = stopState.destQuery === name ? '' : name;
+      renderStopView();
+      break;
+    }
+    case 'deststar': {
+      const name = String(stopState.destQuery || '').trim();
+      const result = toggleStopDest(name);
+      if (result === null) { status.textContent = T('stopDestFull'); break; }
+      status.textContent = T(result ? 'stopDestSavedMsg' : 'stopDestRemovedMsg').replace('{d}', name);
+      renderStopView();
+      break;
+    }
     case 'fav':     stopOpenSaved(stopFavs[Number(el.dataset.index)]); if (stopState.destQuery) { stopState.destFilter = stopState.destQuery; renderStopView(); } break;
     case 'star': {
       const result = toggleStopFav(stopState.stop);
