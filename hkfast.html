@@ -536,6 +536,11 @@
   .rshint { font-size:0.94rem; color:var(--ink-3); line-height:1.45; margin-bottom:10px; }
   /* Saved places on the 車站 tab: pill buttons, one tap each. */
   .destchips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px; }
+  /* Suggested names under the 我要去 box while typing. */
+  .suggest { display:flex; flex-direction:column; gap:4px; margin:-2px 0 8px; }
+  .suggest button { min-height:44px; text-align:left; padding:0 14px; border:2px solid var(--line); border-radius:10px;
+                    background:white; font-weight:700; font-size:1rem; color:var(--ink); cursor:pointer; }
+  .suggest button:active { background:var(--navy-tint); }
   .destchip { min-height:44px; padding:0 16px; border-radius:22px; border:2px solid var(--line);
               background:white; font-weight:700; font-size:1rem; color:var(--ink); }
   .destchip.on { border-color:var(--amber); background:var(--amber-tint); color:var(--amber); }
@@ -6309,7 +6314,7 @@ const STOP_NEAR_M = 500;
 let stopState = freshStopState();
 function freshStopState() {
   return { stop:null, rows:null, noLive:false, loading:false, alert:null,
-           fetchedAt:0, locating:false, locateTried:false, destFilter:'', destQuery:'', indexing:false, group:null };
+           fetchedAt:0, locating:false, locateTried:false, destFilter:'', destQuery:'', destPicked:false, indexing:false, group:null };
 }
 
 // Which company runs the buses at this pole, from the planner's own index.
@@ -6588,7 +6593,7 @@ function stopLocate() {
 
 function stopSetStop(stop, groupStops) {
   const group = groupStops && groupStops.length > 1 ? groupStops : poleGroup(stop);
-  stopState = Object.assign(freshStopState(), { locateTried: true, stop, group, destQuery: stopState.destQuery, indexing: stopState.indexing });
+  stopState = Object.assign(freshStopState(), { locateTried: true, stop, group, destQuery: stopState.destQuery, destPicked: stopState.destPicked, indexing: stopState.indexing });
   renderStopView();
   stopLoadRows();
 }
@@ -6598,7 +6603,7 @@ function stopOpenSaved(sf) {
   // The place typed above stays with you: it becomes the 往… filter here.
   const dest = String(stopState.destQuery || '').trim();
   stopState = Object.assign(freshStopState(), { locateTried: true, stop: sf, group: poleGroup(sf),
-                                                destQuery: dest, destFilter: dest, indexing: stopState.indexing });
+                                                destQuery: dest, destFilter: dest, destPicked: stopState.destPicked, indexing: stopState.indexing });
   if (activeMode !== 'stop') { showMode('stop'); return; }
   renderStopView(); stopLoadRows();
 }
@@ -6749,7 +6754,9 @@ function stopPickerParts() {
 let stopRefreshPending = 0;
 function stopScheduleRefresh() {
   if (stopRefreshPending) return;
-  stopRefreshPending = requestAnimationFrame(() => {
+  // A short timer, not an animation frame: frames stop in a backgrounded
+  // tab, and the redraw would then wait until the tab was looked at again.
+  stopRefreshPending = setTimeout(() => {
     stopRefreshPending = 0;
     const rest = document.getElementById('stop-rest');
     if (!rest || stopState.stop) { renderStopView(); return; }
@@ -6761,7 +6768,7 @@ function stopScheduleRefresh() {
     if (starBox && starBox.innerHTML !== parts.star) starBox.innerHTML = parts.star;
     if (startTyped) { const again = document.getElementById('stop-search'); if (again) { again.value = startTyped; stopRenderSearch(startTyped); } }
     stopRenderDest(stopState.destQuery);
-  });
+  }, 16);
 }
 
 function renderStopView() {
@@ -6850,6 +6857,39 @@ function stopRowsHtml() {
 // "I want to go to X": every pole within 600 m, and every bus from it that
 // stops at X further down its route. Grouped by pole, nearest first, so the
 // answer is "cross to MK752 and take the 60X", not a list of route numbers.
+// Station names that begin with what was typed, Chinese or English, one
+// line per name, shortest first — 金 lists 金鐘 before 金鐘道, "tue" lists
+// Tuen Mun. Names that merely contain the text follow if there is room.
+const suggestMemo = new Map();
+function destSuggestions(q, max) {
+  const needle = tidyName(q);
+  if (!needle) return [];
+  const memoKey = lang + '|' + dataStamp() + '|' + needle;
+  const hit = suggestMemo.get(memoKey);
+  if (hit) return hit;
+  const seen = new Map();
+  for (const stop of plannableStops()) {
+    const m = memoOf(stop);
+    let rank;
+    if (m.nk === needle || m.ne === needle) rank = 0;
+    else if (m.nk.startsWith(needle) || m.ne.startsWith(needle)) rank = 1;
+    else if (m.nk.includes(needle) || m.ne.includes(needle)) rank = 2;
+    else continue;
+    const name = stopName(stop);
+    if (!name) continue;
+    const have = seen.get(name);
+    if (!have) seen.set(name, { name, rank, count: 1 });
+    else { have.count++; if (rank < have.rank) have.rank = rank; }
+  }
+  const list = [...seen.values()]
+    // Busier names first: 金鐘站 has many poles, 金錢 one or two.
+    .sort((a, b) => a.rank - b.rank || b.count - a.count || a.name.length - b.name.length)
+    .slice(0, max || 8);
+  if (suggestMemo.size >= 60) suggestMemo.delete(suggestMemo.keys().next().value);
+  suggestMemo.set(memoKey, list);
+  return list;
+}
+
 function stopRenderDest(query) {
   const box = document.getElementById('stop-dest-results');
   if (!box) return;
@@ -6857,9 +6897,18 @@ function stopRenderDest(query) {
   const q = String(query || '').trim();
   box.innerHTML = '';
   if (q.length < 1) return;
-  if (!stopIndex) { box.innerHTML = '<div class="rshint">' + T('stopIndexing') + '</div>'; return; }
-  if (!herePoint) { box.innerHTML = '<div class="favempty">' + T('stopDestNeedLoc') + '</div>'; return; }
-  // The picker itself now narrows every list to poles that reach the place typed.
+  let html = '';
+  // Suggest while typing; once a name is picked (or tapped from the saved
+  // places) the list stands down until the text changes again.
+  if (!stopState.destPicked) {
+    const list = destSuggestions(q, 8);
+    const done = list.length === 1 && tidyName(list[0].name) === tidyName(q);
+    if (list.length && !done)
+      html += '<div class="suggest">' + list.map(x => '<button data-stop-act="destpick" data-name="' + esc(x.name) + '">' + esc(x.name) + '</button>').join('') + '</div>';
+  }
+  if (!stopIndex) html += '<div class="rshint">' + T('stopIndexing') + '</div>';
+  else if (!herePoint) html += '<div class="favempty">' + T('stopDestNeedLoc') + '</div>';
+  box.innerHTML = html;
 }
 
 function stopRenderSearch(query) {
@@ -6873,6 +6922,10 @@ function stopRenderSearch(query) {
   const stops = plannableStops();
   let named = stops.filter(stop => nameMatches(stop, needle, false));
   if (!named.length && needle.length >= 2) named = stops.filter(stop => nameMatches(stop, needle, true));
+  // Names that START with the text first, shortest first: 屯門 puts 屯門市中心
+  // ahead of 新屯門中心.
+  const prefixRank = stop => { const m = memoOf(stop); return (m.nk.startsWith(needle) || m.ne.startsWith(needle)) ? 0 : 1; };
+  named.sort((a, b) => prefixRank(a) - prefixRank(b) || stopName(a).length - stopName(b).length);
   // Both ends known: list the STATIONS that match, each as one card even
   // when it is several poles (屯門公路轉車站 is TM750 and TM756, two stops on
   // the same 60X run). The card names the buses that reach the place; the
@@ -6884,12 +6937,13 @@ function stopRenderSearch(query) {
       const reach = reachingRoutes(stop.stop, destIds);
       if (!reach.length) continue;
       const k = stationKey(stop);
-      if (!groups.has(k)) groups.set(k, { stops: [], best: Infinity });
+      if (!groups.has(k)) groups.set(k, { stops: [], best: Infinity, rank: 1 });
       const g = groups.get(k);
       g.stops.push(stop);
+      g.rank = Math.min(g.rank, prefixRank(stop));
       g.best = Math.min(g.best, ...reach.map(x => x.reach.stopsAway));
     }
-    const list = [...groups.values()].sort((a, b) => a.best - b.best).slice(0, 8);
+    const list = [...groups.values()].sort((a, b) => a.rank - b.rank || a.best - b.best).slice(0, 8);
     const place = esc(stopState.destQuery);
     // The typed name matched more than one station name: offer them all at
     // once first — "every bus from any 屯門轉車 stop to any 太子站".
@@ -6951,13 +7005,20 @@ document.getElementById('stopview').addEventListener('click', event => {
     return;
   }
   switch (el.dataset.stopAct) {
-    case 'change':  stopState = Object.assign(freshStopState(), { locateTried: true, destQuery: stopState.destQuery, indexing: stopState.indexing }); renderStopView(); break;
+    case 'change':  stopState = Object.assign(freshStopState(), { locateTried: true, destQuery: stopState.destQuery, destPicked: stopState.destPicked, indexing: stopState.indexing }); renderStopView(); break;
     case 'refresh': stopLoadRows(true); break;
     case 'geo-yes': rememberGeoChoice('yes'); stopLocate(); break;
     case 'geo-no':  rememberGeoChoice('no'); renderStopView(); break;
     case 'dest': {
       const name = el.dataset.name || '';
       stopState.destQuery = stopState.destQuery === name ? '' : name;
+      stopState.destPicked = true;
+      renderStopView();
+      break;
+    }
+    case 'destpick': {   // a suggested name: the whole name into the box
+      stopState.destQuery = el.dataset.name || '';
+      stopState.destPicked = true;
       renderStopView();
       break;
     }
@@ -6983,6 +7044,7 @@ document.getElementById('stopview').addEventListener('input', event => {
   if (event.target.id === 'stop-search') stopRenderSearch(event.target.value);
   if (event.target.id === 'stop-dest') {
     stopState.destQuery = event.target.value;
+    stopState.destPicked = false;                  // typing again: suggest again
     stopScheduleRefresh();                         // the lists change; the box stays put
   }
   if (event.target.id === 'stop-filter') {
