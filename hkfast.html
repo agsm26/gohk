@@ -351,6 +351,19 @@
             background:white; font-size:1.06rem; font-weight:800; color:var(--ink); cursor:pointer;
             padding:8px 10px; overflow-wrap:anywhere; }
   .mtrdir.on { background:var(--navy); border-color:var(--navy); color:white; }
+  .mtrdirs { flex-wrap:nowrap; }
+  .mtrdir.left  { text-align:left; }
+  .mtrdir.right { text-align:right; }
+  .mtrdir.blank { border:none; background:transparent; }
+  /* The line laid out sideways. Scrolls; the current station starts centred. */
+  .mtrstrip { display:flex; gap:6px; overflow-x:auto; padding:6px 2px 10px; margin-bottom:4px;
+              scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
+  .mtrstop { flex:0 0 auto; min-height:48px; padding:0 12px; border:2px solid var(--line); border-top:8px solid var(--line);
+             border-radius:10px; background:white; font-weight:700; font-size:0.94rem; white-space:nowrap;
+             color:var(--ink); scroll-snap-align:center; }
+  .mtrstop.here { background:var(--navy); border-color:var(--navy) !important; color:white; }
+  .mtrstop.on { background:var(--red); border-color:var(--red) !important; color:white; }
+  .mtrstop.off { color:var(--ink-3); background:#f3f4f6; }
   .mtrtrain { display:flex; align-items:center; gap:12px; border:2px solid var(--line-soft);
               border-radius:12px; padding:10px 14px; margin-bottom:6px; }
   .mtrtrain .mtrmin { font-size:1.88rem; font-weight:800; color:var(--green); flex:0 0 auto; min-width:100px; }
@@ -1088,6 +1101,7 @@ const TEXT = {
     mtrGeoBody:'If you allow it, the app finds the MTR station closest to you and shows the next trains. Your location stays on this phone.',
     mtrNearby:'Nearest stations', mtrNoneNear:'No MTR station within 1.5 km. Type a station name instead.',
     mtrSearchPh:'Type a station name…', mtrSaved:'Your saved stations', mtrChange:'Change',
+    mtrLineStrip:'Stations on this line — swipe left or right, tap one to go there',
     mtrAway:'about {m} m away', mtrNearestTag:'nearest station',
     mtrChooseLine:'Which line?', mtrChooseDir:'Which direction?', mtrNextTrains:'Next trains',
     mtrPlatform:'Platform {p}', mtrChooseDest:'Going to… (optional)',
@@ -1257,6 +1271,7 @@ const TEXT = {
     mtrGeoBody:'允許後，本app會找出離你最近的港鐵站，並顯示下班列車。你的位置只留在這部手機。',
     mtrNearby:'最近的車站', mtrNoneNear:'1.5 公里內沒有港鐵站，請輸入車站名稱。',
     mtrSearchPh:'輸入車站名稱…', mtrSaved:'你收藏的車站', mtrChange:'更改',
+    mtrLineStrip:'沿線車站 — 左右滑動，按一下即選為目的地',
     mtrAway:'距離約 {m} 米', mtrNearestTag:'最近車站',
     mtrChooseLine:'選擇路綫', mtrChooseDir:'選擇方向', mtrNextTrains:'下班列車',
     mtrPlatform:'{p} 號月台', mtrChooseDest:'目的地站（可選）',
@@ -6570,7 +6585,7 @@ function renderStopView() {
               '<div class="frow"><input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off"></div>' +
               '<div class="mtrpick" id="stop-search-results"></div>';
       // Saved poles as one-tap pills, same shape as the saved places above.
-      const savedShown = stopFavs.filter(keep).slice(0, MAX_STOPS);
+      const savedShown = stopFavs.slice(0, MAX_STOPS);   // always shown — they are yours, whatever the place
       if (savedShown.length) {
         html += '<div class="mtrsub">' + T('stopSavedPicks') + '</div><div class="destchips">' +
           savedShown.map(f => '<button class="destchip" data-stop-act="fav" data-index="' + stopFavs.indexOf(f) + '">📍 ' + esc(stopName(f)) +
@@ -6968,6 +6983,29 @@ function mtrDirections() {
   return out;
 }
 
+// The line laid out left to right, with this station in the middle. Which
+// direction is "left" is decided by where its terminus sits in the running
+// order, so the two direction buttons underneath can sit on the same sides
+// as the stations they lead to.
+function mtrSides() {
+  const st = mtrState;
+  const dirs = mtrDirections();
+  if (!st.line || !st.station || !dirs.length) return null;
+  const order = mtrOrderFor(st.line, st.station, dirs[0].dest);
+  const i = order.indexOf(st.station);
+  if (i < 0) return null;
+  const at = d => order.indexOf(d.dest);
+  const left  = dirs.find(d => at(d) >= 0 && at(d) < i) || null;
+  const right = dirs.find(d => d !== left && at(d) > i) || dirs.find(d => d !== left) || null;
+  return { order, i, left, right };
+}
+function mtrCentreStrip() {
+  const strip = document.getElementById('mtr-strip');
+  const here = strip && strip.querySelector('.mtrstop.here');
+  if (!strip || !here) return;
+  strip.scrollLeft = Math.max(0, here.offsetLeft - strip.clientWidth / 2 + here.offsetWidth / 2);
+}
+
 // Every station ahead in the chosen direction, to the end of the line.
 function mtrStationsAhead() {
   const { line, station, dir } = mtrState;
@@ -7062,12 +7100,30 @@ function renderMtrView() {
     html += '<div class="mtrpick"><button data-mtr-act="refresh">' + T('refresh') + '</button></div>';
     view.innerHTML = html; return;
   }
-  if (dirs.length > 1) {
+  // The line, left to right, this station in the middle; tap a station to
+  // make it the destination (its direction follows from which side it is on).
+  const sides = mtrSides();
+  const colour = MTR_LINE_COLOURS[st.line] || '#999';
+  if (sides) {
+    html += '<div class="mtrsub">' + T('mtrLineStrip') + '</div><div class="mtrstrip" id="mtr-strip">' +
+      sides.order.map((code, j) => {
+        const side = j < sides.i ? sides.left : (j > sides.i ? sides.right : null);
+        const cls = 'mtrstop' + (j === sides.i ? ' here' : '') + (st.dest === code ? ' on' : '') + (j !== sides.i && !side ? ' off' : '');
+        return '<button class="' + cls + '" style="border-top-color:' + colour + '"' +
+          (side ? ' data-mtr-jump="' + code + '" data-side="' + side.key + '"' : ' disabled') + '>' + esc(stationName(code)) + '</button>';
+      }).join('') + '</div>';
+    // The two direction buttons sit under the stations they lead to.
+    const dirBtn = (d, cls) => d
+      ? '<button class="mtrdir ' + cls + (st.dir === d.key ? ' on' : '') + '" data-mtr-dir="' + d.key + '">' +
+        (cls === 'left' ? '◀ ' : '') + T('towards') + ' ' + esc(stationName(d.dest)) + (cls === 'right' ? ' ▶' : '') + '</button>'
+      : '<div class="mtrdir blank"></div>';
+    html += '<div class="mtrsub">' + T('mtrChooseDir') + '</div><div class="mtrdirs">' + dirBtn(sides.left, 'left') + dirBtn(sides.right, 'right') + '</div>';
+  } else if (dirs.length > 1) {
     html += '<div class="mtrsub">' + T('mtrChooseDir') + '</div><div class="mtrdirs">' +
       dirs.map(d => '<button class="mtrdir' + (st.dir === d.key ? ' on' : '') + '" data-mtr-dir="' + d.key + '">' +
         T('towards') + ' ' + esc(stationName(d.dest)) + '</button>').join('') + '</div>';
   }
-  if (!st.dir) { view.innerHTML = html; return; }
+  if (!st.dir) { view.innerHTML = html; mtrCentreStrip(); return; }
 
   // ---- 4. NEXT TRAINS HERE ----
   const trains = mtrTrains(st.dir).slice(0, 4);
@@ -7089,9 +7145,11 @@ function renderMtrView() {
   // ---- 5. DESTINATION (optional) ----
   const ahead = mtrStationsAhead();
   if (ahead.length) {
-    html += '<div class="mtrsub">' + T('mtrChooseDest') + '</div><div class="mtrdests">' +
-      ahead.map(code => '<button class="mtrdest' + (st.dest === code ? ' on' : '') + '" data-mtr-dest="' + code + '">' +
-        esc(stationName(code)) + '</button>').join('') + '</div>';
+    if (!sides) {   // no strip drawn (order unknown): fall back to a plain list
+      html += '<div class="mtrsub">' + T('mtrChooseDest') + '</div><div class="mtrdests">' +
+        ahead.map(code => '<button class="mtrdest' + (st.dest === code ? ' on' : '') + '" data-mtr-dest="' + code + '">' +
+          esc(stationName(code)) + '</button>').join('') + '</div>';
+    }
     if (st.dest && ahead.includes(st.dest)) {
       const stops = ahead.indexOf(st.dest) + 1;
       const route = railRoute(st.station, st.dest);
@@ -7112,6 +7170,7 @@ function renderMtrView() {
       '<button data-mtr-act="trips">🧭 ' + T('mtrShowTrips').replace('{n}', railPicks.length) + '</button></div>';
   }
   view.innerHTML = html;
+  mtrCentreStrip();
 }
 
 function mtrRenderSearch(query) {
@@ -7148,9 +7207,15 @@ function showRailResults() {
 // One listener for the whole screen: it is redrawn from scratch on every
 // change, so per-button handlers would be lost on each redraw.
 document.getElementById('mtrview').addEventListener('click', event => {
-  const el = event.target.closest('[data-mtr-station],[data-mtr-line],[data-mtr-dir],[data-mtr-dest],[data-mtr-act]');
+  const el = event.target.closest('[data-mtr-station],[data-mtr-line],[data-mtr-dir],[data-mtr-dest],[data-mtr-jump],[data-mtr-act]');
   if (!el) return;
   const d = el.dataset;
+  if (d.mtrJump) {     // a station on the strip: direction follows from its side
+    mtrState.dir = d.side;
+    mtrState.dest = mtrState.dest === d.mtrJump ? null : d.mtrJump;
+    renderMtrView();
+    return;
+  }
   if (d.mtrStation) return mtrSetStation(d.mtrStation);
   if (d.mtrLine)    return mtrSetLine(d.mtrLine);
   if (d.mtrDir)     return mtrSetDir(d.mtrDir);
