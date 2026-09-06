@@ -342,17 +342,19 @@
                     padding:8px 12px; display:flex; align-items:center; gap:10px; }
   .mtrpick button .mtrdist { margin-left:auto; color:var(--ink-3); font-weight:700; white-space:nowrap; }
   .mtrlines, .mtrdirs, .mtrdests { display:flex; flex-wrap:wrap; gap:8px; }
-  /* The stripe is the line's own colour — the one every rider already knows.
-     Text stays dark on white so the colour never has to carry the words. */
-  .mtrline { flex:1 1 45%; min-height:52px; border:2px solid var(--line); border-left:12px solid var(--line);
-             border-radius:10px; background:white; font-size:1rem; font-weight:800; color:var(--ink);
-             cursor:pointer; text-align:left; padding:8px 12px; }
-  .mtrline.on { background:var(--navy-tint); border-color:var(--navy); }
   .mtrdir { flex:1 1 45%; min-height:56px; border:2px solid var(--line); border-radius:10px;
             background:white; font-size:1.06rem; font-weight:800; color:var(--ink); cursor:pointer;
             padding:8px 10px; overflow-wrap:anywhere; }
   .mtrdir.on { background:var(--navy); border-color:var(--navy); color:white; }
   .mtrdirs { flex-wrap:nowrap; }
+  /* One section per line through the station, edged in the line's colour. */
+  .mtrlinesec { border:2px solid var(--line-soft); border-left:8px solid var(--line); border-radius:12px;
+                padding:6px 10px 10px; margin:10px 0; }
+  .mtrlinename { font-size:1rem; font-weight:800; color:var(--ink-2); margin-bottom:2px; }
+  .mtrstation small { font-size:0.94rem; font-weight:600; color:var(--ink-3); }
+  .mtrdir .dirname { display:block; }
+  .mtrdir .dirnext { display:block; font-size:0.94rem; font-weight:800; color:var(--green); margin-top:2px; }
+  .mtrdir.on .dirnext { color:white; }
   .mtrdir.left  { text-align:left; }
   .mtrdir.right { text-align:right; }
   .mtrdir.blank { border:none; background:transparent; }
@@ -368,6 +370,8 @@
                   font-size:1.24rem; min-height:64px; padding:0 18px; }
   .mtrstop.on { background:var(--red); border-color:var(--red) !important; color:white; }
   .mtrstop.off { color:var(--ink-3); background:#f3f4f6; }
+  /* Not a target, but a finger landing on it still slides the strip. */
+  .mtrstop.dead { pointer-events:none; }
   .mtrtrain { display:flex; align-items:center; gap:12px; border:2px solid var(--line-soft);
               border-radius:12px; padding:10px 14px; margin-bottom:6px; }
   .mtrtrain .mtrmin { font-size:1.88rem; font-weight:800; color:var(--green); flex:0 0 auto; min-width:100px; }
@@ -1114,9 +1118,9 @@ const TEXT = {
     mtrGeoBody:'If you allow it, the app finds the MTR station closest to you and shows the next trains. Your location stays on this phone.',
     mtrNearby:'Nearest stations', mtrNoneNear:'No MTR station within 1.5 km. Type a station name instead.',
     mtrSearchPh:'Type a station name…', mtrSaved:'Your saved stations', mtrChange:'Change',
-    mtrLineStrip:'Stations on this line — swipe left or right, tap one to go there',
+    mtrLineStrip:'Slide a line to change station · tap a station to go there',
     mtrAway:'about {m} m away', mtrNearestTag:'nearest station',
-    mtrChooseLine:'Which line?', mtrChooseDir:'Which direction?', mtrNextTrains:'Next trains',
+    mtrNextTrains:'Next trains',
     mtrPlatform:'Platform {p}', mtrChooseDest:'Going to… (optional)',
     mtrStops:'{n} stops', mtrOneStop:'1 stop', mtrRide:'about {m} min on the train',
     mtrArrive:'Take the train in {w} min — arrive about {t}',
@@ -1284,9 +1288,9 @@ const TEXT = {
     mtrGeoBody:'允許後，本app會找出離你最近的港鐵站，並顯示下班列車。你的位置只留在這部手機。',
     mtrNearby:'最近的車站', mtrNoneNear:'1.5 公里內沒有港鐵站，請輸入車站名稱。',
     mtrSearchPh:'輸入車站名稱…', mtrSaved:'你收藏的車站', mtrChange:'更改',
-    mtrLineStrip:'沿線車站 — 左右滑動，按一下即選為目的地',
+    mtrLineStrip:'滑動路綫可換站 · 按車站即選為目的地',
     mtrAway:'距離約 {m} 米', mtrNearestTag:'最近車站',
-    mtrChooseLine:'選擇路綫', mtrChooseDir:'選擇方向', mtrNextTrains:'下班列車',
+    mtrNextTrains:'下班列車',
     mtrPlatform:'{p} 號月台', mtrChooseDest:'目的地站（可選）',
     mtrStops:'{n} 個站', mtrOneStop:'1 個站', mtrRide:'車程約 {m} 分鐘',
     mtrArrive:'乘搭 {w} 分鐘後的班次，預計 {t} 到達',
@@ -6872,7 +6876,7 @@ const MTR_CACHE_MS = 30000;    // the feed itself is refreshed about this often
 let mtrState = freshMtrState();
 function freshMtrState() {
   return { station:null, line:null, dir:null, dest:null,
-           block:null, blockKey:null, fetchedAt:0, alert:null,
+           blocks:{}, alerts:{}, blocksFor:null, fetchedAt:0,
            loading:false, locating:false, locateTried:false, noneNear:false };
 }
 
@@ -6894,7 +6898,7 @@ function mtrOpenSaved(t) {
   if (!t) return;
   mtrState = Object.assign(freshMtrState(), { locateTried: true, station: t.station, line: t.line, dir: t.dir });
   if (activeMode !== 'mtr') { showMode('mtr'); return; }   // openMtrView keeps a preset station
-  renderMtrView(); mtrLoadBlock();
+  renderMtrView(); mtrLoadBlocks();
 }
 
 // The feed for one line at one station, both directions, or null.
@@ -6954,7 +6958,7 @@ function openMtrView() {
     }
   }
   renderMtrView();
-  if (mtrState.station && mtrState.line) mtrLoadBlock();
+  if (mtrState.station) mtrLoadBlocks();     // every line through it, not just the chosen one
 }
 
 function mtrLocate() {
@@ -6978,44 +6982,56 @@ function mtrSetStation(code) {
   const lines = whichLinesServe(code);
   if (lines.length === 1) mtrState.line = lines[0];     // one line is not a choice
   renderMtrView();
-  if (mtrState.line) mtrLoadBlock();
+  mtrLoadBlocks();
 }
-function mtrSetLine(line) {
-  Object.assign(mtrState, { line, dir:null, dest:null, block:null, blockKey:null, alert:null });
-  renderMtrView(); mtrLoadBlock();
+// A direction belongs to a line: tapping ◀ 開往 金鐘 under 東鐵綫 picks both.
+function mtrSetDir(dir, line) {
+  if (line) mtrState.line = line;
+  mtrState.dir = dir; mtrState.dest = null; renderMtrView();
 }
-function mtrSetDir(dir)   { mtrState.dir = dir; mtrState.dest = null; renderMtrView(); }
 function mtrSetDest(code) { mtrState.dest = (mtrState.dest === code ? null : code); renderMtrView(); }
 
-// One request: the feed for this line at this station, both directions.
-async function mtrLoadBlock(force) {
-  const { line, station } = mtrState;
-  if (!line || !station) return;
-  const key = line + '-' + station;
-  if (!force && mtrState.blockKey === key && Date.now() - mtrState.fetchedAt < MTR_CACHE_MS) return;
+// One request per line through the station, all at once: at an interchange
+// like 九龍塘 the rider sees both lines and all four directions in one go,
+// with no line-picking step.
+async function mtrLoadBlocks(force) {
+  const { station } = mtrState;
+  if (!station) return;
+  const lines = whichLinesServe(station);
+  if (!force && mtrState.blocksFor === station && Date.now() - mtrState.fetchedAt < MTR_CACHE_MS) return;
   mtrState.loading = true; renderMtrView();
-  try {
-    const url = MTR_ETA_URL + '?line=' + encodeURIComponent(line) +
-                '&sta=' + encodeURIComponent(station) + '&lang=' + (lang === 'zh' ? 'TC' : 'EN');
-    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!response.ok) throw new Error('server said ' + response.status);
-    const data = await response.json();
-    if (mtrState.line !== line || mtrState.station !== station) return;   // moved on meanwhile
-    if (data.status === 0) { mtrState.alert = data.message || T('trainAlert'); mtrState.block = {}; }
-    else { mtrState.alert = null; mtrState.block = (data.data || {})[key] || {}; }
-  } catch (error) {
-    mtrState.block = null; mtrState.alert = T('etaOffline');
+  const results = await Promise.all(lines.map(async line => {
+    try {
+      const url = MTR_ETA_URL + '?line=' + encodeURIComponent(line) +
+                  '&sta=' + encodeURIComponent(station) + '&lang=' + (lang === 'zh' ? 'TC' : 'EN');
+      const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!response.ok) throw new Error('server said ' + response.status);
+      const data = await response.json();
+      if (data.status === 0) return { line, block: {}, alert: data.message || T('trainAlert') };
+      return { line, block: (data.data || {})[line + '-' + station] || {}, alert: null };
+    } catch (error) {
+      return { line, block: null, alert: T('etaOffline') };
+    }
+  }));
+  if (mtrState.station !== station) return;             // moved on meanwhile
+  mtrState.blocks = {}; mtrState.alerts = {};
+  for (const r of results) { mtrState.blocks[r.line] = r.block; mtrState.alerts[r.line] = r.alert; }
+  mtrState.blocksFor = station; mtrState.fetchedAt = Date.now(); mtrState.loading = false;
+  // On the chosen line, one direction with trains is not a choice either.
+  if (mtrState.line) {
+    const dirs = mtrDirections(mtrState.line);
+    if (!mtrState.dir && dirs.length === 1) mtrState.dir = dirs[0].key;
+    if (mtrState.dir && !dirs.some(d => d.key === mtrState.dir)) mtrState.dir = dirs.length === 1 ? dirs[0].key : null;
   }
-  mtrState.blockKey = key; mtrState.fetchedAt = Date.now(); mtrState.loading = false;
-  // One direction with trains is not a choice either.
-  const dirs = mtrDirections();
-  if (!mtrState.dir && dirs.length === 1) mtrState.dir = dirs[0].key;
-  if (mtrState.dir && !dirs.some(d => d.key === mtrState.dir)) mtrState.dir = dirs.length === 1 ? dirs[0].key : null;
   renderMtrView();
 }
+function mtrLoaded(line) {
+  return mtrState.blocksFor === mtrState.station && !!mtrState.blocks &&
+         Object.prototype.hasOwnProperty.call(mtrState.blocks, line);
+}
 
-function mtrTrains(key) {
-  const block = mtrState.block || {};
+function mtrTrains(key, line) {
+  const block = (mtrState.blocks || {})[line || mtrState.line] || {};
   return (block[key] || []).filter(t => t.valid !== 'N')
     .map(t => ({ min: Number(t.ttnt), dest: t.dest, plat: t.plat }))
     .filter(t => isFinite(t.min) && t.min >= 0);
@@ -7023,24 +7039,25 @@ function mtrTrains(key) {
 
 // Directions are named by where the trains are actually going, read from the
 // feed, never guessed from the timetable's idea of "up".
-function mtrDirections() {
+function mtrDirections(line) {
   const out = [];
   for (const key of ['UP', 'DOWN']) {
-    const trains = mtrTrains(key);
+    const trains = mtrTrains(key, line);
     if (trains.length) out.push({ key, dest: trains[0].dest });
   }
   return out;
 }
 
-// The line laid out left to right, with this station in the middle. Which
+// One line laid out left to right, with this station in the middle. Which
 // direction is "left" is decided by where its terminus sits in the running
-// order, so the two direction buttons underneath can sit on the same sides
-// as the stations they lead to.
-function mtrSides() {
+// order, so the two direction buttons underneath sit on the same sides as
+// the stations they lead to. Before the feed answers there are no
+// directions yet; the strip still draws, its chips just wait.
+function mtrSides(line) {
   const st = mtrState;
-  const dirs = mtrDirections();
-  if (!st.line || !st.station || !dirs.length) return null;
-  const order = mtrOrderFor(st.line, st.station, dirs[0].dest);
+  if (!line || !st.station) return null;
+  const dirs = mtrDirections(line);
+  const order = mtrOrderFor(line, st.station, dirs[0] && dirs[0].dest);
   const i = order.indexOf(st.station);
   if (i < 0) return null;
   const at = d => order.indexOf(d.dest);
@@ -7048,41 +7065,48 @@ function mtrSides() {
   const right = dirs.find(d => d !== left && at(d) > i) || dirs.find(d => d !== left) || null;
   return { order, i, left, right };
 }
-// Centre the strip on the station, then listen: when the rider slides it
-// and lets go, whichever station is now in the middle becomes the station,
-// and directions, trains and destination follow from it.
+
+// Centre every strip on the station, then listen: when the rider slides one
+// and lets go, whichever station is now in its middle becomes the station,
+// and lines, directions, trains and destination follow from it.
 let mtrStripSettled = 0;
 function mtrCentreStrip() {
-  const strip = document.getElementById('mtr-strip');
-  const here = strip && strip.querySelector('.mtrstop.here');
-  if (!strip || !here) return;
-  strip.scrollLeft = Math.max(0, here.offsetLeft - strip.clientWidth / 2 + here.offsetWidth / 2);
   mtrStripSettled = Date.now();
-  let timer = null;
-  strip.onscroll = () => {
-    if (Date.now() - mtrStripSettled < 400) return;      // our own centring, not a slide
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      const middle = strip.scrollLeft + strip.clientWidth / 2;
-      let best = null, bestGap = Infinity;
-      for (const chip of strip.querySelectorAll('.mtrstop')) {
-        const gap = Math.abs(chip.offsetLeft + chip.offsetWidth / 2 - middle);
-        if (gap < bestGap) { bestGap = gap; best = chip; }
-      }
-      const code = best && best.dataset.code;
-      if (!code || code === mtrState.station) { mtrCentreStrip(); return; }
-      mtrState = Object.assign(freshMtrState(), { locateTried: true, station: code, line: mtrState.line });
-      renderMtrView();
-      mtrLoadBlock();
-    }, 220);
-  };
+  for (const strip of document.querySelectorAll('#mtrview .mtrstrip')) {
+    const here = strip.querySelector('.mtrstop.here');
+    if (!here) continue;
+    strip.scrollLeft = Math.max(0, here.offsetLeft - strip.clientWidth / 2 + here.offsetWidth / 2);
+    // Only a slide the rider started counts. Browsers also fire scroll when
+    // the layout shifts under a strip (keyboard opening, a rotate, our own
+    // centring), and one of those must never change the station.
+    let timer = null, armed = false;
+    const arm = () => { armed = true; };
+    strip.onpointerdown = arm; strip.ontouchstart = arm; strip.onwheel = arm;
+    strip.onscroll = () => {
+      if (Date.now() - mtrStripSettled < 400 || strip.clientWidth === 0) return;
+      clearTimeout(timer);
+      if (!armed) { timer = setTimeout(mtrCentreStrip, 220); return; }   // layout moved it: put it back
+      timer = setTimeout(() => {
+        armed = false;
+        const middle = strip.scrollLeft + strip.clientWidth / 2;
+        let best = null, bestGap = Infinity;
+        for (const chip of strip.querySelectorAll('.mtrstop')) {
+          const gap = Math.abs(chip.offsetLeft + chip.offsetWidth / 2 - middle);
+          if (gap < bestGap) { bestGap = gap; best = chip; }
+        }
+        const code = best && best.dataset.code;
+        if (!code || code === mtrState.station) { mtrCentreStrip(); return; }
+        mtrSetStation(code);
+      }, 220);
+    };
+  }
 }
 
 // Every station ahead in the chosen direction, to the end of the line.
 function mtrStationsAhead() {
   const { line, station, dir } = mtrState;
   if (!line || !station || !dir) return [];
-  const trains = mtrTrains(dir);
+  const trains = mtrTrains(dir, line);
   if (!trains.length) return [];
   const order = mtrOrderFor(line, station, trains[0].dest);
   const i = order.indexOf(station), d = order.indexOf(trains[0].dest);
@@ -7144,107 +7168,100 @@ function renderMtrView() {
   }
 
   // ---- station chosen ----
-  // The station card only draws when there is no strip to stand in for it:
-  // once the line is known, the big centred chip on the strip is the station,
-  // and sliding the strip changes it.
+  html = '';   // the heading row below names the station; a 港鐵 title above it is a wasted line
+  // Every line through the station at once, each with its own strip and
+  // both direction buttons carrying the next train — at 九龍塘 that is
+  // 東鐵綫 and 觀塘綫, four directions, nothing to pick first. The big
+  // centred chip on each strip is the station; sliding a strip changes it.
+  const lines = whichLinesServe(st.station);
   const here = herePoint ? Math.round(metresBetween(herePoint.lat, herePoint.lng,
                  mtrData.stations[st.station][2], mtrData.stations[st.station][3])) : null;
-  const headerCard = '<div class="mtrsta"><div class="mtrname">📍 ' + esc(stationName(st.station)) +
-          (here !== null ? '<small>' + T('mtrAway').replace('{m}', here) + '</small>' : '') + '</div>' +
-          '<button class="refreshbtn" data-mtr-act="change">' + T('mtrChange') + '</button></div>';
-
-  // ---- 2. WHICH LINE ----
-  const lines = whichLinesServe(st.station);
-  const lineChooser = lines.length > 1
-    ? '<div class="mtrsub">' + T('mtrChooseLine') + '</div><div class="mtrlines">' +
-      lines.map(l => '<button class="mtrline' + (st.line === l ? ' on' : '') + '" data-mtr-line="' + l +
-        '" style="border-left-color:' + (MTR_LINE_COLOURS[l] || '#999') + '">' + esc(railLineName(l)) + '</button>').join('') +
-      '</div>'
-    : '';
-  if (!st.line) { view.innerHTML = html + headerCard + lineChooser; return; }
-
-  // ---- 3. WHICH DIRECTION ----
-  if (st.loading && !st.block) {
-    view.innerHTML = html + headerCard + lineChooser + '<div class="favempty">' + T('rsCheckingEta') + '</div>';
-    return;
-  }
-  const dirs = mtrDirections();
-  if (dirs.length === 0) {
-    html += headerCard + lineChooser;
-    if (st.alert) html += '<div class="mtralert">⚠ ' + esc(st.alert) + '</div>';
-    else html += '<div class="favempty">' + T('noneDue') + '</div>';
-    html += '<div class="mtrpick"><button data-mtr-act="refresh">' + T('refresh') + '</button></div>';
-    view.innerHTML = html; return;
-  }
-  // The line, left to right, this station big in the middle; slide to stand
-  // at another station, tap one to make it the destination.
-  const sides = mtrSides();
-  const colour = MTR_LINE_COLOURS[st.line] || '#999';
-  if (sides) {
-    html += '<div class="mtrhead"><div class="mtrsub">' + T('mtrLineStrip') + '</div>' +
-            '<button class="refreshbtn" data-mtr-act="change">' + T('mtrChange') + '</button></div>' +
-            '<div class="mtrstrip" id="mtr-strip"><span class="mtrpad"></span>' +
-      sides.order.map((code, j) => {
-        const side = j < sides.i ? sides.left : (j > sides.i ? sides.right : null);
-        const cls = 'mtrstop' + (j === sides.i ? ' here' : '') + (st.dest === code ? ' on' : '') + (j !== sides.i && !side ? ' off' : '');
-        return '<button class="' + cls + '" data-code="' + code + '" style="border-top-color:' + colour + '"' +
-          (side ? ' data-mtr-jump="' + code + '" data-side="' + side.key + '"' : ' disabled') + '>' + esc(stationName(code)) + '</button>';
-      }).join('') + '<span class="mtrpad"></span></div>' + lineChooser;
-    if (st.alert) html += '<div class="mtralert">⚠ ' + esc(st.alert) + '</div>';
-    // The two direction buttons sit under the stations they lead to.
-    const dirBtn = (d, cls) => d
-      ? '<button class="mtrdir ' + cls + (st.dir === d.key ? ' on' : '') + '" data-mtr-dir="' + d.key + '">' +
-        (cls === 'left' ? '◀ ' : '') + T('towards') + ' ' + esc(stationName(d.dest)) + (cls === 'right' ? ' ▶' : '') + '</button>'
-      : '<div class="mtrdir blank"></div>';
-    html += '<div class="mtrsub">' + T('mtrChooseDir') + '</div><div class="mtrdirs">' + dirBtn(sides.left, 'left') + dirBtn(sides.right, 'right') + '</div>';
-  } else {
-    html += headerCard + lineChooser;
-    if (st.alert) html += '<div class="mtralert">⚠ ' + esc(st.alert) + '</div>';
-    if (dirs.length > 1) {
-      html += '<div class="mtrsub">' + T('mtrChooseDir') + '</div><div class="mtrdirs">' +
-        dirs.map(d => '<button class="mtrdir' + (st.dir === d.key ? ' on' : '') + '" data-mtr-dir="' + d.key + '">' +
-          T('towards') + ' ' + esc(stationName(d.dest)) + '</button>').join('') + '</div>';
-    }
-  }
-  if (!st.dir) { view.innerHTML = html; mtrCentreStrip(); return; }
-
-  // ---- 4. NEXT TRAINS HERE ----
-  const trains = mtrTrains(st.dir).slice(0, 4);
-  const stamp = new Date(st.fetchedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  const headDest = trains[0] ? trains[0].dest : dirs.find(d => d.key === st.dir).dest;
-  const saved = isSavedTrain(st.station, st.line, st.dir);
-  html += '<div class="mtrhead"><div class="mtrsub">' + T('mtrNextTrains') + ' · ' + T('towards') + ' ' +
-          esc(stationName(headDest)) + '</div>' +
-          '<button class="rsstar' + (saved ? ' on' : '') + '" data-mtr-act="star" data-dest="' + headDest +
-          '" aria-label="' + T('favTrains') + '">' + (saved ? '★' : '☆') + '</button>' +
+  html += '<div class="mtrhead"><div class="mtrsub mtrstation">🚇 ' + esc(stationName(st.station)) +
+          (here !== null ? ' <small>' + T('mtrAway').replace('{m}', here) + '</small>' : '') + '</div>' +
           '<button class="refreshbtn" data-mtr-act="refresh"' + (st.loading ? ' disabled' : '') + '>' +
-          T(st.loading ? 'refreshing' : 'refresh') + '</button></div>';
-  html += trains.map((t, i) => '<div class="mtrtrain' + (i === 0 ? ' hero' : '') + '">' +
-    '<div class="mtrmin">' + (t.min === 0 ? T('due') : t.min + T('min')) + '</div>' +
-    '<div class="mtrmeta">' + T('towards') + ' ' + esc(stationName(t.dest)) +
-    (t.plat ? '<br>' + T('mtrPlatform').replace('{p}', esc(t.plat)) : '') + '</div></div>').join('');
-  html += '<div class="mtrupdated">' + T('updatedAt').replace('{t}', stamp) + '</div>';
+          T(st.loading ? 'refreshing' : 'refresh') + '</button>' +
+          '<button class="refreshbtn" data-mtr-act="change">' + T('mtrChange') + '</button></div>' +
+          '<div class="rshint">' + T('mtrLineStrip') + '</div>';
 
-  // ---- 5. DESTINATION (optional) ----
-  const ahead = mtrStationsAhead();
-  if (ahead.length) {
-    if (!sides) {   // no strip drawn (order unknown): fall back to a plain list
-      html += '<div class="mtrsub">' + T('mtrChooseDest') + '</div><div class="mtrdests">' +
-        ahead.map(code => '<button class="mtrdest' + (st.dest === code ? ' on' : '') + '" data-mtr-dest="' + code + '">' +
-          esc(stationName(code)) + '</button>').join('') + '</div>';
+  // A direction button: where it goes, and the next train or two under it.
+  const dirBtn = (line, d, cls) => {
+    if (!d) return '<div class="mtrdir blank"></div>';
+    const next = mtrTrains(d.key, line).slice(0, 2).map(t => t.min === 0 ? T('due') : t.min + T('min')).join(' · ');
+    const on = st.line === line && st.dir === d.key;
+    return '<button class="mtrdir ' + cls + (on ? ' on' : '') + '" data-mtr-dir="' + d.key + '" data-line="' + line + '">' +
+      '<span class="dirname">' + (cls === 'left' ? '◀ ' : '') + T('towards') + ' ' + esc(stationName(d.dest)) + (cls === 'right' ? ' ▶' : '') + '</span>' +
+      '<span class="dirnext">' + (next || T('noneDue')) + '</span></button>';
+  };
+
+  for (const line of lines) {
+    const colour = MTR_LINE_COLOURS[line] || '#999';
+    const sides = mtrSides(line);
+    const loaded = mtrLoaded(line);
+    const alert = loaded ? st.alerts[line] : null;
+    const active = st.line === line;
+    html += '<section class="mtrlinesec" style="border-left-color:' + colour + '">' +
+            '<div class="mtrlinename">' + esc(railLineName(line)) + '</div>';
+    if (sides) {
+      html += '<div class="mtrstrip" id="mtr-strip-' + line + '" data-line="' + line + '"><span class="mtrpad"></span>' +
+        sides.order.map((code, j) => {
+          const side = j < sides.i ? sides.left : (j > sides.i ? sides.right : null);
+          const cls = 'mtrstop' + (j === sides.i ? ' here' : '') + (active && st.dest === code ? ' on' : '') + (j !== sides.i && !side ? ' off' : '');
+          return '<button class="' + cls + (side ? '' : ' dead') + '" data-code="' + code + '" style="border-top-color:' + colour + '"' +
+            (side ? ' data-mtr-jump="' + code + '" data-side="' + side.key + '" data-line="' + line + '"' : ' tabindex="-1" aria-disabled="true"') +
+            '>' + esc(stationName(code)) + '</button>';
+        }).join('') + '<span class="mtrpad"></span></div>';
     }
-    if (st.dest && ahead.includes(st.dest)) {
-      const stops = ahead.indexOf(st.dest) + 1;
-      const route = railRoute(st.station, st.dest);
-      const ride  = Math.max(1, Math.round(route ? route.cost : stops * 2.5));
-      const wait  = trains[0] ? trains[0].min : 0;
-      const fare  = railFare(st.station, st.dest);
-      html += '<div class="mtrsummary"><div class="big">🚉 ' + esc(stationName(st.dest)) + '</div>' +
-        '<div class="line">' + (stops === 1 ? T('mtrOneStop') : T('mtrStops').replace('{n}', stops)) +
-        ' · ' + T('mtrRide').replace('{m}', ride) + (fare !== null ? ' · $' + fare.toFixed(1) : '') + '</div>' +
-        '<div class="arrive">' + (wait === 0 ? T('mtrArriveNow') : T('mtrArrive').replace('{w}', wait))
-          .replace('{t}', clockIn(wait + ride)) + '</div></div>';
+    if (alert) html += '<div class="mtralert">⚠ ' + esc(alert) + '</div>';
+    if (!loaded) {
+      html += '<div class="favempty">' + T('rsCheckingEta') + '</div>';
+    } else {
+      const dirs = mtrDirections(line);
+      if (!dirs.length) { if (!alert) html += '<div class="favempty">' + T('noneDue') + '</div>'; }
+      else if (sides) html += '<div class="mtrdirs">' + dirBtn(line, sides.left, 'left') + dirBtn(line, sides.right, 'right') + '</div>';
+      else html += '<div class="mtrdirs">' + dirs.map(d => dirBtn(line, d, '')).join('') + '</div>';
     }
+
+    // ---- the chosen direction on this line: next trains, then the place ----
+    if (active && st.dir && loaded) {
+      const trains = mtrTrains(st.dir, line).slice(0, 4);
+      const chosen = mtrDirections(line).find(d => d.key === st.dir);
+      const headDest = trains[0] ? trains[0].dest : (chosen ? chosen.dest : null);
+      if (headDest) {
+        const stamp = new Date(st.fetchedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        const saved = isSavedTrain(st.station, line, st.dir);
+        html += '<div class="mtrhead"><div class="mtrsub">' + T('mtrNextTrains') + ' · ' + T('towards') + ' ' +
+                esc(stationName(headDest)) + '</div>' +
+                '<button class="rsstar' + (saved ? ' on' : '') + '" data-mtr-act="star" data-dest="' + headDest +
+                '" aria-label="' + T('favTrains') + '">' + (saved ? '★' : '☆') + '</button></div>';
+        html += trains.map((t, i) => '<div class="mtrtrain' + (i === 0 ? ' hero' : '') + '">' +
+          '<div class="mtrmin">' + (t.min === 0 ? T('due') : t.min + T('min')) + '</div>' +
+          '<div class="mtrmeta">' + T('towards') + ' ' + esc(stationName(t.dest)) +
+          (t.plat ? '<br>' + T('mtrPlatform').replace('{p}', esc(t.plat)) : '') + '</div></div>').join('');
+        html += '<div class="mtrupdated">' + T('updatedAt').replace('{t}', stamp) + '</div>';
+
+        const ahead = mtrStationsAhead();
+        if (ahead.length) {
+          if (!sides) {   // no strip drawn (order unknown): fall back to a plain list
+            html += '<div class="mtrsub">' + T('mtrChooseDest') + '</div><div class="mtrdests">' +
+              ahead.map(code => '<button class="mtrdest' + (st.dest === code ? ' on' : '') + '" data-mtr-dest="' + code + '">' +
+                esc(stationName(code)) + '</button>').join('') + '</div>';
+          }
+          if (st.dest && ahead.includes(st.dest)) {
+            const stops = ahead.indexOf(st.dest) + 1;
+            const route = railRoute(st.station, st.dest);
+            const ride  = Math.max(1, Math.round(route ? route.cost : stops * 2.5));
+            const wait  = trains[0] ? trains[0].min : 0;
+            const fare  = railFare(st.station, st.dest);
+            html += '<div class="mtrsummary"><div class="big">🚉 ' + esc(stationName(st.dest)) + '</div>' +
+              '<div class="line">' + (stops === 1 ? T('mtrOneStop') : T('mtrStops').replace('{n}', stops)) +
+              ' · ' + T('mtrRide').replace('{m}', ride) + (fare !== null ? ' · $' + fare.toFixed(1) : '') + '</div>' +
+              '<div class="arrive">' + (wait === 0 ? T('mtrArriveNow') : T('mtrArrive').replace('{w}', wait))
+                .replace('{t}', clockIn(wait + ride)) + '</div></div>';
+          }
+        }
+      }
+    }
+    html += '</section>';
   }
 
   // ---- the planner's train results, if a trip was searched ----
@@ -7290,22 +7307,22 @@ function showRailResults() {
 // One listener for the whole screen: it is redrawn from scratch on every
 // change, so per-button handlers would be lost on each redraw.
 document.getElementById('mtrview').addEventListener('click', event => {
-  const el = event.target.closest('[data-mtr-station],[data-mtr-line],[data-mtr-dir],[data-mtr-dest],[data-mtr-jump],[data-mtr-act]');
+  const el = event.target.closest('[data-mtr-station],[data-mtr-dir],[data-mtr-dest],[data-mtr-jump],[data-mtr-act]');
   if (!el) return;
   const d = el.dataset;
-  if (d.mtrJump) {     // a station on the strip: direction follows from its side
+  if (d.mtrJump) {     // a station on a strip: its line, and the direction from its side
+    if (d.line) mtrState.line = d.line;
     mtrState.dir = d.side;
     mtrState.dest = mtrState.dest === d.mtrJump ? null : d.mtrJump;
     renderMtrView();
     return;
   }
   if (d.mtrStation) return mtrSetStation(d.mtrStation);
-  if (d.mtrLine)    return mtrSetLine(d.mtrLine);
-  if (d.mtrDir)     return mtrSetDir(d.mtrDir);
+  if (d.mtrDir)     return mtrSetDir(d.mtrDir, d.line);
   if (d.mtrDest)    return mtrSetDest(d.mtrDest);
   switch (d.mtrAct) {
     case 'change':  mtrState = Object.assign(freshMtrState(), { locateTried: true }); renderMtrView(); break;
-    case 'refresh': mtrLoadBlock(true); break;
+    case 'refresh': mtrLoadBlocks(true); break;
     case 'geo-yes': rememberGeoChoice('yes'); mtrLocate(); break;
     case 'geo-no':  rememberGeoChoice('no'); renderMtrView(); break;
     case 'trips':   showRailResults(); break;
