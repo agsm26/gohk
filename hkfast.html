@@ -341,6 +341,7 @@
                     font-size:1rem; font-weight:700; color:var(--ink); cursor:pointer; text-align:left;
                     padding:8px 12px; display:flex; align-items:center; gap:10px; }
   .mtrpick button .mtrdist { margin-left:auto; color:var(--ink-3); font-weight:700; white-space:nowrap; }
+  .mtrpick button.dim { border-style:dashed; background:#f8fafc; }
   .mtrlines, .mtrdirs, .mtrdests { display:flex; flex-wrap:wrap; gap:8px; }
   .mtrdir { flex:1 1 45%; min-height:56px; border:2px solid var(--line); border-radius:10px;
             background:white; font-size:1.06rem; font-weight:800; color:var(--ink); cursor:pointer;
@@ -1156,7 +1157,7 @@ const TEXT = {
     stopIndexing:'Loading the bus network — first time only…',
     stopDestNoName:'No stop called "{d}" — try a shorter name.',
     stopNearNoneTo:'No nearby stop has a direct bus to {d}.',
-    stopSearchNoneTo:'No stop with that name has a direct bus to {d}.',
+    stopSearchNoneTo:'No stop with that name has a direct bus to {d}.', stopNoReach:'No direct bus to {d} — opens without the filter',
     stopShowingTo:'Showing only stops with a direct bus to {d}',
     dataLoading:'Still loading the bus data — try again in a moment.',
     nearestStop:'Nearest bus stop', getOn:'GET ON', getOff:'GET OFF',
@@ -1325,7 +1326,7 @@ const TEXT = {
     stopIndexing:'正在載入巴士路線網絡（只需一次）…',
     stopDestNoName:'找不到叫「{d}」的車站，試試較短的名稱。',
     stopNearNoneTo:'附近沒有直達 {d} 的車站。',
-    stopSearchNoneTo:'沒有名稱相符而又直達 {d} 的車站。',
+    stopSearchNoneTo:'沒有名稱相符而又直達 {d} 的車站。', stopNoReach:'沒有直達 {d} 的巴士 — 打開會顯示全部班次',
     stopShowingTo:'只顯示有巴士直達 {d} 的車站',
     dataLoading:'巴士資料仍在載入，請稍候再試。',
     nearestStop:'最近巴士站', getOn:'上車', getOff:'下車',
@@ -6776,6 +6777,7 @@ function renderStopView() {
           '<button class="refreshbtn" data-stop-act="refresh"' + (st.loading ? ' disabled' : '') + '>' +
           T(st.loading ? 'refreshing' : 'refresh') + '</button></div>' +
           '<div class="frow"><input id="stop-filter" type="text" placeholder="' + esc(T('stopFilterPh')) + '" autocomplete="off" value="' + esc(st.destFilter || '') + '"></div>' +
+          '<div id="stop-filter-suggest"></div>' +
           '<div id="stop-rows">' + stopRowsHtml() + '</div>';
   view.innerHTML = html;
 }
@@ -6901,43 +6903,52 @@ function stopRenderSearch(query) {
   // tap opens every one of those poles together, filtered to the place and
   // sorted soonest-arrival first — the full answer, with live times.
   if (filtering) {
+    // One card per station name (all its bays). Stations with a direct bus
+    // to the place come first, with those buses; the other matching names
+    // still follow, dimmed, and open WITHOUT the filter — typing 太 must
+    // always find 太子站, whatever the place.
     const groups = new Map();
     for (const stop of named) {
-      const reach = reachingRoutes(stop.stop, destIds);
-      if (!reach.length) continue;
       const k = stationKey(stop);
-      if (!groups.has(k)) groups.set(k, { stops: [], best: Infinity, rank: 1 });
+      if (!groups.has(k)) groups.set(k, { stops: [], best: Infinity, rank: 1, reaches: false });
       const g = groups.get(k);
       g.stops.push(stop);
       g.rank = Math.min(g.rank, prefixRank(stop));
-      g.best = Math.min(g.best, ...reach.map(x => x.reach.stopsAway));
+      const reach = reachingRoutes(stop.stop, destIds);
+      if (reach.length) { g.reaches = true; g.best = Math.min(g.best, ...reach.map(x => x.reach.stopsAway)); }
     }
-    const list = [...groups.values()].sort((a, b) => a.rank - b.rank || a.best - b.best).slice(0, 8);
+    // Busier names (more poles) before quieter ones: 太子站 before 太祥街.
+    const list = [...groups.values()]
+      .sort((a, b) => (b.reaches - a.reaches) || a.rank - b.rank || a.best - b.best ||
+                      b.stops.length - a.stops.length || stopName(a.stops[0]).length - stopName(b.stops[0]).length)
+      .slice(0, 8);
+    const reachList = list.filter(g => g.reaches);
     const place = esc(stopState.destQuery);
-    // The typed name matched more than one station name: offer them all at
-    // once first — "every bus from any 屯門轉車 stop to any 太子站".
-    let allCard = '';
-    if (list.length > 1) {
-      const all = list.flatMap(g => g.stops);
+    const card = g => {
+      // Board at the pole nearest the phone, else the first named.
+      const lead = herePoint
+        ? g.stops.slice().sort((a, b) => metresBetween(herePoint.lat, herePoint.lng, Number(a.lat), Number(a.long)) - metresBetween(herePoint.lat, herePoint.lng, Number(b.lat), Number(b.long)))[0]
+        : g.stops[0];
+      const ids = g.stops.map(x => x.stop);
+      const chip = g.stops.length > 1 ? T('stopBays').replace('{n}', g.stops.length) : poleCodeOf(lead);
+      return '<button' + (g.reaches ? '' : ' class="dim" data-nofilter="1"') + ' data-stop-id="' + esc(lead.stop) + '" data-stop-group="' + esc(ids.join(',')) + '"><span class="pickmain">🚏 ' + esc(stopName(lead)) +
+        (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
+        (g.reaches ? poleRoutesLine(ids, 6, destIds) : '<small class="poleroutes">' + T('stopNoReach').replace('{d}', place) + '</small>') +
+        '</span></button>';
+    };
+    let html = '';
+    if (reachList.length) html += '<div class="mtrsub">' + T('stopOptHead').replace('{s}', esc(query.trim())).replace('{d}', place) + '</div>';
+    // The typed name matched more than one station name that gets there:
+    // offer them all at once first — "every bus from any 屯門轉車 stop".
+    if (reachList.length > 1) {
+      const all = reachList.flatMap(g => g.stops);
       const ids = all.map(x => x.stop);
-      allCard = '<button data-stop-id="' + esc(all[0].stop) + '" data-stop-group="' + esc(ids.join(',')) + '"><span class="pickmain">🚏 ' +
+      html += '<button data-stop-id="' + esc(all[0].stop) + '" data-stop-group="' + esc(ids.join(',')) + '"><span class="pickmain">🚏 ' +
         esc(T('stopAllFrom').replace('{s}', query.trim())) + ' <span class="polecode">' + esc(T('stopBays').replace('{n}', all.length)) + '</span>' +
         poleRoutesLine(ids, 6, destIds) + '</span></button>';
     }
-    box.innerHTML = list.length
-      ? '<div class="mtrsub">' + T('stopOptHead').replace('{s}', esc(query.trim())).replace('{d}', place) + '</div>' + allCard +
-        list.map(g => {
-          // Board at the pole nearest the phone, else the first named.
-          const lead = herePoint
-            ? g.stops.slice().sort((a, b) => metresBetween(herePoint.lat, herePoint.lng, Number(a.lat), Number(a.long)) - metresBetween(herePoint.lat, herePoint.lng, Number(b.lat), Number(b.long)))[0]
-            : g.stops[0];
-          const ids = g.stops.map(x => x.stop);
-          const chip = g.stops.length > 1 ? T('stopBays').replace('{n}', g.stops.length) : poleCodeOf(lead);
-          return '<button data-stop-id="' + esc(lead.stop) + '" data-stop-group="' + esc(ids.join(',')) + '"><span class="pickmain">🚏 ' + esc(stopName(lead)) +
-            (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
-            poleRoutesLine(ids, 6, destIds) + '</span></button>';
-        }).join('')
-      : '<div class="favempty">' + (named.length ? T('stopSearchNoneTo').replace('{d}', place) : T('noMatch')) + '</div>';
+    html += list.map(card).join('');
+    box.innerHTML = html || '<div class="favempty">' + T('noMatch') + '</div>';
     return;
   }
   const keep = stop => true;
@@ -6961,7 +6972,7 @@ document.getElementById('stopview').addEventListener('click', event => {
     if (stop) {
       const groupStops = el.dataset.stopGroup ? el.dataset.stopGroup.split(',').map(findStopById).filter(Boolean) : null;
       stopSetStop(stop, groupStops);
-      const carry = el.dataset.filter || stopState.destQuery;
+      const carry = el.dataset.nofilter ? '' : (el.dataset.filter || stopState.destQuery);
       if (carry) { stopState.destFilter = carry; renderStopView(); }
     }
     return;
@@ -6988,6 +6999,11 @@ document.getElementById('stopview').addEventListener('click', event => {
     case 'destpick': {   // a suggested name: the whole name into the box
       stopState.destQuery = el.dataset.name || '';
       stopState.destPicked = true;
+      renderStopView();
+      break;
+    }
+    case 'filterpick': { // same, for the 往… box on the pole screen
+      stopState.destFilter = el.dataset.name || '';
       renderStopView();
       break;
     }
@@ -7020,6 +7036,15 @@ document.getElementById('stopview').addEventListener('input', event => {
     stopState.destFilter = event.target.value;
     const rows = document.getElementById('stop-rows');
     if (rows) rows.innerHTML = stopRowsHtml();
+    // Names that start with the text, to tap instead of finishing the word.
+    const sug = document.getElementById('stop-filter-suggest');
+    if (sug) {
+      const list = destSuggestions(event.target.value, 6);
+      const done = list.length === 1 && tidyName(list[0].name) === tidyName(event.target.value);
+      sug.innerHTML = list.length && !done
+        ? '<div class="suggest">' + list.map(x => '<button data-stop-act="filterpick" data-name="' + esc(x.name) + '">' + esc(x.name) + '</button>').join('') + '</div>'
+        : '';
+    }
   }
 });
 
@@ -7450,10 +7475,11 @@ function mtrRenderSearch(query) {
   const q = String(query || '').trim().toLowerCase();
   box.innerHTML = '';
   if (!q) return;
+  const starts = code => { const s = mtrData.stations[code]; return ((s[1] || '').startsWith(q) || s[0].toLowerCase().startsWith(q)) ? 0 : 1; };
   const hits = Object.keys(mtrData.stations).filter(code => {
     const s = mtrData.stations[code];
     return (s[1] && s[1].includes(q)) || s[0].toLowerCase().includes(q);
-  }).slice(0, 6);
+  }).sort((a, b) => starts(a) - starts(b) || stationName(a).length - stationName(b).length).slice(0, 6);
   box.innerHTML = hits.length
     ? hits.map(code => '<button data-mtr-station="' + code + '">🚇 ' + esc(stationName(code)) + '</button>').join('')
     : '<div class="favempty">' + T('noMatch') + '</div>';
