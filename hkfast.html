@@ -7369,22 +7369,21 @@ function renderMtrView() {
       if (headDest) {
         const stamp = new Date(st.fetchedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
         const saved = isSavedTrain(st.station, line, st.dir);
-        html += '<div class="mtrhead"><div class="mtrsub">' + T('mtrNextTrains') + ' · ' + T('towards') + ' ' +
-                esc(stationName(headDest)) + '</div>' +
-                '<button class="rsstar' + (saved ? ' on' : '') + '" data-mtr-act="star" data-dest="' + headDest +
-                '" aria-label="' + T('favTrains') + '">' + (saved ? '★' : '☆') + '</button></div>';
-        html += trains.map((t, i) => '<div class="mtrtrain' + (i === 0 ? ' hero' : '') + '">' +
-          '<div class="mtrmin">' + (t.min === 0 ? T('due') : t.min + T('min')) + '</div>' +
-          '<div class="mtrmeta">' + T('towards') + ' ' + esc(stationName(t.dest)) +
-          (t.plat ? '<br>' + T('mtrPlatform').replace('{p}', esc(t.plat)) : '') + '</div></div>').join('');
+        // The direction button above already says when the next trains
+        // come; a card per train underneath was the same numbers again,
+        // four times over. The stamp and the ☆ (save this train) stay.
         html += '<div class="mtrupdated">' + T('updatedAt').replace('{t}', stamp) + '</div>';
-
+        const ahead = mtrStationsAhead();
+        const star = '<button class="rsstar' + (saved ? ' on' : '') + '" data-mtr-act="star" data-dest="' + headDest +
+                     '" aria-label="' + T('favTrains') + '">' + (saved ? '★' : '☆') + '</button>';
         // Every station ahead this way, in order, numbered by stops away.
         // Tapping one gives the arrival time; the strip above stays "where
         // I am" and never doubles as the place you are going.
-        const ahead = mtrStationsAhead();
+        html += '<div class="mtrhead"><div class="mtrsub">' +
+                (ahead.length ? T('mtrNextStops') : T('mtrNextTrains') + ' · ' + T('towards') + ' ' + esc(stationName(headDest))) +
+                '</div>' + star + '</div>';
         if (ahead.length) {
-          html += '<div class="mtrsub">' + T('mtrNextStops') + '</div><div class="mtrnexts">' +
+          html += '<div class="mtrnexts">' +
             ahead.map((code, i) => '<button class="mtrnext' + (st.dest === code ? ' on' : '') + '" data-mtr-dest="' + code + '">' +
               '<span class="n">' + (i + 1) + '</span><span class="nm">' + esc(stationName(code)) + '</span></button>').join('') + '</div>';
           if (st.dest && ahead.includes(st.dest)) {
