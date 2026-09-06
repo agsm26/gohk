@@ -327,6 +327,8 @@
      direction with trains is not a choice.
      ========================================================== */
   .mtrsub { font-size:1rem; font-weight:800; color:var(--ink-3); margin:14px 0 8px; }
+  /* A new section: a rule and air above it, so 起點 is not read as part of 目的地. */
+  .mtrsub.sectionbreak { margin-top:24px; padding-top:14px; border-top:2px solid var(--line-soft); }
   .mtrgeo { border:2px solid var(--navy); border-radius:12px; padding:14px; margin-bottom:12px;
             background:var(--navy-tint); }
   .mtrsta { display:flex; align-items:center; gap:10px; border:2px solid var(--line-soft);
@@ -355,12 +357,15 @@
   .mtrdir.right { text-align:right; }
   .mtrdir.blank { border:none; background:transparent; }
   /* The line laid out sideways. Scrolls; the current station starts centred. */
-  .mtrstrip { display:flex; gap:6px; overflow-x:auto; padding:6px 2px 10px; margin-bottom:4px;
-              scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
-  .mtrstop { flex:0 0 auto; min-height:48px; padding:0 12px; border:2px solid var(--line); border-top:8px solid var(--line);
+  .mtrstrip { display:flex; align-items:center; gap:6px; overflow-x:auto; padding:6px 0 10px; margin-bottom:4px;
+              scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
+  .mtrpad { flex:0 0 calc(50% - 60px); }   /* so the end stations can reach the middle */
+  .mtrstop { flex:0 0 auto; min-height:52px; padding:0 12px; border:2px solid var(--line); border-top:8px solid var(--line);
              border-radius:10px; background:white; font-weight:700; font-size:0.94rem; white-space:nowrap;
              color:var(--ink); scroll-snap-align:center; }
-  .mtrstop.here { background:var(--navy); border-color:var(--navy) !important; color:white; }
+  /* The station you are at: the big one in the middle. */
+  .mtrstop.here { background:var(--navy); border-color:var(--navy) !important; color:white;
+                  font-size:1.24rem; min-height:64px; padding:0 18px; }
   .mtrstop.on { background:var(--red); border-color:var(--red) !important; color:white; }
   .mtrstop.off { color:var(--ink-3); background:#f3f4f6; }
   .mtrtrain { display:flex; align-items:center; gap:12px; border:2px solid var(--line-soft);
@@ -588,6 +593,12 @@
   .liveto { font-size:1rem; font-weight:700; color:var(--ink-2); min-width:0;
             overflow-wrap:anywhere; }
   .livemin { font-size:1.1765rem; font-weight:800; color:var(--green); white-space:nowrap; }
+  .livemin.quiet { font-size:0.94rem; font-weight:600; color:var(--ink-3); }
+  .livecard.compact { padding:8px 12px; margin-bottom:6px; }
+  .liverow { display:flex; align-items:baseline; gap:10px; }
+  .liverow .livetitle { flex:1; min-width:0; font-size:1rem; }
+  .liverow .livemin { flex:0 0 auto; }
+  .livecard.compact .livesub { margin-top:0; font-size:0.88rem; }
 
   /* TRIP PICKER: two columns, one shared list. */
   /* One list per section, full width, so a long stop name is read in one
@@ -949,15 +960,6 @@
 <div id="panel">
   <div id="sheetgrip" title="Expand or collapse"></div>
   <div id="geoask" style="display:none"></div>
-  <div id="livestrip"></div>
-  <!-- The name and language button used to sit in a red bar here. The bar
-       spent a whole row of a phone screen saying something the user already
-       knows, so the name is now only in the title and the language switch
-       lives in SETTINGS. -->
-  <div id="setview" style="display:none"></div>
-  <div id="mtrview" style="display:none"></div>
-  <div id="stopview" style="display:none"></div>
-
   <!-- BUS NUMBER FIRST. "When is my bus coming" is the daily question, and
        most riders know their number; it should not sit below the whole trip
        planner. Typing here switches the panel to "route mode" and the trip
@@ -976,6 +978,15 @@
   </div>
   <!-- Every stop on the chosen route, in order. Filled by renderRouteStops(). -->
   <div id="routestops"></div>
+  <div id="livestrip"></div>
+  <!-- The name and language button used to sit in a red bar here. The bar
+       spent a whole row of a phone screen saying something the user already
+       knows, so the name is now only in the title and the language switch
+       lives in SETTINGS. -->
+  <div id="setview" style="display:none"></div>
+  <div id="mtrview" style="display:none"></div>
+  <div id="stopview" style="display:none"></div>
+
 
   <!-- START: three ways to set it, exactly like DESTINATION below. -->
   <div class="field">
@@ -4758,13 +4769,16 @@ function renderLiveStrip(mode) {
       renderNearbyBuses(strip);
       return;
     }
+    // One line each: number → terminus, next times on the right, the stop
+    // small underneath. The full route is one tap away; it is not shown here.
     strip.innerHTML = '<div class="livehead">🚌 ' + T('myBusesNow') + '</div>' +
       departures.map((dep, i) => {
         const stopName = lang === 'zh' ? (dep.stopName_tc || dep.stopName_en) : dep.stopName_en;
         const dest = lang === 'zh' ? (dep.dest_tc || dep.dest_en) : dep.dest_en;
-        return liveCard(dep.route + '  →  ' + (dest || ''),
-                        plainStopName(stopName), 'live-bus-' + i,
-                        ' data-dep="' + i + '" role="button"', '🚌 ' + T('liveOpenRoute'));
+        return '<div class="livecard tap compact" data-dep="' + i + '" role="button">' +
+          '<div class="liverow"><span class="livetitle">' + esc(dep.route + ' → ' + (dest || '')) + '</span>' +
+          '<span class="livemin" id="live-bus-' + i + '">…</span></div>' +
+          (stopName ? '<div class="livesub">' + esc(plainStopName(stopName)) + '</div>' : '') + '</div>';
       }).join('');
     departures.forEach((dep, i) => loadLiveBus(dep, 'live-bus-' + i));
     renderNearbyBuses(strip);
@@ -4786,7 +4800,7 @@ async function loadLiveBus(dep, id) {
       .filter(row => String(row.route).toUpperCase() === String(dep.route).toUpperCase()
                   && (!dep.dir || row.dir === dep.dir) && row.eta)
       .map(row => Math.round((new Date(row.eta).getTime() - now) / 60000))
-      .filter(n => n >= 0).slice(0, 3);
+      .filter(n => n >= 0).slice(0, 2);
     if (!document.getElementById(id)) return;
     cell.textContent = minutes.length
       ? minutes.map(n => n === 0 ? T('due') : n + T('min')).join(', ')
@@ -6599,7 +6613,7 @@ function renderStopView() {
       }
       // The starting stop: type it, or tap one saved. The nearest poles come
       // last — they are the fallback when you have not said where you are.
-      html += '<div class="mtrsub">' + T('stopStartHead') + '</div>' +
+      html += '<div class="mtrsub sectionbreak">' + T('stopStartHead') + '</div>' +
               '<div class="frow"><input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off"></div>' +
               '<div class="mtrpick" id="stop-search-results"></div>';
       // Saved poles as one-tap pills, same shape as the saved places above.
@@ -6616,7 +6630,7 @@ function renderStopView() {
         const nearAll = stopsNear(herePoint.lat, herePoint.lng, filtering ? 600 : STOP_NEAR_M).filter(n => !n.stop.isStation);
         const near = groupPoles(nearAll, keep, filtering ? 6 : 4);
         if (near.length)
-          html += '<div class="mtrsub">' + T('stopNearby') + '</div><div class="mtrpick">' + near.map(n => poleButton(n.group, n.metres)).join('') + '</div>';
+          html += '<div class="mtrsub sectionbreak">' + T('stopNearby') + '</div><div class="mtrpick">' + near.map(n => poleButton(n.group, n.metres)).join('') + '</div>';
         else
           html += '<div class="favempty">' + (filtering ? T('stopNearNoneTo').replace('{d}', esc(st.destQuery)) : T('stopNoneNear')) + '</div>';
       }
@@ -7031,11 +7045,34 @@ function mtrSides() {
   const right = dirs.find(d => d !== left && at(d) > i) || dirs.find(d => d !== left) || null;
   return { order, i, left, right };
 }
+// Centre the strip on the station, then listen: when the rider slides it
+// and lets go, whichever station is now in the middle becomes the station,
+// and directions, trains and destination follow from it.
+let mtrStripSettled = 0;
 function mtrCentreStrip() {
   const strip = document.getElementById('mtr-strip');
   const here = strip && strip.querySelector('.mtrstop.here');
   if (!strip || !here) return;
   strip.scrollLeft = Math.max(0, here.offsetLeft - strip.clientWidth / 2 + here.offsetWidth / 2);
+  mtrStripSettled = Date.now();
+  let timer = null;
+  strip.onscroll = () => {
+    if (Date.now() - mtrStripSettled < 400) return;      // our own centring, not a slide
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const middle = strip.scrollLeft + strip.clientWidth / 2;
+      let best = null, bestGap = Infinity;
+      for (const chip of strip.querySelectorAll('.mtrstop')) {
+        const gap = Math.abs(chip.offsetLeft + chip.offsetWidth / 2 - middle);
+        if (gap < bestGap) { bestGap = gap; best = chip; }
+      }
+      const code = best && best.dataset.code;
+      if (!code || code === mtrState.station) { mtrCentreStrip(); return; }
+      mtrState = Object.assign(freshMtrState(), { locateTried: true, station: code, line: mtrState.line });
+      renderMtrView();
+      mtrLoadBlock();
+    }, 220);
+  };
 }
 
 // Every station ahead in the chosen direction, to the end of the line.
@@ -7104,56 +7141,67 @@ function renderMtrView() {
   }
 
   // ---- station chosen ----
+  // The station card only draws when there is no strip to stand in for it:
+  // once the line is known, the big centred chip on the strip is the station,
+  // and sliding the strip changes it.
   const here = herePoint ? Math.round(metresBetween(herePoint.lat, herePoint.lng,
                  mtrData.stations[st.station][2], mtrData.stations[st.station][3])) : null;
-  html += '<div class="mtrsta"><div class="mtrname">📍 ' + esc(stationName(st.station)) +
+  const headerCard = '<div class="mtrsta"><div class="mtrname">📍 ' + esc(stationName(st.station)) +
           (here !== null ? '<small>' + T('mtrAway').replace('{m}', here) + '</small>' : '') + '</div>' +
           '<button class="refreshbtn" data-mtr-act="change">' + T('mtrChange') + '</button></div>';
 
   // ---- 2. WHICH LINE ----
   const lines = whichLinesServe(st.station);
-  if (lines.length > 1) {
-    html += '<div class="mtrsub">' + T('mtrChooseLine') + '</div><div class="mtrlines">' +
+  const lineChooser = lines.length > 1
+    ? '<div class="mtrsub">' + T('mtrChooseLine') + '</div><div class="mtrlines">' +
       lines.map(l => '<button class="mtrline' + (st.line === l ? ' on' : '') + '" data-mtr-line="' + l +
         '" style="border-left-color:' + (MTR_LINE_COLOURS[l] || '#999') + '">' + esc(railLineName(l)) + '</button>').join('') +
-      '</div>';
-  }
-  if (!st.line) { view.innerHTML = html; return; }
+      '</div>'
+    : '';
+  if (!st.line) { view.innerHTML = html + headerCard + lineChooser; return; }
 
   // ---- 3. WHICH DIRECTION ----
   if (st.loading && !st.block) {
-    html += '<div class="favempty">' + T('rsCheckingEta') + '</div>';
-    view.innerHTML = html; return;
+    view.innerHTML = html + headerCard + lineChooser + '<div class="favempty">' + T('rsCheckingEta') + '</div>';
+    return;
   }
-  if (st.alert) html += '<div class="mtralert">⚠ ' + esc(st.alert) + '</div>';
   const dirs = mtrDirections();
   if (dirs.length === 0) {
-    if (!st.alert) html += '<div class="favempty">' + T('noneDue') + '</div>';
+    html += headerCard + lineChooser;
+    if (st.alert) html += '<div class="mtralert">⚠ ' + esc(st.alert) + '</div>';
+    else html += '<div class="favempty">' + T('noneDue') + '</div>';
     html += '<div class="mtrpick"><button data-mtr-act="refresh">' + T('refresh') + '</button></div>';
     view.innerHTML = html; return;
   }
-  // The line, left to right, this station in the middle; tap a station to
-  // make it the destination (its direction follows from which side it is on).
+  // The line, left to right, this station big in the middle; slide to stand
+  // at another station, tap one to make it the destination.
   const sides = mtrSides();
   const colour = MTR_LINE_COLOURS[st.line] || '#999';
   if (sides) {
-    html += '<div class="mtrsub">' + T('mtrLineStrip') + '</div><div class="mtrstrip" id="mtr-strip">' +
+    html += '<div class="mtrhead"><div class="mtrsub">' + T('mtrLineStrip') + '</div>' +
+            '<button class="refreshbtn" data-mtr-act="change">' + T('mtrChange') + '</button></div>' +
+            '<div class="mtrstrip" id="mtr-strip"><span class="mtrpad"></span>' +
       sides.order.map((code, j) => {
         const side = j < sides.i ? sides.left : (j > sides.i ? sides.right : null);
         const cls = 'mtrstop' + (j === sides.i ? ' here' : '') + (st.dest === code ? ' on' : '') + (j !== sides.i && !side ? ' off' : '');
-        return '<button class="' + cls + '" style="border-top-color:' + colour + '"' +
+        return '<button class="' + cls + '" data-code="' + code + '" style="border-top-color:' + colour + '"' +
           (side ? ' data-mtr-jump="' + code + '" data-side="' + side.key + '"' : ' disabled') + '>' + esc(stationName(code)) + '</button>';
-      }).join('') + '</div>';
+      }).join('') + '<span class="mtrpad"></span></div>' + lineChooser;
+    if (st.alert) html += '<div class="mtralert">⚠ ' + esc(st.alert) + '</div>';
     // The two direction buttons sit under the stations they lead to.
     const dirBtn = (d, cls) => d
       ? '<button class="mtrdir ' + cls + (st.dir === d.key ? ' on' : '') + '" data-mtr-dir="' + d.key + '">' +
         (cls === 'left' ? '◀ ' : '') + T('towards') + ' ' + esc(stationName(d.dest)) + (cls === 'right' ? ' ▶' : '') + '</button>'
       : '<div class="mtrdir blank"></div>';
     html += '<div class="mtrsub">' + T('mtrChooseDir') + '</div><div class="mtrdirs">' + dirBtn(sides.left, 'left') + dirBtn(sides.right, 'right') + '</div>';
-  } else if (dirs.length > 1) {
-    html += '<div class="mtrsub">' + T('mtrChooseDir') + '</div><div class="mtrdirs">' +
-      dirs.map(d => '<button class="mtrdir' + (st.dir === d.key ? ' on' : '') + '" data-mtr-dir="' + d.key + '">' +
-        T('towards') + ' ' + esc(stationName(d.dest)) + '</button>').join('') + '</div>';
+  } else {
+    html += headerCard + lineChooser;
+    if (st.alert) html += '<div class="mtralert">⚠ ' + esc(st.alert) + '</div>';
+    if (dirs.length > 1) {
+      html += '<div class="mtrsub">' + T('mtrChooseDir') + '</div><div class="mtrdirs">' +
+        dirs.map(d => '<button class="mtrdir' + (st.dir === d.key ? ' on' : '') + '" data-mtr-dir="' + d.key + '">' +
+          T('towards') + ' ' + esc(stationName(d.dest)) + '</button>').join('') + '</div>';
+    }
   }
   if (!st.dir) { view.innerHTML = html; mtrCentreStrip(); return; }
 
