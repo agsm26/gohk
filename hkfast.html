@@ -1112,7 +1112,7 @@ const TEXT = {
     stopGeoBody:'If you allow it, the app lists the stops around you with every bus leaving from each. Your location stays on this phone.',
     stopNearby:'Nearest stops', stopNoneNear:'No bus stop within 500 m. Type a stop name instead.',
     stopSearchPh:'Type a starting stop…', stopStartHead:'Starting stop', stopSavedPicks:'Your saved starting stops',
-    stopOptHead:'From {s} to {d}',
+    stopOptHead:'From {s} to {d}', stopAllFrom:'Every "{s}" stop together',
     stopSaveBtn:'☆ Save stop', stopSavedBtn:'★ Saved', stopRoutesHere:'Buses from this stop',
     stopNoLive:'No live times for this company — tap a route to see its stops.',
     stopTapRoute:'Tap a route to see all its stops. Tap ☆ to keep that bus in SAVED.',
@@ -1282,7 +1282,7 @@ const TEXT = {
     stopGeoBody:'允許後，本app會列出你附近的巴士站，以及每個站開出的所有巴士。你的位置只留在這部手機。',
     stopNearby:'最近的巴士站', stopNoneNear:'500 米內沒有巴士站，請輸入車站名稱。',
     stopSearchPh:'輸入起點車站名稱…', stopStartHead:'起點車站', stopSavedPicks:'你收藏的起點車站',
-    stopOptHead:'由 {s} 去 {d}',
+    stopOptHead:'由 {s} 去 {d}', stopAllFrom:'所有「{s}」車站一起看',
     stopSaveBtn:'☆ 收藏此站', stopSavedBtn:'★ 已收藏', stopRoutesHere:'此站開出的巴士',
     stopNoLive:'此公司沒有實時班次 — 按路線可查看所有車站。',
     stopTapRoute:'按路線可查看該線所有車站。按 ☆ 可把該班巴士加入「收藏」。',
@@ -6724,8 +6724,18 @@ function stopRenderSearch(query) {
     }
     const list = [...groups.values()].sort((a, b) => a.best - b.best).slice(0, 8);
     const place = esc(stopState.destQuery);
+    // The typed name matched more than one station name: offer them all at
+    // once first — "every bus from any 屯門轉車 stop to any 太子站".
+    let allCard = '';
+    if (list.length > 1) {
+      const all = list.flatMap(g => g.stops);
+      const ids = all.map(x => x.stop);
+      allCard = '<button data-stop-id="' + esc(all[0].stop) + '" data-stop-group="' + esc(ids.join(',')) + '"><span class="pickmain">🚏 ' +
+        esc(T('stopAllFrom').replace('{s}', query.trim())) + ' <span class="polecode">' + esc(T('stopBays').replace('{n}', all.length)) + '</span>' +
+        poleRoutesLine(ids, 6, destIds) + '</span></button>';
+    }
     box.innerHTML = list.length
-      ? '<div class="mtrsub">' + T('stopOptHead').replace('{s}', esc(query.trim())).replace('{d}', place) + '</div>' +
+      ? '<div class="mtrsub">' + T('stopOptHead').replace('{s}', esc(query.trim())).replace('{d}', place) + '</div>' + allCard +
         list.map(g => {
           // Board at the pole nearest the phone, else the first named.
           const lead = herePoint
