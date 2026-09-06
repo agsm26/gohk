@@ -6314,6 +6314,14 @@ function poleRoutesLine(stopId, max, destIds) {
 // 屯門公路轉車站, which is how people actually say it. Spaces and punctuation
 // are ignored on both sides.
 function tidyName(text) { return String(text || '').toLowerCase().replace(/[\s,，()（）\-–—·.]/g, ''); }
+// The station a pole belongs to, for grouping: the name with anything in
+// brackets and any pole code stripped. 屯門公路轉車站, 屯門公路轉車站(往屯門)
+// and 屯門公路轉車站 (TM750) are one station to a rider.
+function stationKey(stop) {
+  const raw = String(stop.name_tc || stop.name_en || '');
+  const bare = raw.replace(/[（(][^)）]*[)）]/g, '').replace(/\b[A-Z]{2}\d{3}[A-Za-z]?\b/g, '');
+  return tidyName(bare) || tidyName(raw);
+}
 function nameMatches(stop, needle, loose) {
   const tc = tidyName(stop.name_tc), en = tidyName(stop.name_en);
   if (tc.includes(needle) || en.includes(needle)) return true;
@@ -6364,14 +6372,14 @@ function boundsClash(mine, theirs) {
 }
 function poleGroup(stop) {
   if (!stop || stop.isStation || !stopIndex) return [stop];
-  const name = tidyName(stop.name_tc || stop.name_en);
+  const name = stationKey(stop);
   if (!name) return [stop];
   const bounds = boundsByRoute(stop.stop);
   const members = [stop];
   for (const n of stopsNear(Number(stop.lat), Number(stop.long), POLE_GROUP_M)) {
     const other = n.stop;
     if (other.isStation || members.some(m => m.stop === other.stop)) continue;
-    if (tidyName(other.name_tc || other.name_en) !== name) continue;
+    if (stationKey(other) !== name) continue;
     if (boundsClash(bounds, boundsByRoute(other.stop))) continue;
     members.push(other);
     boundsByRoute(other.stop, bounds);
@@ -6716,7 +6724,7 @@ function stopRenderSearch(query) {
     for (const stop of named) {
       const reach = reachingRoutes(stop.stop, destIds);
       if (!reach.length) continue;
-      const k = tidyName(stop.name_tc || stop.name_en);
+      const k = stationKey(stop);
       if (!groups.has(k)) groups.set(k, { stops: [], best: Infinity });
       const g = groups.get(k);
       g.stops.push(stop);
