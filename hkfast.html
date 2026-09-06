@@ -426,7 +426,6 @@
   .poleroutes { display:block; font-size:0.94rem; font-weight:700; color:var(--ink-3);
                 margin-top:3px; overflow-wrap:anywhere; }
   .poleroutes b { color:var(--blue); }
-  .optroute { font-size:1.35rem; color:var(--blue); margin-right:4px; }
 
   /* THE TOAST. Fixed under the bars, so it is in view whatever the sheet is
      doing. Dark on light, not a coloured pill: it carries errors, "ready",
@@ -1113,7 +1112,7 @@ const TEXT = {
     stopGeoBody:'If you allow it, the app lists the stops around you with every bus leaving from each. Your location stays on this phone.',
     stopNearby:'Nearest stops', stopNoneNear:'No bus stop within 500 m. Type a stop name instead.',
     stopSearchPh:'Type a starting stop…', stopStartHead:'Starting stop', stopSavedPicks:'Your saved starting stops',
-    stopOptHead:'Buses from {s} to {d}', stopOptBoard:'Board at {s} · {n} stops to {d}',
+    stopOptHead:'From {s} to {d}',
     stopSaveBtn:'☆ Save stop', stopSavedBtn:'★ Saved', stopRoutesHere:'Buses from this stop',
     stopNoLive:'No live times for this company — tap a route to see its stops.',
     stopTapRoute:'Tap a route to see all its stops. Tap ☆ to keep that bus in SAVED.',
@@ -1283,7 +1282,7 @@ const TEXT = {
     stopGeoBody:'允許後，本app會列出你附近的巴士站，以及每個站開出的所有巴士。你的位置只留在這部手機。',
     stopNearby:'最近的巴士站', stopNoneNear:'500 米內沒有巴士站，請輸入車站名稱。',
     stopSearchPh:'輸入起點車站名稱…', stopStartHead:'起點車站', stopSavedPicks:'你收藏的起點車站',
-    stopOptHead:'由 {s} 去 {d} 的巴士', stopOptBoard:'在 {s} 上車 · {n} 個站到 {d}',
+    stopOptHead:'由 {s} 去 {d}',
     stopSaveBtn:'☆ 收藏此站', stopSavedBtn:'★ 已收藏', stopRoutesHere:'此站開出的巴士',
     stopNoLive:'此公司沒有實時班次 — 按路線可查看所有車站。',
     stopTapRoute:'按路線可查看該線所有車站。按 ☆ 可把該班巴士加入「收藏」。',
@@ -6470,8 +6469,9 @@ function stopLocate() {
     { enableHighAccuracy:true, timeout:10000 });
 }
 
-function stopSetStop(stop) {
-  stopState = Object.assign(freshStopState(), { locateTried: true, stop, group: poleGroup(stop), destQuery: stopState.destQuery, indexing: stopState.indexing });
+function stopSetStop(stop, groupStops) {
+  const group = groupStops && groupStops.length > 1 ? groupStops : poleGroup(stop);
+  stopState = Object.assign(freshStopState(), { locateTried: true, stop, group, destQuery: stopState.destQuery, indexing: stopState.indexing });
   renderStopView();
   stopLoadRows();
 }
@@ -6706,32 +6706,36 @@ function stopRenderSearch(query) {
   const stops = allPlannableStops().filter(st => !st.isStation);
   let named = stops.filter(stop => nameMatches(stop, needle, false));
   if (!named.length && needle.length >= 2) named = stops.filter(stop => nameMatches(stop, needle, true));
-  // Both ends known: the answer is a list of BUSES, not of poles. 屯門公路轉車站
-  // is two stops (TM750, TM756) on the same 60X run; the rider does not need
-  // to choose between them, they need "60X, 9 stops, $14.6". One option per
-  // route + direction, boarding at the pole nearest the phone (or the first
-  // named), fewest stops first.
+  // Both ends known: list the STATIONS that match, each as one card even
+  // when it is several poles (屯門公路轉車站 is TM750 and TM756, two stops on
+  // the same 60X run). The card names the buses that reach the place; the
+  // tap opens every one of those poles together, filtered to the place and
+  // sorted soonest-arrival first — the full answer, with live times.
   if (filtering) {
-    const best = new Map();
+    const groups = new Map();
     for (const stop of named) {
-      const metres = herePoint ? metresBetween(herePoint.lat, herePoint.lng, Number(stop.lat), Number(stop.long)) : Infinity;
-      for (const x of reachingRoutes(stop.stop, destIds)) {
-        const k = x.r.route + '|' + x.r.bound + '|' + x.r.co;
-        const cand = { r: x.r, stop, metres, stopsAway: x.reach.stopsAway };
-        const have = best.get(k);
-        if (!have || cand.metres < have.metres || (cand.metres === have.metres && cand.stopsAway < have.stopsAway)) best.set(k, cand);
-      }
+      const reach = reachingRoutes(stop.stop, destIds);
+      if (!reach.length) continue;
+      const k = tidyName(stop.name_tc || stop.name_en);
+      if (!groups.has(k)) groups.set(k, { stops: [], best: Infinity });
+      const g = groups.get(k);
+      g.stops.push(stop);
+      g.best = Math.min(g.best, ...reach.map(x => x.reach.stopsAway));
     }
-    const options = [...best.values()].sort((a, b) => a.stopsAway - b.stopsAway || a.r.route.localeCompare(b.r.route, undefined, { numeric: true }));
+    const list = [...groups.values()].sort((a, b) => a.best - b.best).slice(0, 8);
     const place = esc(stopState.destQuery);
-    box.innerHTML = options.length
+    box.innerHTML = list.length
       ? '<div class="mtrsub">' + T('stopOptHead').replace('{s}', esc(query.trim())).replace('{d}', place) + '</div>' +
-        options.map(o => {
-          const fare = stopFare(o.r.route, o.r.bound, o.r.type, o.r.seq, o.r.co);
-          return '<button data-stop-id="' + esc(o.stop.stop) + '"><span class="pickmain">' +
-            '<b class="optroute">' + esc(o.r.route) + '</b> ' + T('towards') + ' ' + esc(o.r.dest || '') +
-            '<small class="poleroutes">' + T('stopOptBoard').replace('{s}', esc(stopName(o.stop)) + (poleCodeOf(o.stop) ? ' ' + esc(poleCodeOf(o.stop)) : '')).replace('{n}', o.stopsAway).replace('{d}', place) +
-            (fare !== null ? ' · $' + fare.toFixed(1) : '') + '</small></span></button>';
+        list.map(g => {
+          // Board at the pole nearest the phone, else the first named.
+          const lead = herePoint
+            ? g.stops.slice().sort((a, b) => metresBetween(herePoint.lat, herePoint.lng, Number(a.lat), Number(a.long)) - metresBetween(herePoint.lat, herePoint.lng, Number(b.lat), Number(b.long)))[0]
+            : g.stops[0];
+          const ids = g.stops.map(x => x.stop);
+          const chip = g.stops.length > 1 ? T('stopBays').replace('{n}', g.stops.length) : poleCodeOf(lead);
+          return '<button data-stop-id="' + esc(lead.stop) + '" data-stop-group="' + esc(ids.join(',')) + '"><span class="pickmain">🚏 ' + esc(stopName(lead)) +
+            (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
+            poleRoutesLine(ids, 6, destIds) + '</span></button>';
         }).join('')
       : '<div class="favempty">' + (named.length ? T('stopSearchNoneTo').replace('{d}', place) : T('noMatch')) + '</div>';
     return;
@@ -6755,7 +6759,8 @@ document.getElementById('stopview').addEventListener('click', event => {
   if (el.dataset.stopId) {
     const stop = findStopById(el.dataset.stopId);
     if (stop) {
-      stopSetStop(stop);
+      const groupStops = el.dataset.stopGroup ? el.dataset.stopGroup.split(',').map(findStopById).filter(Boolean) : null;
+      stopSetStop(stop, groupStops);
       const carry = el.dataset.filter || stopState.destQuery;
       if (carry) { stopState.destFilter = carry; renderStopView(); }
     }
