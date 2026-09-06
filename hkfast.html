@@ -1103,6 +1103,7 @@ const TEXT = {
     favStopOpen:'Show buses here', stopSavedMsg:'Saved {s}', stopRemovedMsg:'Removed {s}',
     stopFull:'Saved stops are full (8) — remove one first.',
     stopDestSaved:'Places you go', stopDestStar:'Save this place', stopDestUnstar:'Saved — tap to remove',
+    stopBays:'{n} bays',
     stopDestFull:'Saved places are full (8) — remove one first.',
     stopDestSavedMsg:'Saved "{d}" to places you go.', stopDestRemovedMsg:'Removed "{d}".',
     stopDestPh:'Going to… (type a place)',
@@ -1269,6 +1270,7 @@ const TEXT = {
     favStopOpen:'查看此站班次', stopSavedMsg:'已收藏 {s}', stopRemovedMsg:'已移除 {s}',
     stopFull:'常用車站已滿（8 個），請先移除一個。',
     stopDestSaved:'常去的目的地', stopDestStar:'收藏此目的地', stopDestUnstar:'已收藏，按此移除',
+    stopBays:'{n} 個站位',
     stopDestFull:'常去目的地已滿（8 個），請先移除一個。',
     stopDestSavedMsg:'已收藏目的地「{d}」。', stopDestRemovedMsg:'已移除「{d}」。',
     stopDestPh:'我要去…（輸入目的地）',
@@ -6201,7 +6203,7 @@ const STOP_NEAR_M = 500;
 let stopState = freshStopState();
 function freshStopState() {
   return { stop:null, rows:null, noLive:false, loading:false, alert:null,
-           fetchedAt:0, locating:false, locateTried:false, destFilter:'', destQuery:'', indexing:false };
+           fetchedAt:0, locating:false, locateTried:false, destFilter:'', destQuery:'', indexing:false, group:null };
 }
 
 // Which company runs the buses at this pole, from the planner's own index.
@@ -6261,7 +6263,8 @@ function poleRoutesLine(stopId, max, destIds) {
     items = reachingRoutes(stopId, destIds).map(x => '<b>' + esc(x.r.route) + '</b> ' +
       T('stopsAwayShort').replace('{n}', x.reach.stopsAway) + (x.r.dest ? ' · ' + T('towards') + esc(x.r.dest) : ''));
   } else {
-    items = routesServing(stopId).map(r => '<b>' + esc(r.route) + '</b>' + (r.dest ? ' ' + T('towards') + esc(r.dest) : ''));
+    const list = Array.isArray(stopId) ? routesServingAny(stopId) : routesServing(stopId);
+    items = list.map(r => '<b>' + esc(r.route) + '</b>' + (r.dest ? ' ' + T('towards') + esc(r.dest) : ''));
   }
   if (!items.length) return '';
   const shown = items.slice(0, max || 4);
@@ -6293,7 +6296,71 @@ function stopIdsMatching(q) {
 }
 // The routes from a pole that stop at any of these places further on.
 function reachingRoutes(stopId, destIds) {
-  return routesServing(stopId).map(r => ({ r, reach: routeReaches(r.key, r.seq, destIds) })).filter(x => x.reach);
+  const list = Array.isArray(stopId) ? routesServingAny(stopId) : routesServing(stopId);
+  return list.map(r => ({ r, reach: routeReaches(r.key, r.seq, destIds) })).filter(x => x.reach);
+}
+// Every route from a set of poles, each route+direction once.
+function routesServingAny(ids) {
+  const out = [], seen = new Set();
+  for (const id of ids) for (const r of routesServing(id)) {
+    const k = r.route + '|' + r.bound + '|' + r.co;
+    if (!seen.has(k)) { seen.add(k); out.push(r); }
+  }
+  return out;
+}
+// Poles that ride together: the same name, within 100 m, and no route that
+// runs one way at one pole and the other way at the other. That is the six
+// bays of 屯門市中心總站 (one option, not six) — and NOT the twins across the
+// road at 太子站, where the 60X leaves one pole outbound and the other inbound.
+const POLE_GROUP_M = 100;
+function boundsByRoute(stopId, into) {
+  const map = into || new Map();
+  for (const r of routesServing(stopId)) { if (!map.has(r.route)) map.set(r.route, new Set()); map.get(r.route).add(r.bound); }
+  return map;
+}
+function boundsClash(mine, theirs) {
+  for (const [route, bounds] of theirs) {
+    const have = mine.get(route);
+    if (have && ![...bounds].some(b => have.has(b))) return true;   // same bus, opposite ways only
+  }
+  return false;
+}
+function poleGroup(stop) {
+  if (!stop || stop.isStation || !stopIndex) return [stop];
+  const name = tidyName(stop.name_tc || stop.name_en);
+  if (!name) return [stop];
+  const bounds = boundsByRoute(stop.stop);
+  const members = [stop];
+  for (const n of stopsNear(Number(stop.lat), Number(stop.long), POLE_GROUP_M)) {
+    const other = n.stop;
+    if (other.isStation || members.some(m => m.stop === other.stop)) continue;
+    if (tidyName(other.name_tc || other.name_en) !== name) continue;
+    if (boundsClash(bounds, boundsByRoute(other.stop))) continue;
+    members.push(other);
+    boundsByRoute(other.stop, bounds);
+  }
+  return members;
+}
+// Dedupe a distance-ordered or search-ordered list into groups. `keep` says
+// which poles are allowed at all (the destination filter).
+function groupPoles(list, keep, max) {
+  const out = [], covered = new Set();
+  for (const item of list) {
+    const stop = item.stop && item.stop.stop ? item.stop : item;           // {stop, metres} or a stop
+    if (covered.has(stop.stop) || !keep(stop)) continue;
+    // A bay already shown under an earlier card is not shown twice.
+    const group = poleGroup(stop).filter(g => keep(g) && !covered.has(g.stop));
+    group.forEach(g => covered.add(g.stop));
+    out.push({ group, metres: item.metres });
+    if (out.length >= max) break;
+  }
+  return out;
+}
+function stopGroupNow() {
+  const st = stopState;
+  if (!st.stop) return [];
+  if (!st.group || (st.group.length === 1 && stopIndex)) st.group = poleGroup(st.stop);
+  return st.group;
 }
 // The destination typed on the picker, as stop ids — null when none typed.
 function destIdsNow() {
@@ -6366,16 +6433,41 @@ function stopLocate() {
 }
 
 function stopSetStop(stop) {
-  stopState = Object.assign(freshStopState(), { locateTried: true, stop, destQuery: stopState.destQuery, indexing: stopState.indexing });
+  stopState = Object.assign(freshStopState(), { locateTried: true, stop, group: poleGroup(stop), destQuery: stopState.destQuery, indexing: stopState.indexing });
   renderStopView();
   stopLoadRows();
 }
 
 // One tap on a saved stop is this screen with the stop already chosen.
 function stopOpenSaved(sf) {
-  stopState = Object.assign(freshStopState(), { locateTried: true, stop: sf });
+  stopState = Object.assign(freshStopState(), { locateTried: true, stop: sf, group: poleGroup(sf) });
   if (activeMode !== 'stop') { showMode('stop'); return; }
   renderStopView(); stopLoadRows();
+}
+
+// Live rows for one pole: an array, or null when its company has no feed.
+async function fetchPoleRows(stop) {
+  const co = stopCompany(stop.stop);
+  let rows = null;
+  if (co === 'KMB') {
+    const response = await fetch('https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/' + stop.stop,
+                                 { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error('server said ' + response.status);
+    rows = (await response.json()).data || [];
+  } else if (co === 'CTB') {
+    // Citybus answers per route, so ask for each route the index says stops here.
+    const routes = [...new Set(routesAtStop(stop.stop).filter(r => r.co === 'CTB').map(r => r.route))].slice(0, 12);
+    const lists = await Promise.all(routes.map(async route => {
+      try {
+        const response = await fetch(CTB_BASE + '/eta/CTB/' + stop.stop + '/' + encodeURIComponent(route),
+                                     { signal: AbortSignal.timeout(10000) });
+        return response.ok ? ((await response.json()).data || []) : [];
+      } catch (error) { return []; }
+    }));
+    rows = lists.flat();
+  }
+  return rows === null ? null : rows.map(row => Object.assign({}, row,
+    { stop: stop.stop, stopName_en: stop.name_en, stopName_tc: stop.name_tc, co: row.co || co }));
 }
 
 async function stopLoadRows(force) {
@@ -6383,33 +6475,17 @@ async function stopLoadRows(force) {
   if (!stop) return;
   if (!force && stopState.rows && Date.now() - stopState.fetchedAt < 30000) return;
   stopState.loading = true; stopState.alert = null; renderStopView();
-  try {
-    const co = stopCompany(stop.stop);
-    let rows = null;
-    if (co === 'KMB') {
-      const response = await fetch('https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/' + stop.stop,
-                                   { signal: AbortSignal.timeout(10000) });
-      if (!response.ok) throw new Error('server said ' + response.status);
-      rows = (await response.json()).data || [];
-    } else if (co === 'CTB') {
-      // Citybus answers per route, so ask for each route the index says stops here.
-      const routes = [...new Set(routesAtStop(stop.stop).filter(r => r.co === 'CTB').map(r => r.route))].slice(0, 12);
-      const lists = await Promise.all(routes.map(async route => {
-        try {
-          const response = await fetch(CTB_BASE + '/eta/CTB/' + stop.stop + '/' + encodeURIComponent(route),
-                                       { signal: AbortSignal.timeout(10000) });
-          return response.ok ? ((await response.json()).data || []) : [];
-        } catch (error) { return []; }
-      }));
-      rows = lists.flat();
-    }
-    if (stopState.stop !== stop) return;                 // moved on meanwhile
-    stopState.noLive = rows === null;
-    stopState.rows = rows === null ? [] : rows.map(row => Object.assign({}, row,
-      { stop: stop.stop, stopName_en: stop.name_en, stopName_tc: stop.name_tc, co: row.co || co }));
-  } catch (error) {
-    if (stopState.stop !== stop) return;
+  // One screen for every bay of the group: ask each, show all.
+  const group = stopGroupNow();
+  const results = await Promise.all(group.map(s => fetchPoleRows(s).catch(() => undefined)));
+  if (stopState.stop !== stop) return;                   // moved on meanwhile
+  const failed = results.filter(r => r === undefined).length;
+  if (failed === results.length) {
     stopState.rows = []; stopState.alert = T('etaOffline');
+  } else {
+    const live = results.filter(Array.isArray);
+    stopState.noLive = !live.length;
+    stopState.rows = live.flat();
   }
   stopState.fetchedAt = Date.now(); stopState.loading = false;
   const rowsBox = document.getElementById('stop-rows');
@@ -6430,11 +6506,14 @@ function renderStopView() {
   const filtering = !!(destIds && destIds.size);
   const keep = stop => !filtering || reachingRoutes(stop.stop, destIds).length > 0;
 
-  const poleButton = (stop, metres, extraAttr) =>
-    '<button data-stop-id="' + esc(stop.stop) + '"' + (extraAttr || '') + '><span class="pickmain">📍 ' + esc(stopName(stop)) +
-    (poleCodeOf(stop) ? ' <span class="polecode">' + esc(poleCodeOf(stop)) + '</span>' : '') +
-    poleRoutesLine(stop.stop, 4, filtering ? destIds : null) + '</span>' +
-    (metres != null ? '<span class="mtrdist">' + Math.round(metres) + ' m</span>' : '') + '</button>';
+  const poleButton = (group, metres) => {
+    const stop = group[0];
+    const chip = group.length > 1 ? T('stopBays').replace('{n}', group.length) : poleCodeOf(stop);
+    return '<button data-stop-id="' + esc(stop.stop) + '"><span class="pickmain">📍 ' + esc(stopName(stop)) +
+      (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
+      poleRoutesLine(group.map(g => g.stop), 4, filtering ? destIds : null) + '</span>' +
+      (metres != null ? '<span class="mtrdist">' + Math.round(metres) + ' m</span>' : '') + '</button>';
+  };
 
   if (!st.stop) {
     if (st.locating) {
@@ -6469,9 +6548,9 @@ function renderStopView() {
       if (filtering) html += '<div class="rshint">' + T('stopShowingTo').replace('{d}', esc(st.destQuery)) + '</div>';
       if (herePoint) {
         const nearAll = stopsNear(herePoint.lat, herePoint.lng, filtering ? 600 : STOP_NEAR_M).filter(n => !n.stop.isStation);
-        const near = nearAll.filter(n => keep(n.stop)).slice(0, filtering ? 6 : 4);
+        const near = groupPoles(nearAll, keep, filtering ? 6 : 4);
         if (near.length)
-          html += '<div class="mtrsub">' + T('stopNearby') + '</div><div class="mtrpick">' + near.map(n => poleButton(n.stop, n.metres)).join('') + '</div>';
+          html += '<div class="mtrsub">' + T('stopNearby') + '</div><div class="mtrpick">' + near.map(n => poleButton(n.group, n.metres)).join('') + '</div>';
         else
           html += '<div class="favempty">' + (filtering ? T('stopNearNoneTo').replace('{d}', esc(st.destQuery)) : T('stopNoneNear')) + '</div>';
       }
@@ -6492,13 +6571,16 @@ function renderStopView() {
 
   // ---- 2. THE STOP ----
   const stop = st.stop;
+  const group = stopGroupNow();
+  const groupIds = group.map(g => g.stop);
   const here = herePoint ? Math.round(metresBetween(herePoint.lat, herePoint.lng, Number(stop.lat), Number(stop.long))) : null;
   const saved = isSavedStop(stop.stop);
   const code = poleCodeOf(stop);
+  const chip = group.length > 1 ? T('stopBays').replace('{n}', group.length) : code;
   html += '<div class="mtrsta"><div class="mtrname">🚏 ' + esc(stopName(stop)) +
-          (code ? ' <span class="polecode">' + esc(code) + '</span>' : '') +
+          (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
           (here !== null ? '<small>' + T('mtrAway').replace('{m}', here) + '</small>' : '') +
-          poleRoutesLine(stop.stop, 6) + '</div>' +
+          poleRoutesLine(groupIds, 6) + '</div>' +
           '<button class="refreshbtn" data-stop-act="change">' + T('mtrChange') + '</button></div>' +
           '<div class="mtrpick"><button class="' + (saved ? 'rsstar on' : 'rsstar') + '" style="flex:none;width:100%;height:auto;min-height:48px" data-stop-act="star">' +
           T(saved ? 'stopSavedBtn' : 'stopSaveBtn') + '</button></div>';
@@ -6520,12 +6602,12 @@ function stopRowsHtml() {
   if (!stop) return '';
   const stamp = st.fetchedAt ? new Date(st.fetchedAt).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }) : '';
   const destIds = st.destFilter ? stopIdsMatching(st.destFilter) : null;
-  const mySeq = (routesServing(stop.stop)[0] || {}).seq;   // not used for KMB rows: they carry seq
+  const groupIds = stopGroupNow().map(g => g.stop);
   let html = '';
   if (st.loading && !st.rows) return '<div class="favempty">' + T('rsCheckingEta') + '</div>';
   if (st.alert) return '<div class="mtralert">⚠ ' + esc(st.alert) + '</div>';
   if (st.noLive) {
-    let routes = routesServing(stop.stop);
+    let routes = routesServingAny(groupIds);
     if (destIds) routes = routes.filter(r => routeReaches(r.key, r.seq, destIds));
     if (!routes.length && destIds) return '<div class="favempty">' + T('stopFilterNone').replace('{d}', esc(st.destFilter)) + '</div>';
     return '<div class="rshint">' + T('stopNoLive') + '</div>' +
@@ -6537,7 +6619,7 @@ function stopRowsHtml() {
     if (destIds) {
       rows = rows.filter(row => {
         const key = routeKeyForRow(row);
-        const seq = Number(row.seq) || (routesServing(stop.stop).find(r => r.key === key) || {}).seq || 0;
+        const seq = Number(row.seq) || (routesServing(row.stop || stop.stop).find(r => r.key === key) || {}).seq || 0;
         return !!routeReaches(key, seq, destIds);
       });
       if (!rows.length) return '<div class="favempty">' + T('stopFilterNone').replace('{d}', esc(st.destFilter)) + '</div>';
@@ -6577,11 +6659,14 @@ function stopRenderSearch(query) {
   const stops = allPlannableStops().filter(st => !st.isStation);
   let named = stops.filter(stop => nameMatches(stop, needle, false));
   if (!named.length && needle.length >= 2) named = stops.filter(stop => nameMatches(stop, needle, true));
-  const hits = named.filter(stop => !filtering || reachingRoutes(stop.stop, destIds).length > 0).slice(0, 8);
+  const keep = stop => !filtering || reachingRoutes(stop.stop, destIds).length > 0;
+  const hits = groupPoles(named, keep, 8);
   box.innerHTML = hits.length
-    ? hits.map(stop => '<button data-stop-id="' + esc(stop.stop) + '"><span class="pickmain">🚏 ' + esc(stopName(stop)) +
-        (poleCodeOf(stop) ? ' <span class="polecode">' + esc(poleCodeOf(stop)) + '</span>' : '') +
-        poleRoutesLine(stop.stop, 4, filtering ? destIds : null) + '</span></button>').join('')
+    ? hits.map(h => { const stop = h.group[0];
+        const chip = h.group.length > 1 ? T('stopBays').replace('{n}', h.group.length) : poleCodeOf(stop);
+        return '<button data-stop-id="' + esc(stop.stop) + '"><span class="pickmain">🚏 ' + esc(stopName(stop)) +
+        (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
+        poleRoutesLine(h.group.map(g => g.stop), 4, filtering ? destIds : null) + '</span></button>'; }).join('')
     : '<div class="favempty">' + (filtering && named.length ? T('stopSearchNoneTo').replace('{d}', esc(stopState.destQuery)) : T('noMatch')) + '</div>';
 }
 
