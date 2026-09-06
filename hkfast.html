@@ -3472,11 +3472,41 @@ function buildRailJourney(found, walkOn, walkOff) {
   };
 }
 
-function stopsNear(lat, lng, limit) {
-  const near = [];
+// Stops in ~1 km cells, built once per stop list. "Within 600 m" then reads
+// nine cells (a few hundred stops) instead of every stop in Hong Kong —
+// which the 車站 tab was doing up to 25 times per keystroke.
+const GRID_DEG = 0.01;           // 1.1 km north-south, 1.0 km east-west here
+let stopGrid = null, stopGridStamp = '';
+function dataStamp() { return allStops.length + ':' + ctbStops.length; }
+function stopGridNow() {
+  const stamp = dataStamp();
+  if (stopGrid && stopGridStamp === stamp) return stopGrid;
+  stopGrid = new Map(); stopGridStamp = stamp;
   for (const stop of allPlannableStops()) {
-    const m = metresBetween(lat, lng, Number(stop.lat), Number(stop.long));
-    if (m <= (limit || WALK_LIMIT_M)) near.push({ stop, metres: m });
+    const lat = Number(stop.lat), lng = Number(stop.long);
+    if (!isFinite(lat) || !isFinite(lng)) continue;
+    const k = Math.floor(lat / GRID_DEG) + ',' + Math.floor(lng / GRID_DEG);
+    let cell = stopGrid.get(k);
+    if (!cell) stopGrid.set(k, cell = []);
+    cell.push(stop);
+  }
+  return stopGrid;
+}
+function stopsNear(lat, lng, limit) {
+  const radius = limit || WALK_LIMIT_M;
+  const grid = stopGridNow();
+  const ring = Math.max(1, Math.ceil(radius / 1000));
+  const cy = Math.floor(lat / GRID_DEG), cx = Math.floor(lng / GRID_DEG);
+  const near = [];
+  for (let y = cy - ring; y <= cy + ring; y++) {
+    for (let x = cx - ring; x <= cx + ring; x++) {
+      const cell = grid.get(y + ',' + x);
+      if (!cell) continue;
+      for (const stop of cell) {
+        const m = metresBetween(lat, lng, Number(stop.lat), Number(stop.long));
+        if (m <= radius) near.push({ stop, metres: m });
+      }
+    }
   }
   return near.sort((a, b) => a.metres - b.metres).slice(0, 25);
 }
@@ -3639,6 +3669,21 @@ function refreshStopById() {
 // Every stop we can plan a journey with, both companies together.
 function allPlannableStops() {
   return ctbStops.length ? allStops.concat(ctbStops) : allStops;
+}
+// The same map, rebuilt only when the stop lists change — so a lookup after
+// the KMB list lands late is still a map hit, never a scan of 7,000 stops.
+let stopMapStamp = '';
+function stopMapNow() {
+  const stamp = dataStamp();
+  if (stamp !== stopMapStamp) { refreshStopById(); stopMapStamp = stamp; }
+  return stopById;
+}
+// Bus stops only (no rail stations), as one cached list.
+let plannableMemo = null, plannableStamp = '';
+function plannableStops() {
+  const stamp = dataStamp();
+  if (!plannableMemo || plannableStamp !== stamp) { plannableMemo = allPlannableStops().filter(s => !s.isStation); plannableStamp = stamp; }
+  return plannableMemo;
 }
 
 function pathBetween(routeKey, fromSeq, toSeq) {
@@ -6294,27 +6339,47 @@ function poleCodeOf(stop) {
 // The far end of a route is its last stop. The trimmed data carries no
 // destination names, but it carries every route's stop order, and the last
 // stop IS the destination — for all four companies alike, with no fetch.
+// Remembered per route and language: the index never changes once built,
+// and finding the last stop of a route means walking the whole route.
+const terminusMemo = new Map(); let terminusMemoIndex = null;
 function routeTerminus(routeKey) {
-  const entries = (typeof routeIndex !== 'undefined' && routeIndex && routeIndex.get(routeKey)) || [];
-  if (!entries.length) return '';
-  const last = entries.reduce((a, b) => (b.seq > a.seq ? b : a));
-  const stop = lookupStop(last.stopId);
-  return stop ? stopName(stop) : '';
+  const index = (typeof routeIndex !== 'undefined' && routeIndex) || null;
+  if (!index) return '';
+  if (terminusMemoIndex !== index) { terminusMemo.clear(); terminusMemoIndex = index; }
+  const k = lang + '|' + routeKey;
+  const hit = terminusMemo.get(k);
+  if (hit !== undefined) return hit;
+  const entries = index.get(routeKey) || [];
+  let name = '';
+  if (entries.length) {
+    const last = entries.reduce((a, b) => (b.seq > a.seq ? b : a));
+    const stop = lookupStop(last.stopId);
+    name = stop ? stopName(stop) : '';
+  }
+  if (name) terminusMemo.set(k, name);      // a miss may just be stops not loaded yet
+  return name;
 }
 function lookupStop(id) {
-  if (typeof stopById !== 'undefined' && stopById && stopById.get(id)) return stopById.get(id);
-  return allPlannableStops().find(x => x.stop === id) || null;
+  return stopMapNow().get(id) || stopFavs.find(x => x.stop === id) || null;
 }
 // Every route leaving a pole, with where it ends up.
+const servingMemo = new Map(); let servingMemoIndex = null;
 function routesServing(stopId) {
+  const index = (typeof stopIndex !== 'undefined' && stopIndex) || null;
+  if (!index) return [];
+  if (servingMemoIndex !== index) { servingMemo.clear(); servingMemoIndex = index; }
+  const memoKey = lang + '|' + stopId;
+  const hit = servingMemo.get(memoKey);
+  if (hit) return hit;
   const out = []; const seen = new Set();
-  for (const k of ((typeof stopIndex !== 'undefined' && stopIndex && stopIndex.get(stopId)) || [])) {
+  for (const k of (index.get(stopId) || [])) {
     const [route, bound, type, co] = String(k.routeKey).split('|');
     const id = route + '|' + bound + '|' + co;
     if (seen.has(id)) continue;
     seen.add(id);
     out.push({ route, bound, type, co: (co || '').toUpperCase(), key: k.routeKey, seq: k.seq, dest: routeTerminus(k.routeKey) });
   }
+  servingMemo.set(memoKey, out);
   return out;
 }
 function poleRoutesLine(stopId, max, destIds) {
@@ -6340,26 +6405,48 @@ function tidyName(text) { return String(text || '').toLowerCase().replace(/[\s,�
 // The station a pole belongs to, for grouping: the name with anything in
 // brackets and any pole code stripped. 屯門公路轉車站, 屯門公路轉車站(往屯門)
 // and 屯門公路轉車站 (TM750) are one station to a rider.
+// Per-stop derived strings, computed once and kept beside the stop (a
+// WeakMap, so nothing is written into the objects that get saved).
+const stopMemo = new WeakMap();
+function memoOf(stop) {
+  let m = stopMemo.get(stop);
+  if (!m) { m = { nk: tidyName(stop.name_tc), ne: tidyName(stop.name_en), sk: undefined }; stopMemo.set(stop, m); }
+  return m;
+}
 function stationKey(stop) {
-  const raw = String(stop.name_tc || stop.name_en || '');
-  const bare = raw.replace(/[（(][^)）]*[)）]/g, '').replace(/\b[A-Z]{2}\d{3}[A-Za-z]?\b/g, '');
-  return tidyName(bare) || tidyName(raw);
+  const m = memoOf(stop);
+  if (m.sk === undefined) {
+    const raw = String(stop.name_tc || stop.name_en || '');
+    const bare = raw.replace(/[（(][^)）]*[)）]/g, '').replace(/\b[A-Z]{2}\d{3}[A-Za-z]?\b/g, '');
+    m.sk = tidyName(bare) || tidyName(raw);
+  }
+  return m.sk;
 }
 function nameMatches(stop, needle, loose) {
-  const tc = tidyName(stop.name_tc), en = tidyName(stop.name_en);
-  if (tc.includes(needle) || en.includes(needle)) return true;
+  const m = memoOf(stop);
+  if (m.nk.includes(needle) || m.ne.includes(needle)) return true;
   if (!loose) return false;
   let i = 0;
-  for (const ch of tc) if (ch === needle[i]) { i++; if (i === needle.length) return true; }
+  for (const ch of m.nk) if (ch === needle[i]) { i++; if (i === needle.length) return true; }
   return false;
 }
 // Stop ids whose name matches what was typed — "the place I am going to".
+// Remembered per typed name: the picker, the search and the rows all ask
+// for the same name in one render, and again on every keystroke elsewhere.
+const matchMemo = new Map(); let matchMemoStamp = '';
 function stopIdsMatching(q) {
-  const ids = new Set(); const needle = tidyName(q);
-  if (!needle) return ids;
-  const stops = allPlannableStops().filter(st => !st.isStation);
+  const needle = tidyName(q);
+  if (!needle) return new Set();
+  const stamp = dataStamp();
+  if (stamp !== matchMemoStamp) { matchMemo.clear(); matchMemoStamp = stamp; }
+  const hit = matchMemo.get(needle);
+  if (hit) return hit;
+  const ids = new Set();
+  const stops = plannableStops();
   for (const stop of stops) if (nameMatches(stop, needle, false)) ids.add(stop.stop);
   if (!ids.size && needle.length >= 2) for (const stop of stops) if (nameMatches(stop, needle, true)) ids.add(stop.stop);
+  if (matchMemo.size >= 60) matchMemo.delete(matchMemo.keys().next().value);
+  matchMemo.set(needle, ids);
   return ids;
 }
 // The routes from a pole that stop at any of these places further on.
@@ -6457,9 +6544,7 @@ function routeKeyForRow(row) {
   return exact;
 }
 
-function findStopById(id) {
-  return allPlannableStops().find(x => x.stop === id) || stopFavs.find(x => x.stop === id) || null;
-}
+function findStopById(id) { return lookupStop(id); }
 
 function openStopView() {
   const panel = document.getElementById('panel');
@@ -6547,9 +6632,22 @@ async function stopLoadRows(force) {
   if (!stop) return;
   if (!force && stopState.rows && Date.now() - stopState.fetchedAt < 30000) return;
   stopState.loading = true; stopState.alert = null; renderStopView();
-  // One screen for every bay of the group: ask each, show all.
+  // One screen for every bay of the group: ask each, and show each bay's
+  // buses the moment they arrive instead of waiting for the slowest bay.
   const group = stopGroupNow();
-  const results = await Promise.all(group.map(s => fetchPoleRows(s).catch(() => undefined)));
+  const results = new Array(group.length).fill(null);
+  const settled = new Array(group.length).fill(false);
+  const paintSoFar = () => {
+    if (stopState.stop !== stop) return;
+    const live = results.filter(Array.isArray);
+    if (!live.length) return;
+    stopState.rows = live.flat();
+    const rowsBox = document.getElementById('stop-rows');
+    if (rowsBox) rowsBox.innerHTML = stopRowsHtml();
+  };
+  await Promise.all(group.map((s, i) => fetchPoleRows(s)
+    .then(r => { results[i] = r; }, () => { results[i] = undefined; })
+    .then(() => { settled[i] = true; if (settled.some(x => !x)) paintSoFar(); })));
   if (stopState.stop !== stop) return;                   // moved on meanwhile
   const failed = results.filter(r => r === undefined).length;
   if (failed === results.length) {
@@ -6565,19 +6663,19 @@ async function stopLoadRows(force) {
   else renderStopView();
 }
 
-function renderStopView() {
-  const view = document.getElementById('stopview');
-  if (!view) return;
+// The picker in two halves. The top holds the 我要去 box (with the location
+// card above it); the rest is everything that changes as the place is typed.
+// A keystroke redraws only the rest, so the box under the rider's finger is
+// never rebuilt — rebuilding it on every letter broke the keyboard's word
+// composition on the phone and made typing feel slow.
+function stopPickerParts() {
   const st = stopState;
-  let html = '';   // no heading: the tab is the heading, and the space is worth more
-
   // The typed destination, if any, narrows every list on this screen to
   // poles that have a direct bus there — and each pole's line to just those
   // buses. A pole that cannot take you where you said is not an option.
   const destIds = destIdsNow();
   const filtering = !!(destIds && destIds.size);
   const keep = stop => !filtering || reachingRoutes(stop.stop, destIds).length > 0;
-
   const poleButton = (group, metres) => {
     const stop = group[0];
     const chip = group.length > 1 ? T('stopBays').replace('{n}', group.length) : poleCodeOf(stop);
@@ -6587,59 +6685,93 @@ function renderStopView() {
       (metres != null ? '<span class="mtrdist">' + Math.round(metres) + ' m</span>' : '') + '</button>';
   };
 
+  let top = '', rest = '', star = '';
+  if (st.locating) return { top: '<div class="favempty">' + T('findingYou') + '</div>', rest, star };
+
+  if (navigator.geolocation && !herePoint && geoChoice() !== 'no' && geoChoice() !== 'yes') {
+    top += '<div class="mtrgeo"><div class="geotitle">' + T('stopGeoTitle') + '</div>' +
+           '<div class="geobody">' + T('stopGeoBody') + '</div>' +
+           '<div class="geobtns"><button class="geoyes" data-stop-act="geo-yes">' + T('geoYes') + '</button>' +
+           '<button class="geono" data-stop-act="geo-no">' + T('geoNo') + '</button></div></div>';
+  } else if (navigator.geolocation && !herePoint) {
+    top += '<div class="mtrpick"><button data-stop-act="geo-yes">' + T('myLocation') + '</button></div>';
+  }
+  if (st.indexing || !stopIndex) top += '<div class="rshint">' + T('stopIndexing') + '</div>';
+
+  // Where are you going? The star saves the place once it names real stops.
+  const destTyped = String(st.destQuery || '').trim();
+  const destSaved = destTyped && isSavedDest(destTyped);
+  const canSaveDest = destTyped && (destSaved || filtering);
+  star = canSaveDest
+    ? '<button class="rsstar' + (destSaved ? ' on' : '') + '" data-stop-act="deststar" title="' + esc(T(destSaved ? 'stopDestUnstar' : 'stopDestStar')) +
+      '" aria-label="' + esc(T(destSaved ? 'stopDestUnstar' : 'stopDestStar')) + '">' + (destSaved ? '★' : '☆') + '</button>'
+    : '';
+  top += '<div class="mtrsub">' + T('stopDestPh').replace(/[（(].*$/, '') + '</div>' +
+         '<div class="frow"><input id="stop-dest" type="text" placeholder="' + esc(T('stopDestPh')) + '" autocomplete="off" value="' + esc(st.destQuery || '') + '">' +
+         '<span id="stop-dest-star">' + star + '</span></div>' +
+         '<div id="stop-dest-results"></div>';
+
+  if (stopDests.length) {
+    // One tap sets the place; tapping the lit one again clears it.
+    rest += '<div class="mtrsub">' + T('stopDestSaved') + '</div><div class="destchips">' +
+      stopDests.map(d => '<button class="destchip' + (d === destTyped ? ' on' : '') + '" data-stop-act="dest" data-name="' + esc(d) + '">' + (d === destTyped ? '★ ' : '') + esc(d) + '</button>').join('') +
+      '</div>';
+  }
+  // The starting stop: type it, or tap one saved. The nearest poles come
+  // last — they are the fallback when you have not said where you are.
+  rest += '<div class="mtrsub sectionbreak">' + T('stopStartHead') + '</div>' +
+          '<div class="frow"><input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off"></div>' +
+          '<div class="mtrpick" id="stop-search-results"></div>';
+  // Saved poles as one-tap pills, same shape as the saved places above.
+  const savedShown = stopFavs.slice(0, MAX_STOPS);   // always shown — they are yours, whatever the place
+  if (savedShown.length) {
+    rest += '<div class="mtrsub">' + T('stopSavedPicks') + '</div><div class="destchips">' +
+      savedShown.map(f => '<button class="destchip" data-stop-act="fav" data-index="' + stopFavs.indexOf(f) + '">📍 ' + esc(stopName(f)) +
+        (poleCodeOf(f) ? ' <small>' + esc(poleCodeOf(f)) + '</small>' : '') + '</button>').join('') + '</div>';
+  }
+  if (st.destQuery && destIds && !destIds.size)
+    rest += '<div class="favempty">' + T('stopDestNoName').replace('{d}', esc(st.destQuery)) + '</div>';
+  if (filtering) rest += '<div class="rshint">' + T('stopShowingTo').replace('{d}', esc(st.destQuery)) + '</div>';
+  if (herePoint) {
+    const nearAll = stopsNear(herePoint.lat, herePoint.lng, filtering ? 600 : STOP_NEAR_M).filter(n => !n.stop.isStation);
+    const near = groupPoles(nearAll, keep, filtering ? 6 : 4);
+    if (near.length)
+      rest += '<div class="mtrsub sectionbreak">' + T('stopNearby') + '</div><div class="mtrpick">' + near.map(n => poleButton(n.group, n.metres)).join('') + '</div>';
+    else
+      rest += '<div class="favempty">' + (filtering ? T('stopNearNoneTo').replace('{d}', esc(st.destQuery)) : T('stopNoneNear')) + '</div>';
+  }
+  return { top, rest, star };
+}
+
+// A keystroke in 我要去: one redraw per frame, of the lower half only. The
+// start-stop box keeps whatever was typed in it, and its results follow.
+let stopRefreshPending = 0;
+function stopScheduleRefresh() {
+  if (stopRefreshPending) return;
+  stopRefreshPending = requestAnimationFrame(() => {
+    stopRefreshPending = 0;
+    const rest = document.getElementById('stop-rest');
+    if (!rest || stopState.stop) { renderStopView(); return; }
+    const parts = stopPickerParts();
+    const startBox = document.getElementById('stop-search');
+    const startTyped = startBox ? startBox.value : '';
+    rest.innerHTML = parts.rest;
+    const starBox = document.getElementById('stop-dest-star');
+    if (starBox && starBox.innerHTML !== parts.star) starBox.innerHTML = parts.star;
+    if (startTyped) { const again = document.getElementById('stop-search'); if (again) { again.value = startTyped; stopRenderSearch(startTyped); } }
+    stopRenderDest(stopState.destQuery);
+  });
+}
+
+function renderStopView() {
+  const view = document.getElementById('stopview');
+  if (!view) return;
+  const st = stopState;
+  let html = '';   // no heading: the tab is the heading, and the space is worth more
+
   if (!st.stop) {
-    if (st.locating) {
-      html += '<div class="favempty">' + T('findingYou') + '</div>';
-    } else {
-      if (navigator.geolocation && !herePoint && geoChoice() !== 'no' && geoChoice() !== 'yes') {
-        html += '<div class="mtrgeo"><div class="geotitle">' + T('stopGeoTitle') + '</div>' +
-                '<div class="geobody">' + T('stopGeoBody') + '</div>' +
-                '<div class="geobtns"><button class="geoyes" data-stop-act="geo-yes">' + T('geoYes') + '</button>' +
-                '<button class="geono" data-stop-act="geo-no">' + T('geoNo') + '</button></div></div>';
-      } else if (navigator.geolocation && !herePoint) {
-        html += '<div class="mtrpick"><button data-stop-act="geo-yes">' + T('myLocation') + '</button></div>';
-      }
-      if (st.indexing || !stopIndex) html += '<div class="rshint">' + T('stopIndexing') + '</div>';
-      // Where are you going? Answered from the poles around you.
-      const destTyped = String(st.destQuery || '').trim();
-      const destSaved = destTyped && isSavedDest(destTyped);
-      const canSaveDest = destTyped && (destSaved || filtering);   // only a name that names real stops
-      html += '<div class="mtrsub">' + T('stopDestPh').replace(/[（(].*$/, '') + '</div>' +
-              '<div class="frow"><input id="stop-dest" type="text" placeholder="' + esc(T('stopDestPh')) + '" autocomplete="off" value="' + esc(st.destQuery || '') + '">' +
-              (canSaveDest ? '<button class="rsstar' + (destSaved ? ' on' : '') + '" data-stop-act="deststar" title="' + esc(T(destSaved ? 'stopDestUnstar' : 'stopDestStar')) + '" aria-label="' + esc(T(destSaved ? 'stopDestUnstar' : 'stopDestStar')) + '">' + (destSaved ? '★' : '☆') + '</button>' : '') +
-              '</div>' +
-              '<div id="stop-dest-results"></div>';
-      if (stopDests.length) {
-        // One tap sets the place; tapping the lit one again clears it.
-        html += '<div class="mtrsub">' + T('stopDestSaved') + '</div><div class="destchips">' +
-          stopDests.map(d => '<button class="destchip' + (d === destTyped ? ' on' : '') + '" data-stop-act="dest" data-name="' + esc(d) + '">' + (d === destTyped ? '★ ' : '') + esc(d) + '</button>').join('') +
-          '</div>';
-      }
-      // The starting stop: type it, or tap one saved. The nearest poles come
-      // last — they are the fallback when you have not said where you are.
-      html += '<div class="mtrsub sectionbreak">' + T('stopStartHead') + '</div>' +
-              '<div class="frow"><input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off"></div>' +
-              '<div class="mtrpick" id="stop-search-results"></div>';
-      // Saved poles as one-tap pills, same shape as the saved places above.
-      const savedShown = stopFavs.slice(0, MAX_STOPS);   // always shown — they are yours, whatever the place
-      if (savedShown.length) {
-        html += '<div class="mtrsub">' + T('stopSavedPicks') + '</div><div class="destchips">' +
-          savedShown.map(f => '<button class="destchip" data-stop-act="fav" data-index="' + stopFavs.indexOf(f) + '">📍 ' + esc(stopName(f)) +
-            (poleCodeOf(f) ? ' <small>' + esc(poleCodeOf(f)) + '</small>' : '') + '</button>').join('') + '</div>';
-      }
-      if (st.destQuery && destIds && !destIds.size)
-        html += '<div class="favempty">' + T('stopDestNoName').replace('{d}', esc(st.destQuery)) + '</div>';
-      if (filtering) html += '<div class="rshint">' + T('stopShowingTo').replace('{d}', esc(st.destQuery)) + '</div>';
-      if (herePoint) {
-        const nearAll = stopsNear(herePoint.lat, herePoint.lng, filtering ? 600 : STOP_NEAR_M).filter(n => !n.stop.isStation);
-        const near = groupPoles(nearAll, keep, filtering ? 6 : 4);
-        if (near.length)
-          html += '<div class="mtrsub sectionbreak">' + T('stopNearby') + '</div><div class="mtrpick">' + near.map(n => poleButton(n.group, n.metres)).join('') + '</div>';
-        else
-          html += '<div class="favempty">' + (filtering ? T('stopNearNoneTo').replace('{d}', esc(st.destQuery)) : T('stopNoneNear')) + '</div>';
-      }
-    }
-    view.innerHTML = html;
+    const parts = stopPickerParts();
+    view.innerHTML = '<div id="stop-top">' + parts.top + '</div><div id="stop-rest">' + parts.rest + '</div>';
     if (st.destQuery) stopRenderDest(st.destQuery);
     return;
   }
@@ -6737,7 +6869,7 @@ function stopRenderSearch(query) {
   if (needle.length < 1) return;
   const destIds = destIdsNow();
   const filtering = !!(destIds && destIds.size);
-  const stops = allPlannableStops().filter(st => !st.isStation);
+  const stops = plannableStops();
   let named = stops.filter(stop => nameMatches(stop, needle, false));
   if (!named.length && needle.length >= 2) named = stops.filter(stop => nameMatches(stop, needle, true));
   // Both ends known: list the STATIONS that match, each as one card even
@@ -6850,11 +6982,7 @@ document.getElementById('stopview').addEventListener('input', event => {
   if (event.target.id === 'stop-search') stopRenderSearch(event.target.value);
   if (event.target.id === 'stop-dest') {
     stopState.destQuery = event.target.value;
-    const pos = event.target.selectionStart;
-    renderStopView();                              // the lists themselves change
-    const again = document.getElementById('stop-dest');
-    if (again) { again.focus(); try { again.setSelectionRange(pos, pos); } catch (e) {} }
-    stopRenderDest(event.target.value);
+    stopScheduleRefresh();                         // the lists change; the box stays put
   }
   if (event.target.id === 'stop-filter') {
     stopState.destFilter = event.target.value;
