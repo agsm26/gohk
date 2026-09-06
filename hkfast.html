@@ -403,17 +403,21 @@
 
   /* THE BUS STOP TAB. Same bones as the MTR tab; the route rows are the map
      popup's own rows, laid out for a panel instead of a bubble. */
-  #stopview .eta-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px;
-                       border:2px solid var(--line-soft); border-radius:12px; padding:10px 12px;
-                       margin:8px 0; cursor:pointer; }
+  /* Three lines per bus, three buses per screen: route · terminus · ☆ /
+     next times / arrival estimate · fare. Sized so three rows fit under
+     the filter on a phone. */
+  #stopview .eta-row { display:flex; flex-wrap:wrap; align-items:center; gap:2px 8px;
+                       border:2px solid var(--line-soft); border-radius:12px; padding:8px 12px;
+                       margin:6px 0; cursor:pointer; }
   #stopview .eta-row:active { filter:brightness(.95); }
-  #stopview .eta-star { order:3; margin-left:auto; flex:0 0 44px; height:44px; padding:0;
-                        border:2px solid var(--line-soft); border-radius:10px; font-size:1.29rem; }
+  #stopview .eta-star { order:1; margin-left:auto; flex:0 0 40px; height:40px; padding:0;
+                        border:2px solid var(--line-soft); border-radius:10px; font-size:1.18rem; }
   #stopview .eta-star.on { border-color:var(--amber); background:var(--amber-tint); }
-  #stopview .eta-route { font-size:1.41rem; min-width:0; }
-  #stopview .eta-dest { flex:1; min-width:0; font-weight:700; overflow-wrap:anywhere; }
-  #stopview .eta-fare { order:2; }
-  #stopview .eta-times { flex-basis:100%; font-size:1.29rem; color:var(--green); margin-top:0; }
+  #stopview .eta-route { order:0; font-size:1.24rem; min-width:0; }
+  #stopview .eta-dest { order:0; flex:1; min-width:0; font-weight:700; font-size:0.94rem; overflow-wrap:anywhere; }
+  #stopview .eta-times { order:2; flex-basis:100%; font-size:1.12rem; color:var(--green); margin-top:0; }
+  #stopview .eta-arrive { order:3; flex:1 1 auto; min-width:0; flex-basis:auto; font-size:0.88rem; margin-top:0; }
+  #stopview .eta-fare { order:4; margin-left:auto; font-size:0.88rem; }
   #stopview .eta-note { color:var(--ink-3); font-weight:700; padding:8px 0; }
   .stoproute { display:flex; align-items:center; gap:10px; border:2px solid var(--line-soft);
                border-radius:12px; padding:12px; margin:8px 0; }
@@ -5789,9 +5793,11 @@ function formatArrivals(entries, opts) {
     // Keep one whole entry per route: it carries the direction, service type
     // and seq we need to price the ride from THIS stop.
     if (!byRoute.has(label)) byRoute.set(label, { minutes: [], sample: entry });
-    byRoute.get(label).minutes.push(minutes);
+    const bucket = byRoute.get(label).minutes;
+    if (!bucket.includes(minutes)) bucket.push(minutes);   // two bays, one bus: one time
   }
   if (byRoute.size === 0) return '<div class="eta-note">' + T('noBusDue') + '</div>';
+  for (const group of byRoute.values()) group.minutes.sort((a, b) => a - b);
 
   // Soonest first: by arrival at the place when one is set, otherwise by the
   // next bus. A bus due in 18 minutes that arrives last belongs last.
