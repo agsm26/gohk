@@ -144,7 +144,7 @@
            border-radius:8px; margin-right:8px; }
   .badge-kmb { background:var(--blue-tint); color:var(--blue); }
   .badge-ctb { background:#ffedd5; color:#9a3412; }
-  .badge-stop{ background:var(--red-tint); color:var(--red); }
+
   .badge-place{background:#dcfce7; color:var(--green); }
   .routeno { font-weight:800; color:var(--blue); font-size:1.1765rem; margin-right:8px; }
 
@@ -389,6 +389,25 @@
   .livecard.tap:active { filter:brightness(.95); }
   .livefoot { font-size:0.94rem; font-weight:800; color:var(--blue); margin-top:6px; }
 
+  /* THE BUS STOP TAB. Same bones as the MTR tab; the route rows are the map
+     popup's own rows, laid out for a panel instead of a bubble. */
+  #stopview .eta-row { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px;
+                       border:2px solid var(--line-soft); border-radius:12px; padding:10px 12px;
+                       margin:8px 0; cursor:pointer; }
+  #stopview .eta-row:active { filter:brightness(.95); }
+  #stopview .eta-star { order:3; margin-left:auto; flex:0 0 44px; height:44px; padding:0;
+                        border:2px solid var(--line-soft); border-radius:10px; font-size:1.29rem; }
+  #stopview .eta-star.on { border-color:var(--amber); background:var(--amber-tint); }
+  #stopview .eta-route { font-size:1.41rem; min-width:0; }
+  #stopview .eta-dest { flex:1; min-width:0; font-weight:700; overflow-wrap:anywhere; }
+  #stopview .eta-fare { order:2; }
+  #stopview .eta-times { flex-basis:100%; font-size:1.29rem; color:var(--green); margin-top:0; }
+  #stopview .eta-note { color:var(--ink-3); font-weight:700; padding:8px 0; }
+  .stoproute { display:flex; align-items:center; gap:10px; border:2px solid var(--line-soft);
+               border-radius:12px; padding:12px; margin:8px 0; }
+  .stoproute .rt { font-size:1.41rem; font-weight:800; color:var(--blue); }
+  .stoproute .quiet { color:var(--ink-3); font-weight:700; font-size:0.94rem; }
+
   /* THE TOAST. Fixed under the bars, so it is in view whatever the sheet is
      doing. Dark on light, not a coloured pill: it carries errors, "ready",
      "saved" — all of them — and one plain style keeps it readable for all. */
@@ -400,21 +419,12 @@
            transition:opacity .18s ease, transform .18s ease; }
   #toast.show { opacity:1; transform:none; }
 
-  /* FAVOURITES LIST. Full names, not the two-character chips used in the
-     form — this is the screen where someone reads rather than recognises. */
-  /* COMPACT ROWS. At the old 140px only four fitted an iPhone SE, so six
-     favourites meant scrolling past two of them — which costs more effort
-     than the taps it saved. One primary button visible, the rest behind ⋯. */
-  #favview .favrow { border:2px solid var(--line-soft); border-radius:12px; padding:10px 12px;
-                     margin-bottom:8px; }
-  #favview .favtop { display:flex; align-items:center; gap:8px; }
-  #favview .favname { font-size:1.0588rem; font-weight:800; color:#111;
-                      flex:1; min-width:0; word-break:break-word; }
-  #favview .favmore { flex:0 0 44px; min-height:48px; border-radius:10px;
-                      border:2px solid var(--line); background:white; color:var(--ink-3);
-                      font-size:1.1765rem; font-weight:800; cursor:pointer; }
-  #favview .favmore.on { background:var(--surface-2); }
-  #favview .favacts { margin-top:8px; }
+
+
+
+
+
+
   #favview .favcount { font-size:0.94rem; font-weight:700; color:var(--ink-3); }
 
   /* LIVE STRIP — the answer before the question. */
@@ -561,10 +571,8 @@
                        font-size:0.94rem; cursor:pointer; padding:0; }
   #favview .tripcopy:disabled { opacity:.35; cursor:default; }
   #favview .tripcopy.done { border-color:#bbf7d0; background:var(--green-tint); }
-  #favview .favmanage { width:100%; min-height:48px; margin-bottom:10px;
-                        border:2px solid var(--line); border-radius:10px; background:white;
-                        font-size:1rem; font-weight:700; color:var(--ink-3); cursor:pointer; }
-  #favview .favmanage.on { background:var(--surface-2); }
+
+
 
   /* SAVED DEPARTURES. No button at all — the countdown is the content. */
   #favview .deprow { position:relative; border:2px solid var(--line-soft); border-radius:12px;
@@ -587,19 +595,13 @@
   .eta-star { border:none; background:none; cursor:pointer; font-size:1.2941rem;
               line-height:1; padding:2px 6px 2px 0; color:var(--ink-3); }
   .eta-star.on { color:var(--amber); }
-  /* The one-tap journey is the primary action, so it gets the width, the
-     colour and the top position. Set-as-start and set-as-destination are the
-     fallbacks underneath, deliberately quieter. */
-  #favview .go-now { flex:0 0 auto; min-height:48px; padding:0 14px;
-                     border:none; border-radius:10px; background:var(--green); color:white;
-                     font-size:1rem; font-weight:800; cursor:pointer; white-space:nowrap; }
-  #favview .go-now:disabled { background:#6b7280; cursor:default; }
-  #favview .favacts { display:flex; gap:8px; }
-  #favview .favacts button { flex:1; min-height:48px; border-radius:10px; border:2px solid var(--line);
-                             background:white; font-size:1rem; font-weight:700; cursor:pointer; }
-  #favview .favacts .go-start { border-color:var(--green); color:var(--green); }
-  #favview .favacts .go-end   { border-color:var(--red); color:var(--red); }
-  #favview .favacts .go-del   { flex:0 0 60px; border-color:var(--line); color:var(--ink-3); }
+
+
+
+
+
+
+
   #favview .favempty { color:var(--ink-3); padding:18px 4px; line-height:1.5; }
 
   /* FAVOURITES TAKES THE WHOLE PANEL. Hiding the form and the results by
@@ -608,6 +610,7 @@
   #panel.favmode > *:not(#favview):not(#sheetgrip) { display:none !important; }
   #panel.setmode > *:not(#setview):not(#sheetgrip) { display:none !important; }
   #panel.mtrmode > *:not(#mtrview):not(#sheetgrip) { display:none !important; }
+  #panel.stopmode > *:not(#stopview):not(#sheetgrip) { display:none !important; }
   /* ROUTE MODE. Looking up a bus number takes the panel the same way
      favourites and settings do — the trip form is not part of this job. */
   #panel.routemode > *:not(#routefield):not(#routestops):not(#sheetgrip):not(#status) {
@@ -621,7 +624,7 @@
   #panel.routemode #routefield { position:sticky; top:0; z-index:2;
                                  background:white; padding-bottom:6px; margin-bottom:0; }
   #panel.routemode #route-exit { display:block !important; }
-  #panel.favmode, #panel.setmode, #panel.mtrmode { top:var(--toph); max-height:calc(100vh - var(--toph));
+  #panel.favmode, #panel.setmode, #panel.mtrmode, #panel.stopmode { top:var(--toph); max-height:calc(100vh - var(--toph));
                   max-height:calc(100dvh - var(--toph)); border-radius:0;
                    padding-top:16px; }
   #favview .favhead, #setview .favhead { font-size:1.1765rem; font-weight:800; color:#111;
@@ -654,7 +657,7 @@
   .jcard .jdet { font-size:1rem; line-height:1.6; color:#111;
                  overflow-wrap:anywhere; word-break:break-word; }
   .jcard, .jcard * { min-width:0; }
-  .jcard .jtime { font-size:1.1765rem; font-weight:800; color:var(--green); margin-top:6px; }
+
   #findbuses { width:100%; min-height:56px; border:none; border-radius:10px; background:var(--green);
                color:white; font-size:1.1176rem; font-weight:800; cursor:pointer; margin-bottom:16px; }
   #findbuses:disabled { background:#6b7280; cursor:default; }
@@ -714,20 +717,16 @@
   .endwrap.flip { flex-direction:row-reverse; justify-content:flex-end; }
   .endwrap.flip .endtext { margin-left:0; margin-right:-6px; text-align:right; }
 
-  .optbadge { color:white; font-weight:800; font-size:1.2941rem; width:46px; height:46px;
-              border-radius:23px; text-align:center; line-height:42px;
-              border:3px solid white; box-shadow:0 2px 8px rgba(0,0,0,.55); }
-  .optlabel { color:white; font-weight:800; font-size:1rem; padding:7px 11px;
-              border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,.5);
-              white-space:nowrap; line-height:1.3; }
+
+
 
   .jcard { position:relative; padding-left:56px; }
   .jnum { position:absolute; left:12px; top:12px; width:36px; height:36px;
           border-radius:18px; color:white; font-size:1.1176rem; font-weight:800;
           text-align:center; line-height:36px; }
-  .jcard.chosen-card { background:var(--navy-tint); border-width:4px; }
-  .jcard.dim-card { opacity:.45; }
-  .jcard.dim-card:hover { opacity:1; }
+
+
+
   /* Four big numbers in one flex row could not fit a phone, so each one
      wrapped and left its unit stranded on the next line: "67 / 分鐘",
      "2 程 / 巴士". A 2x2 grid gives every figure a fixed cell, and putting
@@ -740,7 +739,7 @@
           white-space:nowrap; }
   .junit { display:block; font-size:1rem; font-weight:700; color:var(--ink-3);
            margin-top:2px; }
-  .jsmallfare { font-size:1rem; font-weight:700; color:var(--ink-3); }
+
   .jextra { font-size:1rem; font-weight:700; color:var(--teal); background:var(--teal-tint);
             border-radius:8px; padding:6px 10px; margin-bottom:8px; }
   .jwhy { font-size:1rem; line-height:1.5; color:var(--ink-3); margin-bottom:10px; }
@@ -759,7 +758,7 @@
              cursor:pointer; padding:8px 6px; }
   .zoombtn:hover { background:var(--navy-tint); }
 
-  .jtap { font-size:0.94rem; color:var(--blue); font-weight:700; margin-top:8px; }
+
 
   #stopdetail { position:absolute; top:14px; right:14px; z-index:1200; width:330px;
                 max-width:calc(100vw - 30px); background:white; border-radius:12px;
@@ -909,6 +908,7 @@
        lives in SETTINGS. -->
   <div id="setview" style="display:none"></div>
   <div id="mtrview" style="display:none"></div>
+  <div id="stopview" style="display:none"></div>
 
   <!-- BUS NUMBER FIRST. "When is my bus coming" is the daily question, and
        most riders know their number; it should not sit below the whole trip
@@ -1009,6 +1009,7 @@
 
 <nav id="bottombar">
   <button class="bnav on" data-nav="bus"><span class="bicon">🚌</span><span class="blabel"></span></button>
+  <button class="bnav"    data-nav="stop"><span class="bicon">🚏</span><span class="blabel"></span></button>
   <button class="bnav"    data-nav="mtr"><span class="bicon">🚇</span><span class="blabel"></span></button>
   <button class="bnav"    data-nav="fav"><span class="bicon">⭐</span><span class="blabel"></span></button>
   <button class="bnav"    data-nav="set"><span class="bicon">⚙️</span><span class="blabel"></span></button>
@@ -1036,7 +1037,7 @@ const TEXT = {
     appname:'HK-Fast Route App', start:'START', destination:'DESTINATION',
     notSet:'Not set', typePlace:'Type a building or place…', find:'Find',
     myLocation:'📍 My location', tapMap:'Tap on map', saveFav:'⭐ Save to favourites',
-    alreadyFav:'⭐ Already in favourites', noFavs:'No favourites saved yet.',
+    alreadyFav:'⭐ Already in favourites', 
     findBuses:'🔍 Find buses A → B', setBoth:'Set both points first',
     lookUp:'🚌 LOOK UP A BUS ROUTE', routePlaceholder:'Route number, e.g. 60M',
     clearAll:'Clear everything', ready:'Ready.', loading:'Loading bus data…',
@@ -1057,21 +1058,30 @@ const TEXT = {
     mtrArrive:'Take the train in {w} min — arrive about {t}',
     mtrArriveNow:'Take the train arriving now — arrive about {t}',
     mtrTrips:'Your planned trip', mtrShowTrips:'Show train options ({n})',
+    stopTitle:'Bus stops', stopGeoTitle:'Find the bus stops nearest you?',
+    stopGeoBody:'If you allow it, the app lists the stops around you with every bus leaving from each. Your location stays on this phone.',
+    stopNearby:'Nearest stops', stopNoneNear:'No bus stop within 500 m. Type a stop name instead.',
+    stopSearchPh:'Type a stop name…', stopSavedPicks:'Your saved stops',
+    stopSaveBtn:'☆ Save stop', stopSavedBtn:'★ Saved', stopRoutesHere:'Buses from this stop',
+    stopNoLive:'No live times for this company — tap a route to see its stops.',
+    stopTapRoute:'Tap a route to see all its stops. Tap ☆ to keep that bus in SAVED.',
+    favStops:'MY STOPS', noStopsLong:'No stops saved. On the STOPS tab, open a stop and tap ☆ Save stop.',
+    favStopOpen:'Show buses here', stopSavedMsg:'Saved {s}', stopRemovedMsg:'Removed {s}',
+    stopFull:'Saved stops are full (8) — remove one first.',
     dataLoading:'Still loading the bus data — try again in a moment.',
     nearestStop:'Nearest bus stop', getOn:'GET ON', getOff:'GET OFF',
-    startAndBoard:'START · BOARD', getOffAndArrive:'GET OFF · ARRIVE',
+    getOffAndArrive:'GET OFF · ARRIVE',
     min:' min', walk:' min walk', bus:' bus', buses:' buses', train:' train', trains:' trains',
     totalTime:'minutes', totalFare:'fare', totalWalk:'minutes walking',
     totalBuses:'buses to take', totalTrains:'trains to take',
     boardHere:'✓ Board right here at', walkTo:'🚶 Walk', minTo:'min to',
     rideTo:'Ride to', stops:'stops', stations:'stations', changeBus:'↓ CHANGE BUS',
     changeTrain:'↓ CHANGE TRAIN', trainsFrequent:'Trains every few minutes', here:'here',
-    tabBus:'BUS', tabMtr:'MTR', tabFav:'FAVOURITES', tabSet:'SETTINGS',
+    tabBus:'BUS', tabStop:'STOPS', tabMtr:'MTR', tabFav:'SAVED', tabSet:'SETTINGS',
     settings:'Settings', settingLanguage:'Language',
     settingsNote:'Your choice is remembered on this phone.',
-    goFromHere:'\u27a4 Go here from my location', goShort:'\u27a4 Go',
-    favTrip:'PLAN A TRIP', favPlaces:'PLACES', favRoutes:'MY BUSES',
-    fromCol:'FROM', toCol:'TO', manageFavs:'Edit saved places',
+    goShort:'\u27a4 Go',
+    favRoutes:'MY BUSES',
     favFrom:'START FROM', favTo:'TRAVEL TO',
     favAlsoArrival:'Also save as a destination',
     favAlsoDeparture:'Also save as a starting point',
@@ -1082,12 +1092,12 @@ const TEXT = {
     wxHere:'Hong Kong',
     noFavStart:'No starting points saved yet. Set a start, then tap ⭐ Save.',
     noFavEnd:'No destinations saved yet. Set a destination, then tap ⭐ Save.',
-    noFavsShort:'Nothing saved yet.', locationFailed:'Could not find your location.',
+    locationFailed:'Could not find your location.',
     saveDeparture:'Save this bus', departureSaved:'Saved {r} to favourites.',
     departureRemoved:'Removed {r} from favourites.',
     noDepsLong:'No buses saved. Tap a stop on the map, then tap \u2606 next to a route to keep it here with live times.',
     noneDue:'None due right now', etaOffline:'Times unavailable',
-    myBusesNow:'YOUR SAVED BUSES', myStationsNow:'YOUR SAVED STATIONS', towards:'towards',
+    myBusesNow:'YOUR SAVED BUSES', towards:'towards',
     geoTitle:'Show buses near you?', geoYes:'Yes, use my location', geoNo:'Not now',
     geoBody:'If you allow it, this app can show the bus stops around you and when the next buses arrive. Your location stays on this phone.',
     foundYou:'Found you. Showing buses nearby.', nearbyBuses:'BUSES NEAR YOU',
@@ -1095,17 +1105,14 @@ const TEXT = {
     walkThere:'walk', addRoute:'Add a bus by number', routePlaceholderShort:'Route number, e.g. 60X',
     pickDirection:'Pick the direction you travel:', noRouteFound:'No route with that number.',
     nearestStopToYou:'Nearest stop to you', needLocation:'Allow location to see times',
-    setEndOnly:'Destination set \u2014 now choose a start.',
     noGeo:'This browser cannot do location.',
-    useAsStart:'Set as start', useAsEnd:'Set as destination',
-    noFavsLong:'No favourites yet. Set a start or destination, then tap \u2b50 Save to favourites and it will appear here.',
+    useAsEnd:'Set as destination',
     bestTrain:'BEST TRAIN ROUTE', frequentShort:'frequent',
     due:'due', nextTrain:'Next trains:', trainAlert:'MTR service notice - check before you travel',
     bestTrainWhy:'Fewest changes and least time by rail',
     noTrain:'No MTR station within walking distance of both ends.',
     noBus:'No bus journey found for this trip.',
     thenWalk:'🚶 Then walk', toDest:'min to your destination',
-    tapMapShow:'👆 Tap to show this route on the map',
     checkingBus:'Checking next bus…', next:'Next', inTime:'in', then:'Then',
     checked:'Checked', noBusDue:'No bus due at this stop right now.',
     working:'Working it out…', whichDirection:'— which direction are you going?',
@@ -1183,7 +1190,7 @@ const TEXT = {
     appname:'香港快線', start:'起點', destination:'目的地',
     notSet:'未設定', typePlace:'輸入大廈或地點名稱…', find:'搜尋',
     myLocation:'📍 我的位置', tapMap:'在地圖上點選', saveFav:'⭐ 加入常用地點',
-    alreadyFav:'⭐ 已在常用地點', noFavs:'尚未儲存常用地點。',
+    alreadyFav:'⭐ 已在常用地點', 
     findBuses:'🔍 搜尋巴士路線 起點 → 目的地', setBoth:'請先設定起點及目的地',
     lookUp:'🚌 查詢巴士路線', routePlaceholder:'路線號碼，例如 60M',
     clearAll:'全部清除', ready:'準備就緒。', loading:'正在載入巴士資料…',
@@ -1204,21 +1211,30 @@ const TEXT = {
     mtrArrive:'乘搭 {w} 分鐘後的班次，預計 {t} 到達',
     mtrArriveNow:'乘搭即將到達的班次，預計 {t} 到達',
     mtrTrips:'已規劃的行程', mtrShowTrips:'查看港鐵行程建議 ({n})',
+    stopTitle:'巴士站', stopGeoTitle:'尋找附近的巴士站？',
+    stopGeoBody:'允許後，本app會列出你附近的巴士站，以及每個站開出的所有巴士。你的位置只留在這部手機。',
+    stopNearby:'最近的巴士站', stopNoneNear:'500 米內沒有巴士站，請輸入車站名稱。',
+    stopSearchPh:'輸入車站名稱…', stopSavedPicks:'你收藏的車站',
+    stopSaveBtn:'☆ 收藏此站', stopSavedBtn:'★ 已收藏', stopRoutesHere:'此站開出的巴士',
+    stopNoLive:'此公司沒有實時班次 — 按路線可查看所有車站。',
+    stopTapRoute:'按路線可查看該線所有車站。按 ☆ 可把該班巴士加入「收藏」。',
+    favStops:'常用車站', noStopsLong:'尚未收藏車站。在「車站」打開車站後，按「☆ 收藏此站」。',
+    favStopOpen:'查看此站班次', stopSavedMsg:'已收藏 {s}', stopRemovedMsg:'已移除 {s}',
+    stopFull:'常用車站已滿（8 個），請先移除一個。',
     dataLoading:'巴士資料仍在載入，請稍候再試。',
     nearestStop:'最近巴士站', getOn:'上車', getOff:'下車',
-    startAndBoard:'起點 · 上車', getOffAndArrive:'下車 · 到達',
+    getOffAndArrive:'下車 · 到達',
     min:' 分鐘', walk:' 分鐘步行', bus:' 程巴士', buses:' 程巴士', train:' 程港鐵', trains:' 程港鐵',
     totalTime:'分鐘', totalFare:'車費', totalWalk:'分鐘步行',
     totalBuses:'程巴士', totalTrains:'程港鐵',
     boardHere:'✓ 就在此處上車：', walkTo:'🚶 步行', minTo:'分鐘至',
     rideTo:'乘搭至', stops:'個站', stations:'個站', changeBus:'↓ 轉乘巴士',
     changeTrain:'↓ 轉綫', trainsFrequent:'港鐵班次頻密，數分鐘一班', here:'於此處',
-    tabBus:'巴士', tabMtr:'港鐵', tabFav:'收藏', tabSet:'設定',
+    tabBus:'巴士', tabStop:'車站', tabMtr:'港鐵', tabFav:'收藏', tabSet:'設定',
     settings:'設定', settingLanguage:'語言',
     settingsNote:'你的選擇會記在這部手機。',
-    goFromHere:'\u27a4 由我的位置前往', goShort:'\u27a4 前往',
-    favTrip:'規劃行程', favPlaces:'常用地點', favRoutes:'我的巴士',
-    fromCol:'由', toCol:'往', manageFavs:'編輯常用地點',
+    goShort:'\u27a4 前往',
+    favRoutes:'我的巴士',
     favFrom:'常用起點', favTo:'常用目的地',
     favAlsoArrival:'同時加入常用目的地',
     favAlsoDeparture:'同時加入常用起點',
@@ -1229,12 +1245,12 @@ const TEXT = {
     wxHere:'香港',
     noFavStart:'尚未收藏起點。設定起點後，按「⭐ 加入常用地點」。',
     noFavEnd:'尚未收藏目的地。設定目的地後，按「⭐ 加入常用地點」。',
-    noFavsShort:'尚未收藏。', locationFailed:'無法取得你的位置。',
+    locationFailed:'無法取得你的位置。',
     saveDeparture:'收藏此路線', departureSaved:'已收藏 {r}。',
     departureRemoved:'已移除 {r}。',
     noDepsLong:'尚未收藏巴士。在地圖上點選車站，再按路線旁的 \u2606，即可在此看到實時班次。',
     noneDue:'暫時沒有班次', etaOffline:'無法取得班次',
-    myBusesNow:'你收藏的巴士', myStationsNow:'你收藏的車站', towards:'往',
+    myBusesNow:'你收藏的巴士', towards:'往',
     geoTitle:'顯示你附近的巴士？', geoYes:'好，使用我的位置', geoNo:'暫時不用',
     geoBody:'允許後，本app會顯示你附近的巴士站及下班車到站時間。你的位置只留在這部手機。',
     foundYou:'已找到你的位置，正顯示附近巴士。', nearbyBuses:'你附近的巴士',
@@ -1242,17 +1258,14 @@ const TEXT = {
     walkThere:'步行', addRoute:'用路線號碼加入巴士', routePlaceholderShort:'路線號碼，例如 60X',
     pickDirection:'選擇你乘搭的方向：', noRouteFound:'找不到此路線號碼。',
     nearestStopToYou:'距你最近的車站', needLocation:'允許定位後顯示班次',
-    setEndOnly:'已設定目的地，請再設定起點。',
     noGeo:'此瀏覽器無法定位。',
-    useAsStart:'設為起點', useAsEnd:'設為目的地',
-    noFavsLong:'尚未收藏地點。設定起點或目的地後，按「\u2b50 儲存為常用地點」，該地點便會在此顯示。',
+    useAsEnd:'設為目的地',
     bestTrain:'最佳港鐵路線', frequentShort:'班次頻密',
     due:'即將到達', nextTrain:'下班列車：', trainAlert:'港鐵服務改動，出發前請查看',
     bestTrainWhy:'轉綫最少、時間最短',
     noTrain:'起點及目的地附近沒有港鐵站。',
     noBus:'找不到合適的巴士路線。',
     thenWalk:'🚶 然後步行', toDest:'分鐘到達目的地',
-    tapMapShow:'👆 點選以在地圖顯示此路線',
     checkingBus:'正在查詢下班車…', next:'下班', inTime:'還有', then:'之後',
     checked:'更新於', noBusDue:'此站現時沒有班次。',
     working:'正在計算…', whichDirection:'— 請選擇方向',
@@ -2117,6 +2130,27 @@ const GEO_CHOICE = 'hkfast-geo';
 const MAX_DEPARTURES = 6;
 let departures = [];
 
+// SAVED STOPS: a pole, kept whole (id, both names, position) so the tab can
+// open it without looking anything up.
+const MAX_STOPS = 8;
+let stopFavs = [];
+function loadStopFavs() {
+  try { stopFavs = JSON.parse(localStorage.getItem('hkfast-stops') || '[]'); } catch (e) { stopFavs = []; }
+}
+function saveStopFavs() {
+  try { localStorage.setItem('hkfast-stops', JSON.stringify(stopFavs)); } catch (e) {}
+  if (typeof paintBottomBar === 'function') paintBottomBar();
+}
+function isSavedStop(stopId) { return stopFavs.some(f => f.stop === stopId); }
+function toggleStopFav(stop) {
+  const at = stopFavs.findIndex(f => f.stop === stop.stop);
+  if (at >= 0) { stopFavs.splice(at, 1); saveStopFavs(); return false; }
+  if (stopFavs.length >= MAX_STOPS) return null;
+  stopFavs.unshift({ stop: stop.stop, name_en: stop.name_en, name_tc: stop.name_tc, lat: stop.lat, long: stop.long });
+  saveStopFavs();
+  return true;
+}
+
 // SAVED TRAINS: a station, a line and a direction — the three things the MTR
 // screen asks for — kept so the next time is one tap.
 const MAX_TRAINS = 6;
@@ -2385,6 +2419,7 @@ function applyLanguage() {
   // there rather than relied on here.
   if (activeMode === 'set') renderSettings();
   if (activeMode === 'mtr') renderMtrView();
+  if (activeMode === 'stop') renderStopView();
   // The Observatory returns its own text in the requested language, so the
   // bar needs a fresh fetch rather than a redraw.
   if (typeof loadWeather === 'function') loadWeather();
@@ -2502,6 +2537,7 @@ document.getElementById('end-save').addEventListener('click', () => {
 loadFavourites();
 loadDepartures();
 loadTrainFavs();
+loadStopFavs();
 applyLanguage();
 loadMtr();      // stations join the search list straight away
 askAboutLocation();   // ask in our own words before the browser asks in its
@@ -3091,10 +3127,6 @@ function officialShape(routeNo, fromStop, toStop) {
   return (bestSlice && bestSlice.length > 1) ? bestSlice : null;
 }
 
-function officialFare(routeNo) {
-  const entry = tdRoutes && tdRoutes.get(String(routeNo).toUpperCase());
-  return entry ? entry.fare : null;
-}
 
 // How many legs got a real road shape? Useful for spotting when the
 // official file is not matching and everything is drawing straight.
@@ -4210,8 +4242,8 @@ function paintBottomBar() {
   const labels = { bus: withCount(T('tabBus'), busPicks.length),
                    mtr: withCount(T('tabMtr'), railPicks.length),
                    fav: T('tabFav') + ' (' +
-                        (favStart.length + favEnd.length + departures.length + trainFavs.length) + ')',
-                   set: T('tabSet') };
+                        (favStart.length + favEnd.length + departures.length + trainFavs.length + stopFavs.length) + ')',
+                   stop: T('tabStop'), set: T('tabSet') };
 
   for (const button of bar.querySelectorAll('.bnav')) {
     const name = button.dataset.nav;
@@ -4228,6 +4260,7 @@ function showMode(mode) {
   const favView = document.getElementById('favview');
   const setView = document.getElementById('setview');
   const mtrView = document.getElementById('mtrview');
+  const stopView = document.getElementById('stopview');
   const compare = document.getElementById('compare');
   const box     = document.getElementById('journeys');
 
@@ -4247,12 +4280,27 @@ function showMode(mode) {
   if (mode === 'fav') {
     activeMode = 'fav';
     document.getElementById('livestrip').innerHTML = '';
-    panel.classList.remove('setmode', 'mtrmode');
+    panel.classList.remove('setmode', 'mtrmode', 'stopmode');
     setView.style.display = 'none';
     mtrView.style.display = 'none';
+    stopView.style.display = 'none';
     panel.classList.add('favmode');
     favView.style.display = 'block';
     renderFavouriteList();
+    paintBottomBar();
+    return;
+  }
+
+  // ---- BUS STOPS ----
+  // The nearest poles or a saved one, and every bus leaving from it.
+  if (mode === 'stop') {
+    activeMode = 'stop';
+    document.getElementById('livestrip').innerHTML = '';
+    panel.classList.remove('favmode', 'setmode', 'mtrmode');
+    favView.style.display = 'none';
+    setView.style.display = 'none';
+    mtrView.style.display = 'none';
+    openStopView();
     paintBottomBar();
     return;
   }
@@ -4263,9 +4311,10 @@ function showMode(mode) {
   if (mode === 'mtr') {
     activeMode = 'mtr';
     document.getElementById('livestrip').innerHTML = '';
-    panel.classList.remove('favmode', 'setmode');
+    panel.classList.remove('favmode', 'setmode', 'stopmode');
     favView.style.display = 'none';
     setView.style.display = 'none';
+    stopView.style.display = 'none';
     openMtrView();
     paintBottomBar();
     return;
@@ -4276,9 +4325,10 @@ function showMode(mode) {
   if (mode === 'set') {
     activeMode = 'set';
     document.getElementById('livestrip').innerHTML = '';
-    panel.classList.remove('favmode', 'mtrmode');
+    panel.classList.remove('favmode', 'mtrmode', 'stopmode');
     favView.style.display = 'none';
     mtrView.style.display = 'none';
+    stopView.style.display = 'none';
     panel.classList.add('setmode');
     setView.style.display = 'block';
     renderSettings();
@@ -4286,10 +4336,11 @@ function showMode(mode) {
     return;
   }
 
-  panel.classList.remove('favmode', 'setmode', 'mtrmode');
+  panel.classList.remove('favmode', 'setmode', 'mtrmode', 'stopmode');
   favView.style.display = 'none';
   setView.style.display = 'none';
   mtrView.style.display = 'none';
+  stopView.style.display = 'none';
   compare.style.display = '';
   box.style.display = '';
   activeMode = mode;
@@ -4428,6 +4479,7 @@ function findMeThenNearby() {
       status.textContent = T('foundYou');
       if (activeMode === 'bus') renderLiveStrip('bus');
       if (activeMode === 'mtr') openMtrView();
+      if (activeMode === 'stop') renderStopView();
     },
     error => { status.textContent = T('locationFailed'); },
     { enableHighAccuracy:true, timeout:10000 });
@@ -4614,21 +4666,6 @@ function renderLiveStrip(mode) {
     return;
   }
 
-  const stations = savedStations();
-  if (stations.length === 0) return;
-
-  let html = '<div class="livehead">🚇 ' + T('myStationsNow') + '</div>';
-  const jobs = [];
-  stations.forEach((station, s) => {
-    whichLinesServe(station.code).slice(0, 2).forEach((line, l) => {
-      const id = 'live-mtr-' + s + '-' + l;
-      html += liveCard(mtrData.stations[station.code][lang === 'zh' ? 1 : 0],
-                       railLineName(line), id);
-      jobs.push({ line, station: station.code, id });
-    });
-  });
-  strip.innerHTML = html;
-  jobs.forEach(job => loadLiveTrain(job));
 }
 
 async function loadLiveBus(dep, id) {
@@ -4656,47 +4693,6 @@ async function loadLiveBus(dep, id) {
   }
 }
 
-// Both directions, because standing on a concourse the question is which
-// platform — and the feed answers UP and DOWN in one request anyway.
-async function loadLiveTrain(job) {
-  const cell = document.getElementById(job.id);
-  if (!cell) return;
-  try {
-    const url = MTR_ETA_URL + '?line=' + encodeURIComponent(job.line) +
-                '&sta=' + encodeURIComponent(job.station) +
-                '&lang=' + (lang === 'zh' ? 'TC' : 'EN');
-    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!response.ok) throw new Error('server said ' + response.status);
-    const data = await response.json();
-    if (!document.getElementById(job.id)) return;
-
-    if (data.status === 0) {
-      cell.textContent = data.message || T('trainAlert');
-      cell.classList.add('quiet');
-      return;
-    }
-    const block = (data.data || {})[job.line + '-' + job.station] || {};
-    const lines = [];
-    for (const key of ['UP', 'DOWN']) {
-      const trains = (block[key] || []).filter(t => t.valid !== 'N').slice(0, 2);
-      if (trains.length === 0) continue;
-      const towards = mtrData.stations[trains[0].dest];
-      const times = trains.map(t => Number(t.ttnt))
-        .filter(n => isFinite(n) && n >= 0)
-        .map(n => n === 0 ? T('due') : n + T('min'));
-      if (times.length === 0) continue;
-      lines.push('<div class="liveway"><span class="liveto">' + T('towards') + ' ' +
-                 esc(towards ? towards[lang === 'zh' ? 1 : 0] : trains[0].dest) +
-                 '</span><span class="livemin">' + times.join(', ') + '</span></div>');
-    }
-    if (lines.length === 0) { cell.textContent = T('noneDue'); cell.classList.add('quiet'); return; }
-    cell.innerHTML = lines.join('');
-    cell.classList.remove('quiet');
-  } catch (error) {
-    cell.textContent = T('etaOffline');
-    cell.classList.add('quiet');
-  }
-}
 
 // ============================================================
 // ADDING A BUS BY NUMBER
@@ -5054,6 +5050,33 @@ function renderFavouriteList() {
     });
     trainFavs.forEach((t, index) => loadTrainFavEta(t, index));
   }
+
+  // ---- SAVED STOPS ----
+  heading('🚏', T('favStops'), stopFavs.length + '/' + MAX_STOPS);
+  const stopsBox = document.createElement('div');
+  view.appendChild(stopsBox);
+  if (stopFavs.length === 0) {
+    appendHTML(stopsBox, '<div class="favempty">' + T('noStopsLong') + '</div>');
+  }
+  stopFavs.forEach((sf, index) => {
+    const row = document.createElement('div');
+    row.className = 'deprow';
+    const code = poleCodeOf(sf);
+    row.innerHTML =
+      '<div class="depmain"><span class="deproute">' + esc(stopName(sf)) + '</span>' +
+        (code ? '<span class="polecode">' + esc(code) + '</span>' : '') + '</div>';
+    const del = document.createElement('button');
+    del.className = 'go-del depdel'; del.textContent = '✕';
+    del.setAttribute('aria-label', 'Remove ' + stopName(sf));
+    del.addEventListener('click', () => { stopFavs.splice(index, 1); saveStopFavs(); renderFavouriteList(); });
+    row.appendChild(del);
+    const open = document.createElement('button');
+    open.className = 'depopen';
+    open.textContent = '🚏 ' + T('favStopOpen');
+    open.addEventListener('click', () => stopOpenSaved(sf));
+    row.appendChild(open);
+    stopsBox.appendChild(row);
+  });
 }
 
 // Open the whole line for a saved bus. The saved entry already knows the
@@ -5091,10 +5114,11 @@ function openSavedDepartureRoute(dep) {
 // with the number filled in so the search box matches what is on screen.
 function goToRouteMode(routeNo) {
   const panel = document.getElementById('panel');
-  panel.classList.remove('favmode', 'setmode', 'mtrmode');
+  panel.classList.remove('favmode', 'setmode', 'mtrmode', 'stopmode');
   document.getElementById('favview').style.display = 'none';
   document.getElementById('setview').style.display = 'none';
   document.getElementById('mtrview').style.display = 'none';
+  document.getElementById('stopview').style.display = 'none';
   activeMode = 'bus';
   paintBottomBar();
   document.getElementById('route-text').value = routeNo;
@@ -5376,54 +5400,6 @@ function shapeForLeg(leg) {
   return viaStops;
 }
 
-function showJourneyOnMap(journey) {
-  if (!startPoint || !endPoint) return;
-  routeLayer.clearLayers();
-  const latLngOf = stop => [Number(stop.lat), Number(stop.long)];
-  const all = [[startPoint.lat, startPoint.lng]];
-
-  L.polyline([[startPoint.lat, startPoint.lng], latLngOf(journey.legs[0].on)],
-             { color:'#166534', weight:4, dashArray:'2 8' }).addTo(routeLayer);
-
-  const colours = ['#1e40af', '#6b21a8'];
-  journey.legs.forEach((leg, index) => {
-    L.polyline([latLngOf(leg.on), latLngOf(leg.off)],
-               { color: colours[index % 2], weight:6, opacity:.75 }).addTo(routeLayer);
-    all.push(latLngOf(leg.on), latLngOf(leg.off));
-
-    L.circleMarker(latLngOf(leg.on), { radius:11, color:'white', weight:4,
-      fillColor: colours[index % 2], fillOpacity:1 }).addTo(routeLayer)
-      .bindPopup('<b>Get on bus ' + leg.route + '</b><br>' + leg.on.name_en);
-    L.circleMarker(latLngOf(leg.off), { radius:11, color:'white', weight:4,
-      fillColor: colours[index % 2], fillOpacity:1 }).addTo(routeLayer)
-      .bindPopup('<b>Get off bus ' + leg.route + '</b><br>' + leg.off.name_en);
-  });
-
-  const lastLeg = journey.legs[journey.legs.length - 1];
-  L.polyline([latLngOf(lastLeg.off), [endPoint.lat, endPoint.lng]],
-             { color:'#991b1b', weight:4, dashArray:'2 8' }).addTo(routeLayer);
-  all.push([endPoint.lat, endPoint.lng]);
-
-  markEnds([latLngOf(journey.legs[0].on), latLngOf(lastLeg.off)],
-           'GET ON ' + journey.legs[0].route, 'GET OFF ' + lastLeg.route);
-
-  map.fitBounds(L.latLngBounds(all), mapPadding());
-
-  document.getElementById('rb-route').textContent = journey.legs.map(l => l.route).join(' → ');
-  document.getElementById('rb-company').textContent = 'KMB';
-  document.getElementById('rb-from').textContent = journey.legs[0].on.name_en;
-  document.getElementById('rb-to').textContent = lastLeg.off.name_en;
-  // The fare belongs here too: this banner is what stays on screen while
-  // the rider walks to the stop, so it should answer "how much" as well.
-  const bannerFare = journeyFareText(journey);
-  document.getElementById('rb-note').textContent =
-    T('aboutMin').replace('{n}', journey.total) +
-    (bannerFare === '\u2014' ? '' : '  \u00b7  ' + bannerFare);
-  const banner = document.getElementById('routebanner');
-  banner.classList.remove('ctb');
-  banner.style.display = 'block';
-  reserveRoomForBanner();
-}
 
 
 
@@ -5718,8 +5694,12 @@ function formatArrivals(entries) {
 
   let html = '';
   for (const [label, group] of byRoute) {
-    const [route, dest] = label.split('|');
+    const route = label.split('|')[0];
     const sample = group.sample;
+    // In the reader's language. The row was keyed on dest_en to keep one row
+    // per direction, and then showed that same English name to everyone.
+    const dest = esc(lang === 'zh' ? (sample.dest_tc || sample.dest_en || '')
+                                   : (sample.dest_en || sample.dest_tc || ''));
     const fare = stopFare(sample.route, sample.dir, sample.service_type, sample.seq, sample.co);
     const fareTag = fare === null ? ''
       : '<span class="eta-fare">$' + fare.toFixed(1) + '</span>';
@@ -5746,7 +5726,7 @@ function formatArrivals(entries) {
     html += '<div class="eta-row">' + star + '<span class="eta-route">' + route + '</span>' +
             '<span class="eta-dest">' + dest + '</span>' + fareTag +
             '<span class="eta-times">' +
-            group.minutes.slice(0,3).map(m => m === 0 ? 'due' : m + ' min').join(', ') +
+            group.minutes.slice(0,3).map(m => m === 0 ? T('due') : m + T('min')).join(', ') +
             '</span></div>';
   }
   return html;
@@ -5767,10 +5747,11 @@ const routeList  = document.getElementById('route-results');
 // worse than one that never turned on.
 function enterRouteMode() {
   const panel = document.getElementById('panel');
-  panel.classList.remove('favmode', 'setmode', 'mtrmode');
+  panel.classList.remove('favmode', 'setmode', 'mtrmode', 'stopmode');
   document.getElementById('favview').style.display = 'none';
   document.getElementById('setview').style.display = 'none';
   document.getElementById('mtrview').style.display = 'none';
+  document.getElementById('stopview').style.display = 'none';
   panel.classList.add('routemode');
   // Looking up a bus belongs under the bus tab. Leaving the old section
   // highlighted would point at a screen that is no longer on display.
@@ -5887,13 +5868,6 @@ function endName(record, which) {
   return plainStopName(lang === 'zh' ? (zh || en) : (en || zh));
 }
 
-function addRouteRow(company, badgeClass, routeNo, from, to, onClick) {
-  const item = document.createElement('li');
-  item.innerHTML = '<span class="badge ' + badgeClass + '">' + company + '</span>' +
-                   '<span class="routeno">' + routeNo + '</span>' + from + ' → ' + to;
-  item.addEventListener('click', onClick);
-  routeList.appendChild(item);
-}
 
 async function showKmbRoute(route) {
   routeList.innerHTML = '';
@@ -6105,6 +6079,258 @@ function noteUpdate(registration) {
 }
 
 // ============================================================
+// THE BUS STOP TAB — the nearest poles or a saved one, and every bus from it
+// ============================================================
+// The MTR tab picks the nearest station for you. This one does NOT pick the
+// nearest pole: the pole across the road is usually the same distance away
+// and runs the other way, and sending someone to the wrong side of a dual
+// carriageway is a real mistake. It shows the closest few, with the code
+// painted on each pole, and lets the rider choose.
+const STOP_NEAR_M = 500;
+
+let stopState = freshStopState();
+function freshStopState() {
+  return { stop:null, rows:null, noLive:false, loading:false, alert:null,
+           fetchedAt:0, locating:false, locateTried:false };
+}
+
+// Which company runs the buses at this pole, from the planner's own index.
+function stopCompany(stopId) {
+  const keys = (typeof stopIndex !== 'undefined' && stopIndex && stopIndex.get(stopId)) || [];
+  const cos = new Set(keys.map(k => String(k.routeKey).split('|')[3]));
+  if (cos.has('kmb')) return 'KMB';
+  if (cos.has('ctb')) return 'CTB';
+  if (cos.size) return [...cos][0].toUpperCase();
+  return /^[0-9A-F]{16}$/i.test(stopId) ? 'KMB' : 'CTB';
+}
+function routesAtStop(stopId) {
+  const keys = (typeof stopIndex !== 'undefined' && stopIndex && stopIndex.get(stopId)) || [];
+  const seen = new Set(), out = [];
+  for (const k of keys) {
+    const [route, bound, type, co] = String(k.routeKey).split('|');
+    const id = route + '|' + bound + '|' + co;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({ route, bound, type, co: (co || '').toUpperCase(), seq: k.seq });
+  }
+  return out;
+}
+function poleCodeOf(stop) {
+  const found = /\(([A-Z]{2}\d{3}[A-Za-z]?)\)\s*$/.exec(stop.name_en || '');
+  return found ? found[1] : '';
+}
+function findStopById(id) {
+  return allPlannableStops().find(x => x.stop === id) || stopFavs.find(x => x.stop === id) || null;
+}
+
+function openStopView() {
+  const panel = document.getElementById('panel');
+  const view  = document.getElementById('stopview');
+  panel.classList.remove('favmode', 'setmode', 'mtrmode', 'routemode');
+  for (const id of ['favview', 'setview', 'mtrview']) document.getElementById(id).style.display = 'none';
+  view.style.display = 'block';
+  panel.classList.add('stopmode');
+  panel.scrollTop = 0;
+  if (!stopState.stop && !herePoint && navigator.geolocation && geoChoice() === 'yes'
+      && !stopState.locating && !stopState.locateTried) {
+    stopState.locateTried = true;
+    stopLocate();
+  }
+  renderStopView();
+  if (stopState.stop && !stopState.rows && !stopState.loading) stopLoadRows();
+}
+
+function stopLocate() {
+  if (!navigator.geolocation) { status.textContent = T('noGeo'); return; }
+  stopState.locating = true; renderStopView();
+  status.textContent = T('findingYou');
+  navigator.geolocation.getCurrentPosition(
+    position => {
+      herePoint = { lat: position.coords.latitude, lng: position.coords.longitude };
+      stopState.locating = false; renderStopView();
+    },
+    () => { stopState.locating = false; status.textContent = T('locationFailed'); renderStopView(); },
+    { enableHighAccuracy:true, timeout:10000 });
+}
+
+function stopSetStop(stop) {
+  stopState = Object.assign(freshStopState(), { locateTried: true, stop });
+  renderStopView();
+  stopLoadRows();
+}
+
+// One tap on a saved stop is this screen with the stop already chosen.
+function stopOpenSaved(sf) {
+  stopState = Object.assign(freshStopState(), { locateTried: true, stop: sf });
+  if (activeMode !== 'stop') { showMode('stop'); return; }
+  renderStopView(); stopLoadRows();
+}
+
+async function stopLoadRows(force) {
+  const stop = stopState.stop;
+  if (!stop) return;
+  if (!force && stopState.rows && Date.now() - stopState.fetchedAt < 30000) return;
+  stopState.loading = true; stopState.alert = null; renderStopView();
+  try {
+    const co = stopCompany(stop.stop);
+    let rows = null;
+    if (co === 'KMB') {
+      const response = await fetch('https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/' + stop.stop,
+                                   { signal: AbortSignal.timeout(10000) });
+      if (!response.ok) throw new Error('server said ' + response.status);
+      rows = (await response.json()).data || [];
+    } else if (co === 'CTB') {
+      // Citybus answers per route, so ask for each route the index says stops here.
+      const routes = [...new Set(routesAtStop(stop.stop).filter(r => r.co === 'CTB').map(r => r.route))].slice(0, 12);
+      const lists = await Promise.all(routes.map(async route => {
+        try {
+          const response = await fetch(CTB_BASE + '/eta/CTB/' + stop.stop + '/' + encodeURIComponent(route),
+                                       { signal: AbortSignal.timeout(10000) });
+          return response.ok ? ((await response.json()).data || []) : [];
+        } catch (error) { return []; }
+      }));
+      rows = lists.flat();
+    }
+    if (stopState.stop !== stop) return;                 // moved on meanwhile
+    stopState.noLive = rows === null;
+    stopState.rows = rows === null ? [] : rows.map(row => Object.assign({}, row,
+      { stop: stop.stop, stopName_en: stop.name_en, stopName_tc: stop.name_tc, co: row.co || co }));
+  } catch (error) {
+    if (stopState.stop !== stop) return;
+    stopState.rows = []; stopState.alert = T('etaOffline');
+  }
+  stopState.fetchedAt = Date.now(); stopState.loading = false;
+  renderStopView();
+}
+
+function renderStopView() {
+  const view = document.getElementById('stopview');
+  if (!view) return;
+  const st = stopState;
+  let html = '<div class="favhead">🚏 ' + T('stopTitle') + '</div>';
+
+  // ---- 1. WHICH STOP ----
+  if (!st.stop) {
+    if (st.locating) {
+      html += '<div class="favempty">' + T('findingYou') + '</div>';
+    } else {
+      if (navigator.geolocation && !herePoint && geoChoice() !== 'no' && geoChoice() !== 'yes') {
+        html += '<div class="mtrgeo"><div class="geotitle">' + T('stopGeoTitle') + '</div>' +
+                '<div class="geobody">' + T('stopGeoBody') + '</div>' +
+                '<div class="geobtns"><button class="geoyes" data-stop-act="geo-yes">' + T('geoYes') + '</button>' +
+                '<button class="geono" data-stop-act="geo-no">' + T('geoNo') + '</button></div></div>';
+      } else if (navigator.geolocation && !herePoint) {
+        html += '<div class="mtrpick"><button data-stop-act="geo-yes">' + T('myLocation') + '</button></div>';
+      }
+      if (herePoint) {
+        const near = stopsNear(herePoint.lat, herePoint.lng, STOP_NEAR_M).filter(n => !n.stop.isStation).slice(0, 4);
+        if (near.length) {
+          html += '<div class="mtrsub">' + T('stopNearby') + '</div><div class="mtrpick">' +
+            near.map(n => '<button data-stop-id="' + esc(n.stop.stop) + '">📍 ' + esc(stopName(n.stop)) +
+              (poleCodeOf(n.stop) ? ' <span class="polecode">' + esc(poleCodeOf(n.stop)) + '</span>' : '') +
+              '<span class="mtrdist">' + Math.round(n.metres) + ' m</span></button>').join('') + '</div>';
+        } else {
+          html += '<div class="favempty">' + T('stopNoneNear') + '</div>';
+        }
+      }
+      if (stopFavs.length) {
+        html += '<div class="mtrsub">' + T('stopSavedPicks') + '</div><div class="mtrpick">' +
+          stopFavs.map((f, i) => '<button data-stop-act="fav" data-index="' + i + '">★ ' + esc(stopName(f)) + '</button>').join('') + '</div>';
+      }
+      html += '<div class="mtrsub">' + T('stopSearchPh').replace('…', '') + '</div>' +
+              '<div class="frow"><input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off"></div>' +
+              '<div class="mtrpick" id="stop-search-results"></div>';
+    }
+    view.innerHTML = html;
+    return;
+  }
+
+  // ---- 2. THE STOP ----
+  const stop = st.stop;
+  const here = herePoint ? Math.round(metresBetween(herePoint.lat, herePoint.lng, Number(stop.lat), Number(stop.long))) : null;
+  const saved = isSavedStop(stop.stop);
+  const code = poleCodeOf(stop);
+  html += '<div class="mtrsta"><div class="mtrname">🚏 ' + esc(stopName(stop)) +
+          (code ? ' <span class="polecode">' + esc(code) + '</span>' : '') +
+          (here !== null ? '<small>' + T('mtrAway').replace('{m}', here) + '</small>' : '') + '</div>' +
+          '<button class="refreshbtn" data-stop-act="change">' + T('mtrChange') + '</button></div>' +
+          '<div class="mtrpick"><button class="' + (saved ? 'rsstar on' : 'rsstar') + '" style="flex:none;width:100%;height:auto;min-height:48px" data-stop-act="star">' +
+          T(saved ? 'stopSavedBtn' : 'stopSaveBtn') + '</button></div>';
+
+  // ---- 3. EVERY BUS FROM IT ----
+  const stamp = st.fetchedAt ? new Date(st.fetchedAt).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }) : '';
+  html += '<div class="mtrhead"><div class="mtrsub">' + T('stopRoutesHere') + '</div>' +
+          '<button class="refreshbtn" data-stop-act="refresh"' + (st.loading ? ' disabled' : '') + '>' +
+          T(st.loading ? 'refreshing' : 'refresh') + '</button></div>';
+  if (st.loading && !st.rows) {
+    html += '<div class="favempty">' + T('rsCheckingEta') + '</div>';
+  } else if (st.alert) {
+    html += '<div class="mtralert">⚠ ' + esc(st.alert) + '</div>';
+  } else if (st.noLive) {
+    const routes = routesAtStop(stop.stop);
+    html += '<div class="rshint">' + T('stopNoLive') + '</div>' +
+      routes.map(r => '<div class="stoproute"><span class="rt">' + esc(r.route) + '</span>' +
+        '<span class="quiet">' + esc(r.co) + '</span></div>').join('');
+  } else if (st.rows) {
+    html += '<div class="rshint">' + T('stopTapRoute') + '</div>' + formatArrivals(st.rows);
+    if (stamp) html += '<div class="mtrupdated">' + T('updatedAt').replace('{t}', stamp) + '</div>';
+  }
+  view.innerHTML = html;
+}
+
+function stopRenderSearch(query) {
+  const box = document.getElementById('stop-search-results');
+  if (!box) return;
+  const q = String(query || '').trim().toLowerCase();
+  box.innerHTML = '';
+  if (q.length < 1) return;
+  const hits = [];
+  for (const stop of allPlannableStops()) {
+    if (stop.isStation) continue;
+    if ((stop.name_tc && stop.name_tc.includes(q)) || String(stop.name_en || '').toLowerCase().includes(q)) {
+      hits.push(stop);
+      if (hits.length === 8) break;
+    }
+  }
+  box.innerHTML = hits.length
+    ? hits.map(stop => '<button data-stop-id="' + esc(stop.stop) + '">🚏 ' + esc(stopName(stop)) +
+        (poleCodeOf(stop) ? ' <span class="polecode">' + esc(poleCodeOf(stop)) + '</span>' : '') + '</button>').join('')
+    : '<div class="favempty">' + T('noMatch') + '</div>';
+}
+
+document.getElementById('stopview').addEventListener('click', event => {
+  // The ☆ on a route row is the app-wide "save this bus" star; let it through.
+  if (event.target.closest('[data-star]')) return;
+  const el = event.target.closest('[data-stop-id],[data-stop-act],.eta-row');
+  if (!el) return;
+  if (el.dataset.stopId) { const stop = findStopById(el.dataset.stopId); if (stop) stopSetStop(stop); return; }
+  if (el.classList.contains('eta-row')) {
+    // The row's own star carries route, direction, type and company.
+    const star = el.querySelector('[data-star]');
+    if (star) openSavedDepartureRoute({ route: star.dataset.route, dir: star.dataset.dir,
+                                        serviceType: star.dataset.type, co: star.dataset.co });
+    return;
+  }
+  switch (el.dataset.stopAct) {
+    case 'change':  stopState = Object.assign(freshStopState(), { locateTried: true }); renderStopView(); break;
+    case 'refresh': stopLoadRows(true); break;
+    case 'geo-yes': rememberGeoChoice('yes'); stopLocate(); break;
+    case 'geo-no':  rememberGeoChoice('no'); renderStopView(); break;
+    case 'fav':     stopOpenSaved(stopFavs[Number(el.dataset.index)]); break;
+    case 'star': {
+      const result = toggleStopFav(stopState.stop);
+      if (result === null) { status.textContent = T('stopFull'); break; }
+      status.textContent = T(result ? 'stopSavedMsg' : 'stopRemovedMsg').replace('{s}', stopName(stopState.stop));
+      renderStopView();
+      break;
+    }
+  }
+});
+document.getElementById('stopview').addEventListener('input', event => {
+  if (event.target.id === 'stop-search') stopRenderSearch(event.target.value);
+});
+
+// ============================================================
 // THE MTR TAB — nearest station, line, direction, next trains
 // ============================================================
 // The official line colours, used only as a stripe on the line buttons: the
@@ -6171,9 +6397,10 @@ async function loadTrainFavEta(t, index) {
 function openMtrView() {
   const panel = document.getElementById('panel');
   const view  = document.getElementById('mtrview');
-  panel.classList.remove('favmode', 'setmode', 'routemode');
+  panel.classList.remove('favmode', 'setmode', 'routemode', 'stopmode');
   document.getElementById('favview').style.display = 'none';
   document.getElementById('setview').style.display = 'none';
+  document.getElementById('stopview').style.display = 'none';
   view.style.display = 'block';
   panel.classList.add('mtrmode');
   panel.scrollTop = 0;
