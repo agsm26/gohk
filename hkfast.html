@@ -6651,9 +6651,12 @@ function renderStopView() {
   html += '<div class="mtrsta"><div class="mtrname">🚏 ' + esc(stopName(stop)) +
           (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
           (here !== null ? '<small>' + T('mtrAway').replace('{m}', here) + '</small>' : '') + '</div>' +
-          '<button class="refreshbtn" data-stop-act="change">' + T('mtrChange') + '</button></div>' +
-          '<div class="mtrpick"><button class="' + (saved ? 'rsstar on' : 'rsstar') + '" style="flex:none;width:100%;height:auto;min-height:48px" data-stop-act="star">' +
-          T(saved ? 'stopSavedBtn' : 'stopSaveBtn') + '</button></div>';
+          // Save / unsave is one small star beside 更改 — the full-width
+          // 已收藏 bar it replaces was a whole line saying something the
+          // rider already knew, on the screen where every line counts.
+          '<button class="' + (saved ? 'rsstar on' : 'rsstar') + '" data-stop-act="star" title="' + esc(T(saved ? 'stopSavedBtn' : 'stopSaveBtn')) +
+          '" aria-label="' + esc(T(saved ? 'stopSavedBtn' : 'stopSaveBtn')) + '">' + (saved ? '★' : '☆') + '</button>' +
+          '<button class="refreshbtn" data-stop-act="change">' + T('mtrChange') + '</button></div>';
 
   // ---- 3. EVERY BUS FROM IT, narrowed to a direction if asked ----
   html += '<div class="mtrhead"><div class="mtrsub">' + T('stopRoutesHere') + '</div>' +
