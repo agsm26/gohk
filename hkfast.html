@@ -552,9 +552,20 @@
               background:white; font-weight:700; font-size:1rem; color:var(--ink); }
   .destchip.on { border-color:var(--amber); background:var(--amber-tint); color:var(--amber); }
   /* The "which way?" sheet for a looked-up bus: one big button per direction. */
-  #dirsheet { display:none; position:fixed; inset:0; z-index:2000; background:rgba(15,23,42,.55);
+  #dirsheet, #alertsheet { display:none; position:fixed; inset:0; z-index:2000; background:rgba(15,23,42,.55);
               align-items:flex-end; justify-content:center; padding:10px; }
-  #dirsheet.open { display:flex; }
+  #dirsheet.open, #alertsheet.open { display:flex; }
+  /* One block per notice inside the alert sheet. */
+  .alertitem { border:2px solid var(--line-soft); border-left:8px solid var(--red); border-radius:12px; padding:10px 12px; margin-top:10px; }
+  .alertwho { font-size:1rem; font-weight:800; color:var(--red); }
+  .alerttitle { font-size:1.06rem; font-weight:800; color:var(--ink); margin-top:4px; }
+  .alerttext { font-size:0.94rem; line-height:1.5; color:var(--ink-2); margin-top:6px; white-space:pre-line; max-height:40vh; overflow:auto; }
+  .alertmeta { font-size:0.88rem; color:var(--ink-3); font-weight:700; margin-top:6px; }
+  /* The red line under the weather: there while a notice touching the
+     rider's things stays active, and a tap reopens the text. */
+  #weatherbar.hasalert { flex-wrap:wrap; white-space:normal; }
+  .wxalert { flex:1 0 100%; order:9; margin-top:4px; background:var(--red); color:white; border:none;
+             border-radius:8px; padding:6px 10px; font-weight:800; font-size:0.94rem; text-align:left; cursor:pointer; }
   .dircard { background:white; border-radius:16px; width:100%; max-width:460px; padding:16px 16px 14px;
              max-height:85vh; overflow:auto; box-shadow:0 12px 40px rgba(0,0,0,.35); }
   .dirhead { display:flex; align-items:baseline; gap:10px; margin-bottom:4px; }
@@ -1067,6 +1078,8 @@
 
 <!-- "Which way?" for a looked-up bus. Filled by showDirections(). -->
 <div id="dirsheet" role="dialog" aria-modal="true"><div class="dircard" id="dircard"></div></div>
+<!-- Traffic notice that touches something the rider saved or is looking at. Filled by showAlertSheet(). -->
+<div id="alertsheet" role="dialog" aria-modal="true"><div class="dircard" id="alertcard"></div></div>
 
 <div id="routebanner">
   <button id="rb-close" title="Close">✕</button>
@@ -1158,6 +1171,10 @@ const TEXT = {
     stopDestNoName:'No stop called "{d}" — try a shorter name.',
     stopNearNoneTo:'No nearby stop has a direct bus to {d}.',
     stopSearchNoneTo:'No stop with that name has a direct bus to {d}.', stopNoReach:'No direct bus to {d} — opens without the filter',
+    alertTitle:'Traffic notice — your route is affected', alertSure:'Affected: {x}', alertMaybe:'Possibly affected: {x}', alertOk:'Got it',
+    alertBanner:'⚠ Traffic notice: {x} · tap to read', alertSource:'Transport Department special traffic news',
+    alertSourceMtr:'MTR next-train feed', alertSourceBus:'Bus company arrival feed', alertMtrDelay:'{line} is delayed at the moment',
+    alertMyBus:'my bus {r}', alertSavedStop:'saved stop {s}', alertPlace:'saved place {s}', alertTrain:'my train at {s}', alertOnScreen:'on screen: {s}',
     stopShowingTo:'Showing only stops with a direct bus to {d}',
     dataLoading:'Still loading the bus data — try again in a moment.',
     nearestStop:'Nearest bus stop', getOn:'GET ON', getOff:'GET OFF',
@@ -1327,6 +1344,10 @@ const TEXT = {
     stopDestNoName:'找不到叫「{d}」的車站，試試較短的名稱。',
     stopNearNoneTo:'附近沒有直達 {d} 的車站。',
     stopSearchNoneTo:'沒有名稱相符而又直達 {d} 的車站。', stopNoReach:'沒有直達 {d} 的巴士 — 打開會顯示全部班次',
+    alertTitle:'交通消息 — 你的路線受影響', alertSure:'受影響：{x}', alertMaybe:'可能受影響：{x}', alertOk:'知道了',
+    alertBanner:'⚠ 交通消息：{x} · 按此查看', alertSource:'運輸署特別交通消息',
+    alertSourceMtr:'港鐵列車班次資料', alertSourceBus:'巴士公司班次資料', alertMtrDelay:'{line} 現時延誤',
+    alertMyBus:'我的巴士 {r}', alertSavedStop:'常用車站 {s}', alertPlace:'常去目的地 {s}', alertTrain:'我的列車 {s}', alertOnScreen:'現正查看 {s}',
     stopShowingTo:'只顯示有巴士直達 {d} 的車站',
     dataLoading:'巴士資料仍在載入，請稍候再試。',
     nearestStop:'最近巴士站', getOn:'上車', getOff:'下車',
@@ -6051,7 +6072,7 @@ function closeDirections() {
   document.getElementById('dircard').innerHTML = '';
 }
 document.getElementById('dirsheet').addEventListener('click', event => { if (event.target.id === 'dirsheet') closeDirections(); });
-document.addEventListener('keydown', event => { if (event.key === 'Escape') closeDirections(); });
+document.addEventListener('keydown', event => { if (event.key === 'Escape') { closeDirections(); closeAlertSheet(); } });
 
 // Terminus names in the reader's own language. The feeds carry both, so
 // showing the English one to a Chinese reader is a choice, not a limit.
@@ -6637,6 +6658,9 @@ async function stopLoadRows(force) {
   const rowsBox = document.getElementById('stop-rows');
   if (rowsBox && document.activeElement && document.activeElement.id === 'stop-filter') rowsBox.innerHTML = stopRowsHtml();
   else renderStopView();
+  // Any remark on a row here that says delayed, diverted or suspended.
+  noteBusRemarks(stopState.rows || [], group.map(g => g.stop), route => T('alertOnScreen').replace('{s}', route));
+  refreshAlerts();
 }
 
 // The picker in two halves. The top holds the 我要去 box (with the location
@@ -7204,15 +7228,15 @@ async function mtrLoadBlocks(force) {
       const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
       if (!response.ok) throw new Error('server said ' + response.status);
       const data = await response.json();
-      if (data.status === 0) return { line, block: {}, alert: data.message || T('trainAlert') };
-      return { line, block: (data.data || {})[line + '-' + station] || {}, alert: null };
+      if (data.status === 0) return { line, block: {}, alert: data.message || T('trainAlert'), delay: data.isdelay === 'Y' };
+      return { line, block: (data.data || {})[line + '-' + station] || {}, alert: null, delay: data.isdelay === 'Y' };
     } catch (error) {
-      return { line, block: null, alert: T('etaOffline') };
+      return { line, block: null, alert: T('etaOffline'), delay: false };
     }
   }));
   if (mtrState.station !== station) return;             // moved on meanwhile
   mtrState.blocks = {}; mtrState.alerts = {};
-  for (const r of results) { mtrState.blocks[r.line] = r.block; mtrState.alerts[r.line] = r.alert; }
+  for (const r of results) { mtrState.blocks[r.line] = r.block; mtrState.alerts[r.line] = r.alert; noteMtrDelay(r.line, r.delay); }
   mtrState.blocksFor = station; mtrState.fetchedAt = Date.now(); mtrState.loading = false;
   // On the chosen line, one direction with trains is not a choice either.
   if (mtrState.line) {
@@ -7221,6 +7245,7 @@ async function mtrLoadBlocks(force) {
     if (mtrState.dir && !dirs.some(d => d.key === mtrState.dir)) mtrState.dir = dirs.length === 1 ? dirs[0].key : null;
   }
   renderMtrView();
+  refreshAlerts();
 }
 function mtrLoaded(line) {
   return mtrState.blocksFor === mtrState.station && !!mtrState.blocks &&
@@ -7532,6 +7557,246 @@ document.getElementById('mtrview').addEventListener('input', event => {
 });
 
 // ============================================================
+// TRAFFIC ALERTS — what the government and the operators are saying,
+// checked against what the rider has saved and what is open on screen.
+// ============================================================
+// Three sources, as the user chose:
+//  1. The Transport Department's special traffic news (road closures,
+//     accidents, service adjustments) — one XML, both languages, with a
+//     road, a district, landmarks and the full text, which names bus
+//     routes when they are diverted.
+//  2. The MTR next-train feed's own isdelay flag, per line.
+//  3. The bus companies' arrival remarks (受交通擠塞影響, 改道, 暫停…).
+// A notice counts when it NAMES the rider's bus or station (certain), or
+// when its road or landmark matches a stop on the rider's route (possible).
+// Watched: saved buses, stops, places and trains, plus whatever route,
+// stop or station is open. The popup shows once per notice; the red line
+// under the weather stays while the notice does, and reopens the text.
+const TD_NEWS_URL = 'https://www.td.gov.hk/tc/special_news/trafficnews.xml';
+const ALERT_REFRESH_MS = 5 * 60 * 1000;
+const BUS_TROUBLE = /延誤|受阻|擠塞|改道|暫停|取消|停駛|延遲|delay|congest|divert|suspend|cancel/i;
+let tdNotices = [];
+let alertFlags = { mtr: {}, bus: {} };        // line → {since}; 'route|stop' → {since, text, label}
+let currentAlerts = [];
+let alertsSeen = {};
+try { alertsSeen = JSON.parse(localStorage.getItem('hkfast-alerts-seen') || '{}'); } catch (e) { alertsSeen = {}; }
+function rememberSeen(keys) {
+  const now = Date.now();
+  for (const k of keys) alertsSeen[k] = now;
+  for (const k of Object.keys(alertsSeen)) if (now - alertsSeen[k] > 3 * 86400000) delete alertsSeen[k];
+  try { localStorage.setItem('hkfast-alerts-seen', JSON.stringify(alertsSeen)); } catch (e) {}
+}
+
+// Route numbers named in a notice. A bare number only counts after the word
+// 路線 / route, so times and dates never become the number 5 bus; anything
+// with a letter in it (60X, NR338S, A33X) is a route wherever it appears.
+function routeTokens(text) {
+  const out = new Set();
+  const t = String(text || '');
+  for (const m of t.matchAll(/(?:路線|路线|routes?|巴士)\s*(?:no\.?\s*)?([A-Za-z]{0,2}\d{1,4}[A-Za-z]{0,2})/gi)) out.add(m[1].toUpperCase());
+  for (const m of t.matchAll(/(?<![A-Za-z0-9])([A-Za-z]{1,2}\d{1,3}[A-Za-z]?|\d{1,3}[A-Za-z]{1,2})(?![A-Za-z0-9])/g)) out.add(m[1].toUpperCase());
+  return out;
+}
+
+async function loadTdNews() {
+  try {
+    const response = await fetch(TD_NEWS_URL, { cache: 'no-store', signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error('server said ' + response.status);
+    const doc = new DOMParser().parseFromString(await response.text(), 'text/xml');
+    const g = (m, tag) => ((m.querySelector(tag) || {}).textContent || '').trim();
+    tdNotices = [...doc.querySelectorAll('message')].map(m => {
+      const n = {
+        id: g(m, 'INCIDENT_NUMBER') || g(m, 'ID'), date: g(m, 'ANNOUNCEMENT_DATE'), statusEn: g(m, 'INCIDENT_STATUS_EN'),
+        heading_tc: g(m, 'INCIDENT_HEADING_CN'), heading_en: g(m, 'INCIDENT_HEADING_EN'),
+        detail_tc: g(m, 'INCIDENT_DETAIL_CN'), detail_en: g(m, 'INCIDENT_DETAIL_EN'),
+        location_tc: g(m, 'LOCATION_CN'), location_en: g(m, 'LOCATION_EN'),
+        direction_tc: g(m, 'DIRECTION_CN'), direction_en: g(m, 'DIRECTION_EN'),
+        near_tc: g(m, 'NEAR_LANDMARK_CN'), near_en: g(m, 'NEAR_LANDMARK_EN'),
+        between_tc: g(m, 'BETWEEN_LANDMARK_CN'), between_en: g(m, 'BETWEEN_LANDMARK_EN'),
+        content_tc: g(m, 'CONTENT_CN'), content_en: g(m, 'CONTENT_EN') };
+      n.routes = routeTokens(n.content_tc + ' ' + n.content_en + ' ' + n.detail_tc + ' ' + n.detail_en);
+      return n;
+    }).filter(n => !/CLOSED|CANCEL/i.test(n.statusEn));
+  } catch (error) { console.warn('TD news unavailable:', error); }
+}
+
+// What the rider cares about right now: route numbers, stop names (both
+// languages, tidied), MTR stations and lines — each with the words for the
+// popup ("my bus 60X", "saved stop 屯門公路轉車站", "on screen: 太子站").
+function alertWatchItems() {
+  const routes = new Map(), names = [], stations = new Map(), lines = new Set();
+  const addName = (tc, en, label) => {
+    const keys = [tidyName(plainStopName(tc)), tidyName(plainStopName(en))].filter(k => k.length >= 2);
+    if (keys.length) names.push({ keys, label });
+  };
+  const addRoute = (r, label) => { r = String(r || '').toUpperCase(); if (r && !routes.has(r)) routes.set(r, label); };
+  for (const dep of departures) {
+    addRoute(dep.route, T('alertMyBus').replace('{r}', dep.route));
+    addName(dep.stopName_tc, dep.stopName_en, T('alertMyBus').replace('{r}', dep.route));
+  }
+  for (const f of stopFavs) addName(f.name_tc, f.name_en, T('alertSavedStop').replace('{s}', stopName(f)));
+  for (const d of stopDests) addName(d, d, T('alertPlace').replace('{s}', d));
+  for (const t of trainFavs) { stations.set(t.station, T('alertTrain').replace('{s}', stationName(t.station))); lines.add(t.line); }
+  if (activeMode === 'stop' && stopState.stop) {
+    const group = stopGroupNow();
+    for (const g of group) addName(g.name_tc, g.name_en, T('alertOnScreen').replace('{s}', stopName(g)));
+    const shown = (stopState.rows || []).map(r => String(r.route).toUpperCase());
+    const list = shown.length ? [...new Set(shown)] : routesServingAny(group.map(g => g.stop)).map(r => r.route);
+    for (const r of list) addRoute(r, T('alertOnScreen').replace('{s}', r));
+  }
+  if (activeMode === 'bus' && routeStopsState && routeStopsState.context) {
+    const r = String(routeStopsState.context.routeNo || '').toUpperCase();
+    if (r) { addRoute(r, T('alertOnScreen').replace('{s}', r)); for (const st of routeStopsState.stops) addName(st.name_tc, st.name_en, T('alertOnScreen').replace('{s}', r)); }
+  }
+  if (activeMode === 'mtr' && mtrState.station) {
+    stations.set(mtrState.station, T('alertOnScreen').replace('{s}', stationName(mtrState.station)));
+    for (const l of whichLinesServe(mtrState.station)) lines.add(l);
+  }
+  return { routes, names, stations, lines };
+}
+
+// Does this notice touch any of them? Certain when it names the bus or the
+// station; possible when its road or landmark is in a stop's name.
+function tdHits(n, watch) {
+  const hits = [], seen = new Set();
+  const add = (sure, label) => { if (!seen.has(label)) { seen.add(label); hits.push({ sure, label }); } };
+  for (const r of n.routes) if (watch.routes.has(r)) add(true, watch.routes.get(r));
+  const places = [n.location_tc, n.near_tc, n.between_tc, n.location_en, n.near_en, n.between_en].map(tidyName).filter(x => x.length >= 2);
+  for (const item of watch.names) {
+    if (item.keys.some(k => places.some(pl => k.includes(pl) || (k.length >= 3 && pl.includes(k))))) add(false, item.label);
+  }
+  if (/港鐵|鐵路|MTR|rail/i.test(n.heading_tc + n.heading_en + n.detail_tc + n.detail_en)) {
+    for (const [code, label] of watch.stations) {
+      const s = mtrData && mtrData.stations[code];
+      const tc = s && s[1], en = s && s[0];
+      if ((tc && n.content_tc.includes(tc)) || (en && n.content_en.toLowerCase().includes(en.toLowerCase()))) add(true, label);
+    }
+  }
+  return hits;
+}
+
+// The live flags: a line the feed says is delayed, a bus whose remark says
+// trouble. Kept with the time they were first seen, so each episode shows
+// its popup once and the banner stays until the flag clears.
+function noteMtrDelay(line, delayed) {
+  if (delayed) { if (!alertFlags.mtr[line]) alertFlags.mtr[line] = { since: Date.now() }; }
+  else delete alertFlags.mtr[line];
+}
+function noteBusRemarks(rows, stopIds, labelFor) {
+  const byRoute = new Map();
+  for (const r of rows) {
+    const route = String(r.route || '').toUpperCase();
+    if (!route) continue;
+    const rmk = (r.rmk_tc || '') + ' ' + (r.rmk_en || '');
+    if (!byRoute.has(route)) byRoute.set(route, null);
+    if (BUS_TROUBLE.test(rmk) && !byRoute.get(route)) byRoute.set(route, lang === 'zh' ? (r.rmk_tc || r.rmk_en) : (r.rmk_en || r.rmk_tc));
+  }
+  for (const stopId of stopIds) for (const [route, text] of byRoute) {
+    const key = route + '|' + stopId;
+    if (text) alertFlags.bus[key] = Object.assign(alertFlags.bus[key] || { since: Date.now() }, { text, label: labelFor(route) });
+    else delete alertFlags.bus[key];
+  }
+}
+// Saved trains and saved buses are not on screen, so they are asked about
+// on the same 5-minute beat as the news.
+async function fetchTrainDelayFlag(line, station) {
+  const url = MTR_ETA_URL + '?line=' + encodeURIComponent(line) + '&sta=' + encodeURIComponent(station) + '&lang=' + (lang === 'zh' ? 'TC' : 'EN');
+  const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  if (!response.ok) throw new Error('server said ' + response.status);
+  const data = await response.json();
+  return data.isdelay === 'Y';
+}
+async function checkSavedTrains() {
+  const done = new Set();
+  await Promise.all(trainFavs.map(async t => {
+    if (done.has(t.line)) return;
+    done.add(t.line);
+    try { noteMtrDelay(t.line, await fetchTrainDelayFlag(t.line, t.station)); } catch (error) {}
+  }));
+}
+async function checkSavedBuses() {
+  await Promise.all(departures.filter(d => d.stop).map(async dep => {
+    try {
+      const rows = await fetchPoleRows({ stop: dep.stop, name_tc: dep.stopName_tc, name_en: dep.stopName_en });
+      if (Array.isArray(rows)) noteBusRemarks(rows.filter(r => String(r.route).toUpperCase() === String(dep.route).toUpperCase()), [dep.stop], route => T('alertMyBus').replace('{r}', route));
+    } catch (error) {}
+  }));
+}
+
+function composeAlerts() {
+  const watch = alertWatchItems();
+  const list = [];
+  for (const n of tdNotices) {
+    const hits = tdHits(n, watch);
+    if (hits.length) list.push({ key: 'td:' + n.id + '@' + n.date, kind: 'td', notice: n, hits });
+  }
+  for (const [line, f] of Object.entries(alertFlags.mtr)) {
+    if (!watch.lines.has(line)) continue;
+    list.push({ key: 'mtr:' + line + '@' + f.since, kind: 'mtr', line, hits: [{ sure: true, label: railLineName(line) }] });
+  }
+  const onScreenStops = (activeMode === 'stop' && stopState.stop) ? new Set(stopGroupNow().map(g => g.stop)) : new Set();
+  for (const [k, f] of Object.entries(alertFlags.bus)) {
+    const [route, stopId] = k.split('|');
+    const relevant = departures.some(d => String(d.route).toUpperCase() === route && d.stop === stopId) || onScreenStops.has(stopId);
+    if (!relevant) continue;
+    list.push({ key: 'bus:' + k + '@' + f.since, kind: 'bus', route, text: f.text, hits: [{ sure: true, label: f.label }] });
+  }
+  return list;
+}
+function refreshAlerts() {
+  if (typeof renderWeatherBar !== 'function') return;
+  currentAlerts = composeAlerts();
+  renderWeatherBar();
+  const fresh = currentAlerts.filter(a => !alertsSeen[a.key]);
+  if (fresh.length) { showAlertSheet(fresh); rememberSeen(fresh.map(a => a.key)); }
+}
+async function checkAlerts() {
+  await loadTdNews();
+  await Promise.all([checkSavedTrains(), checkSavedBuses()]);
+  refreshAlerts();
+}
+
+function alertChip() {
+  const button = document.createElement('button');
+  button.className = 'wxalert';
+  const who = [...new Set(currentAlerts.flatMap(a => a.hits.map(h => h.label)))].slice(0, 2).join(lang === 'zh' ? '、' : ', ');
+  button.textContent = T('alertBanner').replace('{x}', who);
+  button.addEventListener('click', () => showAlertSheet(currentAlerts));
+  return button;
+}
+function showAlertSheet(list) {
+  const sheet = document.getElementById('alertsheet'), card = document.getElementById('alertcard');
+  if (!sheet || !card || !list.length) return;
+  const zh = lang === 'zh';
+  const item = a => {
+    const who = a.hits.map(h => (h.sure ? T('alertSure') : T('alertMaybe')).replace('{x}', esc(h.label))).join('<br>');
+    if (a.kind === 'td') {
+      const n = a.notice;
+      const title = [zh ? n.heading_tc : n.heading_en, zh ? n.location_tc : n.location_en, zh ? n.direction_tc : n.direction_en].filter(Boolean).join(' · ');
+      const body = zh ? (n.content_tc || n.detail_tc) : (n.content_en || n.detail_en);
+      const when = n.date ? n.date.replace('T', ' ').slice(0, 16) : '';
+      return '<div class="alertitem"><div class="alertwho">' + who + '</div><div class="alerttitle">' + esc(title) + '</div>' +
+             '<div class="alerttext">' + esc(body) + '</div><div class="alertmeta">' + esc(when) + (when ? ' · ' : '') + T('alertSource') + '</div></div>';
+    }
+    if (a.kind === 'mtr')
+      return '<div class="alertitem"><div class="alertwho">' + who + '</div><div class="alerttitle">' + esc(T('alertMtrDelay').replace('{line}', railLineName(a.line))) + '</div>' +
+             '<div class="alertmeta">' + T('alertSourceMtr') + '</div></div>';
+    return '<div class="alertitem"><div class="alertwho">' + who + '</div><div class="alerttitle">' + esc(a.route) + '：' + esc(a.text) + '</div>' +
+           '<div class="alertmeta">' + T('alertSourceBus') + '</div></div>';
+  };
+  card.innerHTML = '<div class="dirhead"><b>⚠</b><span>' + T('alertTitle') + '</span></div>' + list.map(item).join('') +
+                   '<button class="dircancel" data-alert-ok="1">' + T('alertOk') + '</button>';
+  sheet.classList.add('open');
+}
+function closeAlertSheet() {
+  const sheet = document.getElementById('alertsheet');
+  if (sheet) sheet.classList.remove('open');
+}
+document.getElementById('alertsheet').addEventListener('click', event => {
+  if (event.target.id === 'alertsheet' || event.target.closest('[data-alert-ok]')) closeAlertSheet();
+});
+
+// ============================================================
 // WEATHER — Hong Kong Observatory open data
 // ============================================================
 // Two calls: the current report (temperature per weather station, plus any
@@ -7658,6 +7923,8 @@ function renderWeatherBar() {
   if (updateWaiting) parts.push(updateChip());
   if (!navigator.onLine) parts.push(offlineChip());
   if (weatherData) parts.push(...weatherParts());
+  if (typeof currentAlerts !== 'undefined' && currentAlerts.length) parts.push(alertChip());
+  bar.classList.toggle('hasalert', typeof currentAlerts !== 'undefined' && currentAlerts.length > 0);
 
   if (parts.length === 0) { hideWeatherBar(); return; }
   for (const part of parts) bar.appendChild(part);
@@ -7776,6 +8043,7 @@ function renderRouteStops(context, stops) {
   const box = document.getElementById('routestops');
   if (!box || !stops.length) return;
 
+  setTimeout(refreshAlerts, 0);           // the route on screen is now watched
   routeStopsState = { context, stops, boardAt: null, alightAt: null, autoBoard: false,
                       watchId: null, observer: null, inFlight: 0, queue: [] };
 
@@ -8279,6 +8547,11 @@ function resetTrip() {
 renderWeatherBar();
 loadWeather();
 setInterval(loadWeather, WEATHER_REFRESH_MS);
+// Traffic notices: on open, every five minutes, and whenever the app comes
+// back to the front — the moment a rider is about to set off.
+checkAlerts();
+setInterval(checkAlerts, ALERT_REFRESH_MS);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkAlerts(); });
 // Open on 車站. The trip planner is one tap away under 巴士.
 showMode('stop');
 </script>
