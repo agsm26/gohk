@@ -1097,7 +1097,7 @@ const TEXT = {
     stopTitle:'Bus stops', stopGeoTitle:'Find the bus stops nearest you?',
     stopGeoBody:'If you allow it, the app lists the stops around you with every bus leaving from each. Your location stays on this phone.',
     stopNearby:'Nearest stops', stopNoneNear:'No bus stop within 500 m. Type a stop name instead.',
-    stopSearchPh:'Type a stop name…', stopSavedPicks:'Your saved stops',
+    stopSearchPh:'Type a starting stop…', stopStartHead:'Starting stop', stopSavedPicks:'Your saved starting stops',
     stopSaveBtn:'☆ Save stop', stopSavedBtn:'★ Saved', stopRoutesHere:'Buses from this stop',
     stopNoLive:'No live times for this company — tap a route to see its stops.',
     stopTapRoute:'Tap a route to see all its stops. Tap ☆ to keep that bus in SAVED.',
@@ -1265,7 +1265,7 @@ const TEXT = {
     stopTitle:'巴士站', stopGeoTitle:'尋找附近的巴士站？',
     stopGeoBody:'允許後，本app會列出你附近的巴士站，以及每個站開出的所有巴士。你的位置只留在這部手機。',
     stopNearby:'最近的巴士站', stopNoneNear:'500 米內沒有巴士站，請輸入車站名稱。',
-    stopSearchPh:'輸入車站名稱…', stopSavedPicks:'你收藏的車站',
+    stopSearchPh:'輸入起點車站名稱…', stopStartHead:'起點車站', stopSavedPicks:'你收藏的起點車站',
     stopSaveBtn:'☆ 收藏此站', stopSavedBtn:'★ 已收藏', stopRoutesHere:'此站開出的巴士',
     stopNoLive:'此公司沒有實時班次 — 按路線可查看所有車站。',
     stopTapRoute:'按路線可查看該線所有車站。按 ☆ 可把該班巴士加入「收藏」。',
@@ -6561,6 +6561,11 @@ function renderStopView() {
           stopDests.map(d => '<button class="destchip' + (d === destTyped ? ' on' : '') + '" data-stop-act="dest" data-name="' + esc(d) + '">' + (d === destTyped ? '★ ' : '') + esc(d) + '</button>').join('') +
           '</div>';
       }
+      // The starting stop: type it, or tap one saved. The nearest poles come
+      // last — they are the fallback when you have not said where you are.
+      html += '<div class="mtrsub">' + T('stopStartHead') + '</div>' +
+              '<div class="frow"><input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off"></div>' +
+              '<div class="mtrpick" id="stop-search-results"></div>';
       // Saved poles as one-tap pills, same shape as the saved places above.
       const savedShown = stopFavs.filter(keep).slice(0, MAX_STOPS);
       if (savedShown.length) {
@@ -6579,9 +6584,6 @@ function renderStopView() {
         else
           html += '<div class="favempty">' + (filtering ? T('stopNearNoneTo').replace('{d}', esc(st.destQuery)) : T('stopNoneNear')) + '</div>';
       }
-      html += '<div class="mtrsub">' + T('stopSearchPh').replace('…', '') + '</div>' +
-              '<div class="frow"><input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off"></div>' +
-              '<div class="mtrpick" id="stop-search-results"></div>';
     }
     view.innerHTML = html;
     if (st.destQuery) stopRenderDest(st.destQuery);
