@@ -644,6 +644,13 @@
   .rsstar { flex:0 0 44px; height:44px; border-radius:10px; border:2px solid var(--line-soft);
             background:white; color:var(--ink-3); font-size:1.1765rem; cursor:pointer; padding:0; }
   .rsstar.on { border-color:var(--amber); background:var(--amber-tint); color:var(--amber); }
+  /* THE LOCATION PIN, left of a search box. Same size as the ★ on the right
+     so the box sits centred between them, and tinted rather than outlined:
+     it is an action you take, not a state the box is in. */
+  .rspin { flex:0 0 44px; height:44px; border-radius:10px; border:2px solid #bfdbfe;
+           background:var(--navy-tint); font-size:1.1765rem; cursor:pointer; padding:0;
+           line-height:1; }
+  .rspin:active { background:var(--blue-tint); }
 
   /* BOARDING MARK. Tapping a stop marks it; every stop after it then says how
      many stops away it is, which is the actual question — "how many more?" */
@@ -1286,6 +1293,7 @@ const TEXT = {
     favBusRoute:'Show all stops on this route',
     routeNotFound:'Route {r} is not in the timetable right now.',
     wxHere:'Hong Kong',
+    useMyLocation:'Use my location', hereIs:'You are at {s}',
     renameTitle:'Rename', renameSave:'Save', cancel:'Cancel', removeLabel:'Remove',
     renameDone:'Renamed to {n}', renameCleared:'Name put back to {n}',
     fullFare:'Full fare', svcToday:'Today', svcUsual:'Usually', svcAllDay:'24 hours',
@@ -1473,6 +1481,7 @@ const TEXT = {
     favBusRoute:'顯示此路線所有車站',
     routeNotFound:'暫時找不到 {r} 的班次資料。',
     wxHere:'香港',
+    useMyLocation:'用我的位置', hereIs:'你在 {s}',
     renameTitle:'改名', renameSave:'儲存', cancel:'取消', removeLabel:'移除',
     renameDone:'已改名為 {n}', renameCleared:'已還原為 {n}',
     fullFare:'全程車費', svcToday:'今日', svcUsual:'平日', svcAllDay:'24 小時',
@@ -7152,6 +7161,32 @@ function stopLocate() {
     { enableHighAccuracy:true, timeout:10000 });
 }
 
+// Run something once we know where the rider is. Already located: straight
+// through. Otherwise ask the phone first, and remember that they said yes —
+// tapping a location pin IS saying yes, so it would be rude to ask again.
+function withHere(then) {
+  if (herePoint) { then(herePoint); return; }
+  if (!navigator.geolocation) { status.textContent = T('noGeo'); return; }
+  rememberGeoChoice('yes');
+  stopState.locating = true; renderStopView();
+  status.textContent = T('findingYou');
+  navigator.geolocation.getCurrentPosition(
+    position => {
+      herePoint = { lat: position.coords.latitude, lng: position.coords.longitude };
+      stopState.locating = false;
+      renderStopView();
+      then(herePoint);
+    },
+    () => { stopState.locating = false; status.textContent = T('locationFailed'); renderStopView(); },
+    { enableHighAccuracy: true, timeout: 10000 });
+}
+
+// The closest pole to a point, ignoring rail stations — this is the bus tab.
+function nearestPoleTo(here) {
+  const near = stopsNear(here.lat, here.lng, STOP_NEAR_M).filter(n => !n.stop.isStation);
+  return near.length ? near[0].stop : null;
+}
+
 function stopSetStop(stop, groupStops) {
   const group = groupStops && groupStops.length > 1 ? groupStops : poleGroup(stop);
   stopState = Object.assign(freshStopState(), { locateTried: true, stop, group, destQuery: stopState.destQuery, destPicked: stopState.destPicked, indexing: stopState.indexing });
@@ -7290,8 +7325,16 @@ function stopPickerParts() {
     ? '<button class="rsstar' + (destSaved ? ' on' : '') + '" data-stop-act="deststar" title="' + esc(T(destSaved ? 'stopDestUnstar' : 'stopDestStar')) +
       '" aria-label="' + esc(T(destSaved ? 'stopDestUnstar' : 'stopDestStar')) + '">' + (destSaved ? '★' : '☆') + '</button>'
     : '';
+  // A pin on the left of each box, so "where I am" never has to be typed.
+  // On 我要去 it fills the box with the stop you are standing at — which is
+  // what makes the ★ beside it useful: stand somewhere once, save it, and it
+  // is a one-tap destination for ever after.
+  const pin = act => '<button class="rspin" data-stop-act="' + act + '" title="' + esc(T('useMyLocation')) +
+                     '" aria-label="' + esc(T('useMyLocation')) + '">📍</button>';
+
   top += '<div class="mtrsub">' + T('stopDestPh').replace(/[（(].*$/, '') + '</div>' +
-         '<div class="frow"><input id="stop-dest" type="text" placeholder="' + esc(T('stopDestPh')) + '" autocomplete="off" value="' + esc(st.destQuery || '') + '">' +
+         '<div class="frow">' + pin('here-dest') +
+         '<input id="stop-dest" type="text" placeholder="' + esc(T('stopDestPh')) + '" autocomplete="off" value="' + esc(st.destQuery || '') + '">' +
          '<span id="stop-dest-star">' + star + '</span></div>' +
          '<div id="stop-dest-results"></div>';
 
@@ -7306,7 +7349,8 @@ function stopPickerParts() {
   // The starting stop: type it, or tap one saved. The nearest poles come
   // last — they are the fallback when you have not said where you are.
   rest += '<div class="mtrsub sectionbreak">' + T('stopStartHead') + '</div>' +
-          '<div class="frow"><input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off"></div>' +
+          '<div class="frow">' + pin('here-start') +
+          '<input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off"></div>' +
           '<div class="mtrpick" id="stop-search-results"></div>';
   // Saved poles as one-tap pills, same shape as the saved places above.
   const savedShown = stopFavs.slice(0, MAX_STOPS);   // always shown — they are yours, whatever the place
@@ -7633,6 +7677,26 @@ document.getElementById('stopview').addEventListener('click', event => {
     case 'change':  stopState = Object.assign(freshStopState(), { locateTried: true, destQuery: stopState.destQuery, destPicked: stopState.destPicked, indexing: stopState.indexing }); renderStopView(); break;
     case 'refresh': stopLoadRows(true); break;
     case 'geo-yes': rememberGeoChoice('yes'); stopLocate(); break;
+    // THE PIN ON A SEARCH BOX. Both need the same thing first — a fix — so
+    // they share one path: locate if we have to, then act on the answer.
+    // withHere() is what makes the button work on the first tap rather than
+    // asking the rider to press 我的位置 and then press the pin.
+    case 'here-dest': withHere(here => {
+      const near = nearestPoleTo(here);
+      if (!near) { status.textContent = T('stopNoneNear'); return; }
+      // The NAME, not the pole: 我要去 matches on names, and which bay you
+      // happen to be beside is not what you mean by "here".
+      stopState.destQuery = stopName(near);
+      stopState.destPicked = true;
+      renderStopView();
+      status.textContent = T('hereIs').replace('{s}', stopName(near));
+    }); break;
+    case 'here-start': withHere(here => {
+      const near = nearestPoleTo(here);
+      if (!near) { status.textContent = T('stopNoneNear'); return; }
+      stopSetStop(near);          // straight to the buses leaving from here
+      stopLoadRows();
+    }); break;
     case 'geo-no':  rememberGeoChoice('no'); renderStopView(); break;
     case 'dest': {
       const name = el.dataset.name || '';
