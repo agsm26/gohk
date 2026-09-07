@@ -556,8 +556,11 @@
   .rshead { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:4px 0 10px; }
   .rsacts { flex:1 0 100%; display:flex; gap:8px; }
   .rsacts .refreshbtn { flex:1 1 0; }
-  /* The pin matches the ones on the search boxes: an action, tinted. */
-  .rsacts .rsfind { border-color:#bfdbfe; background:var(--navy-tint); }
+  /* ➤ walks you to the stop 📍 just found. Dim until there is one, because a
+     link with nowhere to go is worse than a link that says "not yet". */
+  a.rspin { display:flex; align-items:center; justify-content:center;
+            text-decoration:none; color:var(--blue); }
+  a.rspin.off { opacity:.4; border-color:var(--line-soft); background:var(--surface-2); }
   .rstitle { flex:1; min-width:0; font-size:1.0588rem; font-weight:800; color:#111; }
   .rstitle small { display:block; font-size:0.94rem; font-weight:700; color:var(--ink-3);
                    margin-top:2px; }
@@ -658,7 +661,9 @@
            display:flex; align-items:center; justify-content:center; }
   .rspick { flex:1; min-width:0; text-align:left; background:none; border:none;
             padding:6px 2px; min-height:44px; cursor:pointer; font:inherit; }
-  .rsname { font-size:1rem; font-weight:700; color:#111; line-height:1.3;
+  /* The stop NAME is what a rider scans for down a 34-stop list, so it is the
+     biggest thing on the row — bigger than the times underneath it. */
+  .rsname { font-size:1.1765rem; font-weight:800; color:#111; line-height:1.3;
             word-break:break-word; }
   .rseta { font-size:0.94rem; font-weight:800; color:var(--green); margin-top:2px; }
   .rseta.quiet { font-weight:600; color:var(--ink-3); }
@@ -1107,8 +1112,10 @@
       <button class="rsclose" id="route-exit" style="display:none">✕</button>
     </div>
     <div class="frow">
+      <button class="rspin" id="route-here">📍</button>
       <input id="route-text" type="text" inputmode="text" autocapitalize="characters"
              placeholder="路線號碼，例如 60M" autocomplete="off">
+      <a class="rspin rswalk" id="route-walk" target="_blank" rel="noopener">➤</a>
     </div>
     <ul class="results" id="route-results"></ul>
   </div>
@@ -1315,6 +1322,8 @@ const TEXT = {
     wxHere:'Hong Kong',
     useMyLocation:'Use my location', hereIs:'You are at {s}', stopNoDirect:'no direct bus',
     rsNearestStop:'Nearest stop', rsNearestFound:'Nearest on this route: {s} ({m} m)',
+    rsWalkNeedStop:'Tap 📍 first to find your stop', rsWalkTo:'Walking directions to {s}',
+    rsPickRouteFirst:'Pick a bus route first.',
     renameTitle:'Rename', renameSave:'Save', cancel:'Cancel', removeLabel:'Remove',
     renameDone:'Renamed to {n}', renameCleared:'Name put back to {n}',
     fullFare:'Full fare', svcToday:'Today', svcUsual:'Usually', svcAllDay:'24 hours',
@@ -1504,6 +1513,8 @@ const TEXT = {
     wxHere:'香港',
     useMyLocation:'用我的位置', hereIs:'你在 {s}', stopNoDirect:'冇直達',
     rsNearestStop:'最近車站', rsNearestFound:'此路線最近的站：{s}（{m} 米）',
+    rsWalkNeedStop:'請先按 📍 找出最近車站', rsWalkTo:'步行前往 {s}',
+    rsPickRouteFirst:'請先選擇巴士路線。',
     renameTitle:'改名', renameSave:'儲存', cancel:'取消', removeLabel:'移除',
     renameDone:'已改名為 {n}', renameCleared:'已還原為 {n}',
     fullFare:'全程車費', svcToday:'今日', svcUsual:'平日', svcAllDay:'24 小時',
@@ -6451,6 +6462,61 @@ function leaveRouteMode() {
 
 document.getElementById('route-exit').addEventListener('click', leaveRouteMode);
 
+// ---- 📍 WHICH OF THESE STOPS AM I AT? ----
+// The list marks itself when a fix is already to hand, but on a cold open
+// there is none, and scrolling thirty-four stops hunting for a name you half
+// remember is exactly the job a phone should do.
+function markNearestOnRoute() {
+  if (!routeStopsState) { status.textContent = T('rsPickRouteFirst'); return; }
+  withHere(here => {
+    if (!routeStopsState) return;
+    const near = nearestRouteStop(here);
+    if (!near) { status.textContent = T('stopNoneNear'); return; }
+    routeStopsState.boardAt = near.index;
+    routeStopsState.alightAt = null;            // a new boarding stop ends the old ride
+    routeStopsState.autoBoard = true;
+    routeStopsState.autoMetres = near.metres;
+    paintStopCounts();
+    syncRideWatch();
+    scrollToMarkedStop();
+    paintWalkLink();
+    const stop = routeStopsState.stops[near.index];
+    status.textContent = T('rsNearestFound')
+      .replace('{s}', plainStopName(lang === 'zh' ? (stop.name_tc || stop.name_en) : stop.name_en))
+      .replace('{m}', Math.round(near.metres));
+  });
+}
+document.getElementById('route-here').addEventListener('click', markNearestOnRoute);
+
+// ---- ➤ WALK ME THERE ----
+// A real link with a real href, not a scripted window.open: the open has to
+// happen on the tap itself, and a fix that arrives a second later would be
+// blocked as a popup. So the arrow stays dim until 📍 has found the stop,
+// and then it is simply a link the rider taps.
+function walkUrl(lat, lng) {
+  const onApple = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  return onApple
+    ? 'https://maps.apple.com/?daddr=' + lat + ',' + lng + '&dirflg=w'
+    : 'https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng + '&travelmode=walking';
+}
+function paintWalkLink() {
+  const link = document.getElementById('route-walk');
+  if (!link) return;
+  const st = routeStopsState;
+  const stop = st && st.boardAt !== null ? st.stops[st.boardAt] : null;
+  const lat = stop ? Number(stop.lat) : NaN, lng = stop ? Number(stop.long) : NaN;
+  if (!isFinite(lat) || !isFinite(lng)) {
+    link.removeAttribute('href');
+    link.classList.add('off');
+    link.title = T('rsWalkNeedStop');
+    return;
+  }
+  link.href = walkUrl(lat, lng);
+  link.classList.remove('off');
+  link.title = T('rsWalkTo').replace('{s}', plainStopName(lang === 'zh' ? (stop.name_tc || stop.name_en) : stop.name_en));
+}
+
 routeInput.addEventListener('input', () => {
   const typed = routeInput.value.trim().toUpperCase();
   routeList.innerHTML = '';
@@ -9051,38 +9117,12 @@ function renderRouteStops(context, stops) {
     if (panel) panel.scrollTop = scrollWas;
     status.textContent = T('refreshing');
   });
-  // WHICH OF THESE THIRTY-ONE STOPS AM I AT?
-  // The list is marked automatically when a fix is already to hand, but on a
-  // cold start there is none, and scrolling a long route looking for a name
-  // you half-remember is exactly the job a phone should do. This asks.
-  const findMe = document.createElement('button');
-  findMe.className = 'refreshbtn rsfind';
-  findMe.textContent = '📍 ' + T('rsNearestStop');
-  findMe.addEventListener('click', () => {
-    withHere(here => {
-      if (!routeStopsState) return;
-      const near = nearestRouteStop(here);
-      if (!near) { status.textContent = T('stopNoneNear'); return; }
-      routeStopsState.boardAt = near.index;
-      routeStopsState.alightAt = null;          // a new boarding stop ends the old ride
-      routeStopsState.autoBoard = true;
-      routeStopsState.autoMetres = near.metres;
-      paintStopCounts();
-      syncRideWatch();
-      scrollToMarkedStop();
-      status.textContent = T('rsNearestFound')
-        .replace('{s}', plainStopName(lang === 'zh' ? (routeStopsState.stops[near.index].name_tc || routeStopsState.stops[near.index].name_en)
-                                                    : routeStopsState.stops[near.index].name_en))
-        .replace('{m}', Math.round(near.metres));
-    });
-  });
-
-  // Title and ✕ on the first line, the two actions on their own beneath.
-  // Four things across a 375px phone left the route name in an ellipsis, and
-  // the route name is the one thing on this screen that must always be legible.
+  // Title and ✕ on the first line, 更新班次 beneath. Finding your stop lives
+  // on the search bar now, beside the route number, where every other 📍 in
+  // this app already is.
   const acts = document.createElement('div');
   acts.className = 'rsacts';
-  acts.appendChild(findMe); acts.appendChild(refresh);
+  acts.appendChild(refresh);
   head.appendChild(title); head.appendChild(close); head.appendChild(acts);
   box.appendChild(head);
 
@@ -9137,6 +9177,7 @@ function renderRouteStops(context, stops) {
       }
       paintStopCounts();
       syncRideWatch();
+      paintWalkLink();
       const lat = Number(stop.lat), lng = Number(stop.long);
       if (isFinite(lat) && isFinite(lng)) map.setView([lat, lng], 17);
     });
@@ -9183,6 +9224,7 @@ function renderRouteStops(context, stops) {
   }
 
   paintStopCounts();
+  paintWalkLink();
   watchForVisibleRows();
 
   const panel = document.getElementById('panel');
@@ -9240,10 +9282,10 @@ function paintStopCounts() {
       note.className = 'rscount';
       note.textContent = away === 1 ? T('rsOneStopAway')
                                     : T('rsStopsAway').replace('{n}', away);
-    } else {
-      note.className = 'rseta quiet';
-      note.textContent = T('rsBefore');
     }
+    // Nothing at all for the stops BEFORE the boarding mark. 「在上車站之前」
+    // said only what the row was not, on every row above the one that
+    // mattered, and it pushed the name and the times apart for no gain.
   }
   paintRideBanner();
 }

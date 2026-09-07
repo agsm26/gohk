@@ -43,7 +43,7 @@
    halfway through reading.
    ========================================================================= */
 
-const VERSION = 'hkfast-2026-09-07i';
+const VERSION = 'hkfast-2026-09-07j';
 const CACHE   = VERSION;
 
 // Fetched at install, before the app is ever called ready. Kept small on
