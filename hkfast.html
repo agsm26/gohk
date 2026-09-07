@@ -588,6 +588,12 @@
   .destchip { min-height:44px; padding:0 16px; border-radius:22px; border:2px solid var(--line);
               background:white; font-weight:700; font-size:1rem; color:var(--ink); }
   .destchip.on { border-color:var(--amber); background:var(--amber-tint); color:var(--amber); }
+  /* Bus numbers offered by the 我要去 box. Blue and bold like every other
+     route number in this app, so a number never reads as a place name. */
+  .routesuggest button { border-color:#bfdbfe; background:var(--navy-tint);
+                         color:var(--blue); font-weight:800; font-size:1.1176rem; }
+  .routesuggest button small { margin-left:6px; font-size:0.82rem; font-weight:800;
+                               color:var(--ink-3); }
   /* A saved stop with no bus to where you said you are going. Dashed and
      faded, matching the greyed station cards in the search above — still
      yours, still tappable, just not for this trip. Kept above the 4.5:1
@@ -1199,8 +1205,7 @@
 
 <nav id="bottombar">
   <!-- 車站 first: "which bus is coming to take me there" is the daily question. -->
-  <button class="bnav on" data-nav="stop"><span class="bicon">🚏</span><span class="blabel"></span></button>
-  <button class="bnav"    data-nav="bus"><span class="bicon">🚌</span><span class="blabel"></span></button>
+  <button class="bnav on" data-nav="stop"><span class="bicon">🚌</span><span class="blabel"></span></button>
   <button class="bnav"    data-nav="mtr"><span class="bicon">🚇</span><span class="blabel"></span></button>
   <button class="bnav"    data-nav="fav"><span class="bicon">⭐</span><span class="blabel"></span></button>
   <button class="bnav"    data-nav="set"><span class="bicon">⚙️</span><span class="blabel"></span></button>
@@ -1265,7 +1270,7 @@ const TEXT = {
     stopDestFull:'Saved destinations are full (8) — remove one first.',
     etaArrive:'about {n} stops · reach {d} around {t}',
     stopDestSavedMsg:'Saved "{d}" to places you go.', stopDestRemovedMsg:'Removed "{d}".',
-    stopDestPh:'Going to… (type a place)',
+    stopDestPh:'Going to… (a place, or a bus number)',
     stopDestNeedLoc:'Tap 📍 to find which stops near you have a direct bus.',
     stopFilterPh:'Only buses towards…', stopFilterNone:'No bus from this stop towards {d}.',
     stopFilterOn:'Showing buses towards {d}', stopsAwayShort:'{n} stops', stopMore:'+{n} more',
@@ -1291,7 +1296,7 @@ const TEXT = {
     boardHere:'✓ Board right here at', walkTo:'🚶 Walk', minTo:'min to',
     rideTo:'Ride to', stops:'stops', stations:'stations', changeBus:'↓ CHANGE BUS',
     changeTrain:'↓ CHANGE TRAIN', trainsFrequent:'Trains every few minutes', here:'here',
-    tabBus:'BUS', tabStop:'STOPS', tabMtr:'MTR', tabFav:'SAVED', tabSet:'SETTINGS',
+    tabBus:'BUS', tabStop:'BUS', tabMtr:'MTR', tabFav:'SAVED', tabSet:'SETTINGS',
     settings:'Settings', settingLanguage:'Language',
     settingsNote:'Your choice is remembered on this phone.',
     goShort:'\u27a4 Go',
@@ -1453,7 +1458,7 @@ const TEXT = {
     stopDestFull:'常用目的地已滿（8 個），請先移除一個。',
     etaArrive:'約 {n} 個站，預計 {t} 到 {d}',
     stopDestSavedMsg:'已收藏目的地「{d}」。', stopDestRemovedMsg:'已移除「{d}」。',
-    stopDestPh:'我要去…（輸入目的地）',
+    stopDestPh:'我要去…（地點或巴士號碼）',
     stopDestNeedLoc:'按 📍 就可找出你附近哪個站有直達巴士。',
     stopFilterPh:'只顯示往…', stopFilterNone:'此站沒有往 {d} 的巴士。',
     stopFilterOn:'只顯示往 {d} 的巴士', stopsAwayShort:'{n} 個站', stopMore:'另有 {n} 條',
@@ -1479,7 +1484,7 @@ const TEXT = {
     boardHere:'✓ 就在此處上車：', walkTo:'🚶 步行', minTo:'分鐘至',
     rideTo:'乘搭至', stops:'個站', stations:'個站', changeBus:'↓ 轉乘巴士',
     changeTrain:'↓ 轉綫', trainsFrequent:'港鐵班次頻密，數分鐘一班', here:'於此處',
-    tabBus:'巴士', tabStop:'車站', tabMtr:'港鐵', tabFav:'收藏', tabSet:'設定',
+    tabBus:'巴士', tabStop:'巴士', tabMtr:'港鐵', tabFav:'收藏', tabSet:'設定',
     settings:'設定', settingLanguage:'語言',
     settingsNote:'你的選擇會記在這部手機。',
     goShort:'\u27a4 前往',
@@ -4788,11 +4793,15 @@ function paintBottomBar() {
   // "(0)" on a section that has simply not been searched yet reads as a
   // fault. The count appears once there are results to count.
   const withCount = (label, n) => n > 0 ? label + ' (' + n + ')' : label;
-  const labels = { bus: withCount(T('tabBus'), busPicks.length),
-                   mtr: withCount(T('tabMtr'), railPicks.length),
+  const labels = { mtr: withCount(T('tabMtr'), railPicks.length),
                    fav: T('tabFav') + ' (' +
                         (stopFavs.length + stopDests.length + departures.length + trainFavs.length) + ')',
                    stop: T('tabStop'), set: T('tabSet') };
+
+  // Looking up a route number is no longer a tab of its own — it is what the
+  // 巴士 tab's own search box does — so route mode lights the 巴士 button
+  // rather than nothing at all.
+  const lit = activeMode === 'bus' ? 'stop' : activeMode;
 
   for (const button of bar.querySelectorAll('.bnav')) {
     const name = button.dataset.nav;
@@ -4800,7 +4809,7 @@ function paintBottomBar() {
     // Nothing is ever disabled. The bar is how you move around the app, and
     // a dead button is a dead end — an empty section still has something
     // worth saying, and favourites is where you learn how to fill it.
-    button.classList.toggle('on', name === activeMode);
+    button.classList.toggle('on', name === lit);
   }
 }
 
@@ -5739,7 +5748,7 @@ document.getElementById('bottombar').addEventListener('click', event => {
 // sideways than up-down before it counts — an older thumb resting on the edge
 // of a phone while scrolling must never be able to change the screen by
 // accident.
-const TAB_ORDER  = ['stop', 'bus', 'mtr', 'fav', 'set'];
+const TAB_ORDER  = ['stop', 'mtr', 'fav', 'set'];
 const SWIPE_EDGE = 44;   // px from either side a slide must begin in
 const SWIPE_MIN  = 60;   // px it must travel before the section changes
 const SWIPE_SLOP = 40;   // px of up-down movement that abandons it
@@ -5747,7 +5756,10 @@ const SWIPE_SLOP = 40;   // px of up-down movement that abandons it
 let swipe = null;
 
 function swipeToTab(step) {
-  const at = TAB_ORDER.indexOf(activeMode);
+  // Route mode is not in the order; it belongs to the 巴士 tab, so a slide
+  // out of it starts from there.
+  const from = activeMode === 'bus' ? 'stop' : activeMode;
+  const at = TAB_ORDER.indexOf(from);
   const to = TAB_ORDER[(at < 0 ? 0 : at) + step];
   if (!to) return;                       // already at one end: nothing to do
   showMode(to);
@@ -6425,6 +6437,10 @@ function leaveRouteMode() {
   journeyMode = false;
   drawStops();
   panel.scrollTop = 0;
+  // Route lookup used to BE a tab, so closing it could just leave the panel
+  // as it was. It is now a mode of the 巴士 tab, and leaving it with every
+  // view hidden would show a blank panel.
+  showMode('stop');
 }
 
 document.getElementById('route-exit').addEventListener('click', leaveRouteMode);
@@ -7567,6 +7583,36 @@ function destSuggestions(q, max) {
   return list;
 }
 
+// ROUTE NUMBERS IN THE DESTINATION BOX.
+// The 巴士 tab used to be a separate screen whose only job was this. It is
+// now the same box you type a place into, because a rider does not think
+// "am I looking up a route or a place" — they think "60X" or "屯門市中心" and
+// expect the app to know which. Numbers and place names never collide: no
+// Hong Kong stop is called 60X.
+function routeMatches(typed) {
+  const q = String(typed || '').trim().toUpperCase();
+  if (!q) return [];
+  const out = [];
+  const byNumber = new Map();
+  for (const route of allRoutes) {
+    if (!route.route.toUpperCase().startsWith(q)) continue;
+    if (!byNumber.has(route.route)) byNumber.set(route.route, []);
+    byNumber.get(route.route).push(route);
+  }
+  for (const [no, variants] of [...byNumber].slice(0, 6))
+    out.push({ no, variants, co: 'KMB' });
+  for (const route of ctbRoutes.filter(r => r.route.toUpperCase().startsWith(q)).slice(0, 4))
+    out.push({ no: route.route, variants: [route], co: 'CITYBUS' });
+  // The exact number first, then shortest: typing 6 puts 6 above 6C above 60X.
+  out.sort((a, b) => (a.no.toUpperCase() === q ? 0 : 1) - (b.no.toUpperCase() === q ? 0 : 1) ||
+                     a.no.length - b.no.length || a.no.localeCompare(b.no));
+  return out.slice(0, 6);
+}
+
+// Held between the render and the tap: a route match is an object, and a
+// data- attribute can only carry a string.
+let routeSuggestions = [];
+
 function stopRenderDest(query) {
   const box = document.getElementById('stop-dest-results');
   if (!box) return;
@@ -7577,6 +7623,12 @@ function stopRenderDest(query) {
   let html = '';
   // Suggest while typing; once a name is picked (or tapped from the saved
   // places) the list stands down until the text changes again.
+  routeSuggestions = routeMatches(q);
+  if (routeSuggestions.length) {
+    html += '<div class="suggest routesuggest">' + routeSuggestions.map((r, i) =>
+      '<button data-stop-act="routepick" data-index="' + i + '">🚌 ' + esc(r.no) +
+      '<small>' + esc(r.co === 'KMB' ? 'KMB' : 'CITYBUS') + '</small></button>').join('') + '</div>';
+  }
   if (!stopState.destPicked) {
     const list = destSuggestions(q, 8);
     const done = list.length === 1 && tidyName(list[0].name) === tidyName(q);
@@ -7751,6 +7803,16 @@ document.getElementById('stopview').addEventListener('click', event => {
       stopState.destQuery = stopState.destQuery === name ? '' : name;
       stopState.destPicked = true;
       renderStopView();
+      break;
+    }
+    case 'routepick': {  // a suggested BUS NUMBER: straight to "which way?"
+      const hit = routeSuggestions[Number(el.dataset.index)];
+      if (!hit) break;
+      // 60X is not a destination. Leaving it in the box would have the picker
+      // filtering every stop by a place that does not exist the moment the
+      // rider came back from the route.
+      stopState.destQuery = ''; stopState.destPicked = false;
+      showDirections(hit.no, hit.variants, hit.co);
       break;
     }
     case 'destpick': {   // a suggested name: the whole name into the box
