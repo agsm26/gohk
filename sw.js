@@ -1,4 +1,4 @@
-/* 香港快線 — service worker.
+/* GO香港 GO HK — service worker.
    =========================================================================
    This is the file that makes the app installable and lets it open without a
    connection. It sits between the app and the network and decides, for every
@@ -43,7 +43,7 @@
    halfway through reading.
    ========================================================================= */
 
-const VERSION = 'hkfast-2026-09-07j';
+const VERSION = 'hkfast-2026-09-07k';
 const CACHE   = VERSION;
 
 // Fetched at install, before the app is ever called ready. Kept small on
