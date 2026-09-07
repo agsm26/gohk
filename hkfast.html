@@ -588,6 +588,14 @@
   .destchip { min-height:44px; padding:0 16px; border-radius:22px; border:2px solid var(--line);
               background:white; font-weight:700; font-size:1rem; color:var(--ink); }
   .destchip.on { border-color:var(--amber); background:var(--amber-tint); color:var(--amber); }
+  /* A saved stop with no bus to where you said you are going. Dashed and
+     faded, matching the greyed station cards in the search above — still
+     yours, still tappable, just not for this trip. Kept above the 4.5:1
+     floor so the name stays readable rather than becoming decoration. */
+  .destchip.dim { border-style:dashed; background:var(--surface-2); color:var(--ink-3); }
+  .destchip.dim .polecode { background:var(--ink-3); }
+  .destchip .noreach { display:inline-block; margin-left:8px; font-size:0.88rem;
+                       font-weight:800; color:var(--red); }
   /* The "which way?" sheet for a looked-up bus: one big button per direction. */
   #dirsheet, #alertsheet { display:none; position:fixed; inset:0; z-index:2000; background:rgba(15,23,42,.55);
               align-items:flex-end; justify-content:center; padding:10px; }
@@ -1293,7 +1301,7 @@ const TEXT = {
     favBusRoute:'Show all stops on this route',
     routeNotFound:'Route {r} is not in the timetable right now.',
     wxHere:'Hong Kong',
-    useMyLocation:'Use my location', hereIs:'You are at {s}',
+    useMyLocation:'Use my location', hereIs:'You are at {s}', stopNoDirect:'no direct bus',
     renameTitle:'Rename', renameSave:'Save', cancel:'Cancel', removeLabel:'Remove',
     renameDone:'Renamed to {n}', renameCleared:'Name put back to {n}',
     fullFare:'Full fare', svcToday:'Today', svcUsual:'Usually', svcAllDay:'24 hours',
@@ -1481,7 +1489,7 @@ const TEXT = {
     favBusRoute:'顯示此路線所有車站',
     routeNotFound:'暫時找不到 {r} 的班次資料。',
     wxHere:'香港',
-    useMyLocation:'用我的位置', hereIs:'你在 {s}',
+    useMyLocation:'用我的位置', hereIs:'你在 {s}', stopNoDirect:'冇直達',
     renameTitle:'改名', renameSave:'儲存', cancel:'取消', removeLabel:'移除',
     renameDone:'已改名為 {n}', renameCleared:'已還原為 {n}',
     fullFare:'全程車費', svcToday:'今日', svcUsual:'平日', svcAllDay:'24 小時',
@@ -7195,11 +7203,17 @@ function stopSetStop(stop, groupStops) {
 }
 
 // One tap on a saved stop is this screen with the stop already chosen.
-function stopOpenSaved(sf) {
-  // The place typed above stays with you: it becomes the 往… filter here.
+function stopOpenSaved(sf, noFilter) {
+  // The place typed above stays with you: it becomes the 往… filter here —
+  // unless this stop has no bus there at all, in which case filtering by it
+  // would open an empty screen. Show everything the stop does have instead.
+  // destQuery is what the rider typed and must survive — going back to the
+  // picker has to still say 屯門市中心. destFilter is the narrowing applied to
+  // THIS stop's rows, and that is the only thing dropped.
   const dest = String(stopState.destQuery || '').trim();
   stopState = Object.assign(freshStopState(), { locateTried: true, stop: sf, group: poleGroup(sf),
-                                                destQuery: dest, destFilter: dest, destPicked: stopState.destPicked, indexing: stopState.indexing });
+                                                destQuery: dest, destFilter: noFilter ? '' : dest,
+                                                destPicked: stopState.destPicked, indexing: stopState.indexing });
   if (activeMode !== 'stop') { showMode('stop'); return; }
   renderStopView(); stopLoadRows();
 }
@@ -7357,12 +7371,32 @@ function stopPickerParts() {
           '<input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off"></div>' +
           '<div class="mtrpick" id="stop-search-results"></div>';
   // Saved poles as one-tap pills, same shape as the saved places above.
-  const savedShown = stopFavs.slice(0, MAX_STOPS);   // always shown — they are yours, whatever the place
+  // YOUR SAVED STOPS, ALWAYS SHOWN — but greyed when they cannot get you
+  // where you just said you were going. Hiding them was tried and was worse:
+  // a favourite that vanishes reads as lost, not as unsuitable. Dimmed, it
+  // still says "this is yours" while saying "not for this trip".
+  //
+  // Reachability is judged over the whole GROUP of bays, not the one saved
+  // pole, because tapping the pill opens the group. Judging the single pole
+  // would grey out a stop that works the moment you tap it.
+  //
+  // It stays TAPPABLE. A dead button is a dead end — an older rider taps it,
+  // nothing happens, and the app looks broken. Tapping a greyed one opens it
+  // WITHOUT the destination filter, which is the same thing the greyed
+  // station cards in the search above already do.
+  const savedShown = stopFavs.slice(0, MAX_STOPS);
   if (savedShown.length) {
     rest += '<div class="mtrsub">' + T('stopSavedPicks') + '</div><div class="destchips">' +
-      savedShown.map(f => '<button class="destchip" data-stop-act="fav" data-index="' + stopFavs.indexOf(f) + '">📍 ' + esc(favLabel(f)) +
-        (poleCodeOf(f) ? ' <small>' + esc(poleCodeOf(f)) + '</small>' : '') +
-        poleDirHtml(f.stop) + '</button>').join('') + '</div>';
+      savedShown.map(f => {
+        const ids = poleGroup(f).map(g => g.stop);
+        const reaches = !filtering || reachingRoutes(ids, destIds).length > 0;
+        return '<button class="destchip' + (reaches ? '' : ' dim') + '" data-stop-act="fav" data-index="' +
+          stopFavs.indexOf(f) + '"' + (reaches ? '' : ' data-nofilter="1"') + '>📍 ' + esc(favLabel(f)) +
+          (poleCodeOf(f) ? ' <small>' + esc(poleCodeOf(f)) + '</small>' : '') +
+          poleDirHtml(f.stop) +
+          (reaches ? '' : '<small class="noreach">' + esc(T('stopNoDirect')) + '</small>') +
+          '</button>';
+      }).join('') + '</div>';
   }
   if (st.destQuery && destIds && !destIds.size)
     rest += '<div class="favempty">' + T('stopDestNoName').replace('{d}', esc(st.destQuery)) + '</div>';
@@ -7728,7 +7762,7 @@ document.getElementById('stopview').addEventListener('click', event => {
       renderStopView();
       break;
     }
-    case 'fav':     stopOpenSaved(stopFavs[Number(el.dataset.index)]); break;
+    case 'fav':     stopOpenSaved(stopFavs[Number(el.dataset.index)], !!el.dataset.nofilter); break;
     case 'star': {
       const result = toggleStopFav(stopState.stop);
       if (result === null) { status.textContent = T('stopFull'); break; }
