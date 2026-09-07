@@ -104,6 +104,14 @@
     max-width:calc(100vw - 20px); max-height:calc(100vh - 20px); overflow-y:auto;
     background:white; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.35); padding:14px;
   }
+  /* Sliding between sections. The panel arrives from the side the finger came
+     from, once, so the change reads as movement rather than a screen that
+     swapped itself. Decoration: the reduced-motion rule above removes it. */
+  @keyframes slidefromright { from { transform:translateX(20%); opacity:.4; } to { transform:none; opacity:1; } }
+  @keyframes slidefromleft  { from { transform:translateX(-20%); opacity:.4; } to { transform:none; opacity:1; } }
+  #panel.slidefromright { animation:slidefromright .2s ease-out; }
+  #panel.slidefromleft  { animation:slidefromleft  .2s ease-out; }
+
   .field { margin-bottom:16px; }
   .flabel { font-size:1rem; font-weight:800; letter-spacing:.5px; margin-bottom:6px; }
   .flabel.start { color:var(--green); }
@@ -431,6 +439,12 @@
   #stopview .eta-times { order:2; flex-basis:100%; font-size:1.12rem; color:var(--green); margin-top:0; }
   #stopview .eta-arrive { order:3; flex:1 1 auto; min-width:0; flex-basis:auto; font-size:0.88rem; margin-top:0; }
   #stopview .eta-fare { order:4; margin-left:auto; font-size:0.88rem; }
+  /* WHICH POLE, when one card is holding several. This is the only thing on
+     the row that says where to stand, so it sits on the top line beside the
+     destination — not below the times where a thumb would cover it. */
+  #stopview .eta-pole { order:1; flex:0 0 auto; font-size:0.88rem; font-weight:800;
+                        color:var(--ink-2); background:var(--surface-2);
+                        border-radius:10px; padding:2px 8px; white-space:nowrap; }
   #stopview .eta-note { color:var(--ink-3); font-weight:700; padding:8px 0; }
   .stoproute { display:flex; align-items:center; gap:10px; border:2px solid var(--line-soft);
                border-radius:12px; padding:12px; margin:8px 0; }
@@ -500,6 +514,12 @@
               overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .nearmin { font-size:1.0588rem; font-weight:800; color:var(--green); white-space:nowrap; }
 
+  /* WHICH WAY THE BUSES LEAVE, beside the pole code. Deliberately not a
+     second blue badge: the pole code is the thing painted on the street
+     furniture and must stay the loudest mark on the row. */
+  .poledir { margin-left:6px; font-size:0.94rem; font-weight:800; color:var(--ink-2);
+             white-space:nowrap; }
+
   /* The pole code, shown ONLY where it helps: standing in the street, it is
      painted on the pole and it is how you know you are at the right one. */
   .polecode { display:inline-block; margin-left:8px; padding:1px 7px; border-radius:8px;
@@ -541,6 +561,23 @@
              background:white; color:var(--ink-3); font-size:1rem; font-weight:800; cursor:pointer; }
 
   .rshint { font-size:0.94rem; color:var(--ink-3); line-height:1.45; margin-bottom:10px; }
+
+  /* WHAT THIS ROUTE COSTS AND WHEN IT RUNS. Two lines above the stop list,
+     the rest folded behind a button: the fare and today's hours are what a
+     rider standing at a stop needs, and Sunday's hours on a Tuesday are not. */
+  .rsinfo { margin:0 0 10px; padding:10px 12px; border:2px solid var(--line-soft);
+            border-radius:12px; background:#f8fafc; }
+  .rsinfo .rsi { display:block; font-size:1rem; font-weight:700; color:var(--ink);
+                 line-height:1.5; }
+  .rsinfo .rsi + .rsi { margin-top:4px; }
+  .rsinfo .rsi.warn { color:var(--red); }
+  .rsmore { margin-top:8px; min-height:44px; width:100%; border:2px solid #bfdbfe;
+            border-radius:10px; background:var(--navy-tint); color:var(--blue);
+            font-size:0.94rem; font-weight:800; cursor:pointer; }
+  .rsdetail { margin-top:8px; }
+  .rsdrow { font-size:0.94rem; color:var(--ink-2); line-height:1.5; padding:3px 0;
+            border-top:1px solid var(--line-soft); }
+  .rsdrow b { color:var(--ink); }
   /* Saved places on the 車站 tab: pill buttons, one tap each. */
   .destchips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px; }
   /* Suggested names under the 我要去 box while typing. */
@@ -679,6 +716,46 @@
   #favview .depopen:hover { background:var(--blue-tint); }
   #favview .depdel { position:absolute; top:10px; right:10px; flex:0 0 auto;
                      width:40px; min-height:40px; }
+
+  /* SAVED PLACES. Eight starting stops and eight destinations is sixteen rows,
+     so each one is a single line: the whole row opens it, ✕ removes it, and
+     there is no separate "open" button underneath to double the height. */
+  .favplace { display:flex; gap:8px; margin-bottom:8px; }
+  .favplace .fpopen { flex:1; min-width:0; display:flex; align-items:center; gap:8px;
+                      min-height:54px; padding:8px 12px; text-align:left;
+                      border:2px solid var(--line-soft); border-radius:12px;
+                      background:white; cursor:pointer; }
+  .favplace .fpopen:hover { background:var(--navy-tint); }
+  .favplace .fpbody { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+  .favplace .fpname { min-width:0; font-size:1.1176rem; font-weight:800;
+                      color:var(--blue); overflow:hidden; text-overflow:ellipsis;
+                      white-space:nowrap; }
+  /* The pole code and which way it faces, under the name — and the real stop
+     name too when the rider has renamed it. 「返屋企」 is what you remember;
+     屯門公路轉車站 TM744 往東 is what gets you to the right kerb. */
+  .favplace .fpmeta { min-width:0; font-size:0.88rem; font-weight:700; color:var(--ink-3);
+                      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .favplace .fpmeta .polecode { margin-left:0; margin-right:2px; font-size:0.82rem; vertical-align:0; }
+  .favplace .fpmeta .poledir { margin-left:6px; font-size:0.88rem; }
+  .favplace .fparrow { flex:0 0 auto; margin-left:auto; padding-left:8px;
+                       font-size:1.1176rem; font-weight:800; color:var(--ink-3); }
+  .favplace .fpdel, .favplace .fpedit {
+                     flex:0 0 44px; min-height:54px; border:2px solid var(--line-soft);
+                     border-radius:12px; background:#f8fafc; color:var(--ink-2);
+                     font-size:1.0588rem; font-weight:800; cursor:pointer; }
+  /* Renaming happens in the row itself rather than in a dialog: one fewer
+     screen to understand, and the name stays visible while it is typed. */
+  .fprename { display:flex; gap:8px; margin-bottom:8px; }
+  .fprename input { flex:1; min-width:0; min-height:54px; padding:8px 12px;
+                    border:2px solid var(--navy); border-radius:12px;
+                    font-size:1.1176rem; font-weight:700; color:var(--ink);
+                    font-family:inherit; background:white; }
+  .fprename .fpsave { flex:0 0 auto; min-height:54px; padding:0 16px; border:2px solid var(--green);
+                      border-radius:12px; background:var(--green); color:white;
+                      font-size:1rem; font-weight:800; cursor:pointer; }
+  .fprename .fpcancel { flex:0 0 48px; min-height:54px; border:2px solid var(--line-soft);
+                        border-radius:12px; background:#f8fafc; color:var(--ink-2);
+                        font-size:1.0588rem; font-weight:800; cursor:pointer; }
 
   /* The star on an arrival row. */
   .eta-star { border:none; background:none; cursor:pointer; font-size:1.2941rem;
@@ -1164,10 +1241,10 @@ const TEXT = {
     stopTapRoute:'Tap a route to see all its stops. Tap ☆ to keep that bus in SAVED.',
     favStops:'MY STOPS', noStopsLong:'No stops saved. On the STOPS tab, open a stop and tap ☆ Save stop.',
     favStopOpen:'Show buses here', stopSavedMsg:'Saved {s}', stopRemovedMsg:'Removed {s}',
-    stopFull:'Saved stops are full (5) — remove one first.',
+    stopFull:'Saved starting stops are full (8) — remove one first.',
     stopDestSaved:'Places you go', stopDestStar:'Save this place', stopDestUnstar:'Saved — tap to remove',
     stopBays:'{n} bays',
-    stopDestFull:'Saved places are full (5) — remove one first.',
+    stopDestFull:'Saved destinations are full (8) — remove one first.',
     etaArrive:'about {n} stops · reach {d} around {t}',
     stopDestSavedMsg:'Saved "{d}" to places you go.', stopDestRemovedMsg:'Removed "{d}".',
     stopDestPh:'Going to… (type a place)',
@@ -1209,8 +1286,18 @@ const TEXT = {
     favBusRoute:'Show all stops on this route',
     routeNotFound:'Route {r} is not in the timetable right now.',
     wxHere:'Hong Kong',
-    noFavStart:'No starting points saved yet. Set a start, then tap ⭐ Save.',
-    noFavEnd:'No destinations saved yet. Set a destination, then tap ⭐ Save.',
+    renameTitle:'Rename', renameSave:'Save', cancel:'Cancel', removeLabel:'Remove',
+    renameDone:'Renamed to {n}', renameCleared:'Name put back to {n}',
+    fullFare:'Full fare', svcToday:'Today', svcUsual:'Usually', svcAllDay:'24 hours',
+    svcEvery:'about every {a} min', svcEveryRange:'about every {a}–{b} min',
+    svcDepartures:'{n} departures a day', svcNight:'Night service only',
+    svcClosedToday:'Does not run today', svcClosedPh:'No service today (public holiday)',
+    svcMore:'All service hours', svcLess:'Hide service hours', dayPhOnly:'Public holidays',
+    faceN:'N', faceNE:'NE', faceE:'E', faceSE:'SE',
+    faceS:'S', faceSW:'SW', faceW:'W', faceNW:'NW',
+    noFavStart:'No starting stops saved yet. On the STOPS tab, open a stop and tap ★.',
+    noFavEnd:'No destinations saved yet. On the STOPS tab, type where you are going and tap ★.',
+    favDestOpen:'Buses going there',
     locationFailed:'Could not find your location.',
     saveDeparture:'Save this bus', departureSaved:'Saved {r} to favourites.',
     departureRemoved:'Removed {r} from favourites.',
@@ -1341,10 +1428,10 @@ const TEXT = {
     stopTapRoute:'按路線可查看該線所有車站。按 ☆ 可把該班巴士加入「收藏」。',
     favStops:'常用車站', noStopsLong:'尚未收藏車站。在「車站」打開車站後，按「☆ 收藏此站」。',
     favStopOpen:'查看此站班次', stopSavedMsg:'已收藏 {s}', stopRemovedMsg:'已移除 {s}',
-    stopFull:'常用車站已滿（5 個），請先移除一個。',
+    stopFull:'常用起點已滿（8 個），請先移除一個。',
     stopDestSaved:'常去的目的地', stopDestStar:'收藏此目的地', stopDestUnstar:'已收藏，按此移除',
     stopBays:'{n} 個站位',
-    stopDestFull:'常去目的地已滿（5 個），請先移除一個。',
+    stopDestFull:'常用目的地已滿（8 個），請先移除一個。',
     etaArrive:'約 {n} 個站，預計 {t} 到 {d}',
     stopDestSavedMsg:'已收藏目的地「{d}」。', stopDestRemovedMsg:'已移除「{d}」。',
     stopDestPh:'我要去…（輸入目的地）',
@@ -1386,8 +1473,18 @@ const TEXT = {
     favBusRoute:'顯示此路線所有車站',
     routeNotFound:'暫時找不到 {r} 的班次資料。',
     wxHere:'香港',
-    noFavStart:'尚未收藏起點。設定起點後，按「⭐ 加入常用地點」。',
-    noFavEnd:'尚未收藏目的地。設定目的地後，按「⭐ 加入常用地點」。',
+    renameTitle:'改名', renameSave:'儲存', cancel:'取消', removeLabel:'移除',
+    renameDone:'已改名為 {n}', renameCleared:'已還原為 {n}',
+    fullFare:'全程車費', svcToday:'今日', svcUsual:'平日', svcAllDay:'24 小時',
+    svcEvery:'約 {a} 分鐘一班', svcEveryRange:'約 {a}–{b} 分鐘一班',
+    svcDepartures:'每日 {n} 班', svcNight:'只在深宵行走',
+    svcClosedToday:'今日不設服務', svcClosedPh:'公眾假期今日停駛',
+    svcMore:'所有服務時間', svcLess:'收起服務時間', dayPhOnly:'公眾假期',
+    faceN:'往北', faceNE:'往東北', faceE:'往東', faceSE:'往東南',
+    faceS:'往南', faceSW:'往西南', faceW:'往西', faceNW:'往西北',
+    noFavStart:'尚未收藏起點。在「車站」揀好車站後，按旁邊的 ★。',
+    noFavEnd:'尚未收藏目的地。在「車站」的「我要去」輸入地點後，按旁邊的 ★。',
+    favDestOpen:'去呢度嘅巴士',
     locationFailed:'無法取得你的位置。',
     saveDeparture:'收藏此路線', departureSaved:'已收藏 {r}。',
     departureRemoved:'已移除 {r}。',
@@ -2314,7 +2411,7 @@ let departures = [];
 
 // SAVED STOPS: a pole, kept whole (id, both names, position) so the tab can
 // open it without looking anything up.
-const MAX_STOPS = 5;
+const MAX_STOPS = 8;
 let stopFavs = [];
 function loadStopFavs() {
   try { stopFavs = JSON.parse(localStorage.getItem('hkfast-stops') || '[]'); } catch (e) { stopFavs = []; }
@@ -2328,15 +2425,28 @@ function isSavedStop(stopId) { return stopFavs.some(f => f.stop === stopId); }
 // Places people go, for the 車站 tab's 我要去 box — names, not poles, because
 // "屯門轉車站" is the thing a rider knows; which pole they leave from depends
 // on where they are standing today. Max 8, newest first.
-const MAX_DESTS = 5;
+const MAX_DESTS = 8;
+// A saved destination is either a bare name (how they were stored before
+// nicknames existed) or { name, nick }. The NAME is what every search and
+// every alert match uses and is never touched by a rename; the NICK is only
+// ever shown. Keeping them apart is what lets someone call 屯門公路轉車站
+// 「返屋企」 without the app losing track of which place that is.
+function destName(d)  { return typeof d === 'string' ? d : String((d && d.name) || ''); }
+function destLabel(d) { return (d && d.nick) ? String(d.nick) : destName(d); }
+function favLabel(f)  { return (f && f.nick) ? String(f.nick) : stopName(f); }
+
 let stopDests = [];
-try { stopDests = JSON.parse(localStorage.getItem('hkfast-stopdests') || '[]').filter(d => typeof d === 'string'); } catch (e) { stopDests = []; }
+try {
+  stopDests = JSON.parse(localStorage.getItem('hkfast-stopdests') || '[]')
+    .map(d => typeof d === 'string' ? d : (d && d.name ? { name: String(d.name), nick: d.nick ? String(d.nick) : '' } : null))
+    .filter(d => d && destName(d));
+} catch (e) { stopDests = []; }
 function saveStopDests() { try { localStorage.setItem('hkfast-stopdests', JSON.stringify(stopDests)); } catch (e) {} }
-function isSavedDest(name) { return stopDests.includes(String(name || '').trim()); }
+function isSavedDest(name) { const n = String(name || '').trim(); return stopDests.some(d => destName(d) === n); }
 function toggleStopDest(name) {
   name = String(name || '').trim();
   if (!name) return false;
-  const at = stopDests.indexOf(name);
+  const at = stopDests.findIndex(d => destName(d) === name);
   if (at >= 0) { stopDests.splice(at, 1); saveStopDests(); return false; }
   if (stopDests.length >= MAX_DESTS) return null;
   stopDests.unshift(name); saveStopDests(); return true;
@@ -2483,6 +2593,24 @@ function loadFavourites() {
   if (old.length && !favStart.length && !favEnd.length) {
     favStart = old.slice(0, MAX_FAVS).map(f => ({ ...f }));
     favEnd   = old.slice(0, MAX_FAVS).map(f => ({ ...f }));
+  }
+
+  // SECOND MIGRATION. The trip-planner form these two lists belonged to is
+  // gone — the ⭐ buttons that filled them are inside a block the CSS now
+  // hides, so nothing can add to them any more and nothing can reach them.
+  // Their contents are still places the rider chose to keep, so they move to
+  // the 車站 tab's destination list, which is the one list that takes a bare
+  // name. A start favourite goes there too: the same argument the split
+  // migration above made — somewhere you leave from is nearly always
+  // somewhere you come back to, and dropping it to be tidy loses more.
+  if (favStart.length || favEnd.length) {
+    for (const fav of favEnd.concat(favStart)) {
+      const name = String(fav.label || '').trim();
+      if (name && !isSavedDest(name) && stopDests.length < MAX_DESTS) stopDests.push(name);
+    }
+    saveStopDests();
+    favStart = [];
+    favEnd   = [];
   }
 
   // Anything saved before colours existed gets one now, per list, so an
@@ -2745,6 +2873,18 @@ document.getElementById('end-save').addEventListener('click', () => {
   addFavourite('end', endPoint);
   showChosen('end-chosen', endPoint);
 });
+
+// ---- TRAFFIC ALERT STATE ----
+// Declared HERE, above the start-up calls, and not down in the alerts section
+// where the rest of that code lives. The weather bar is painted during
+// start-up and reads these; a `let` further down the file is in its temporal
+// dead zone until then, and reading one throws — `typeof` included, which is
+// why the guards that were supposed to cover this did not.
+let tdNotices = [];
+let alertFlags = { mtr: {}, bus: {} };        // line → {since}; 'route|stop' → {since, text, label}
+let currentAlerts = [];
+let alertsSeen = {};
+try { alertsSeen = JSON.parse(localStorage.getItem('hkfast-alerts-seen') || '{}'); } catch (e) { alertsSeen = {}; }
 
 loadFavourites();
 loadDepartures();
@@ -3063,67 +3203,199 @@ function minutesNow() {
   return now.getHours() * 60 + now.getMinutes();
 }
 
-// "0530" or "05:30" -> minutes since midnight. Returns null if unreadable.
-function parseClock(text) {
-  const digits = String(text).replace(/[^0-9]/g, '');
-  if (digits.length < 3) return null;
-  const padded = digits.padStart(4, '0');
-  const hours = Number(padded.slice(0, 2)), mins = Number(padded.slice(2, 4));
-  if (!isFinite(hours) || !isFinite(mins) || hours > 23 || mins > 59) return null;
-  return hours * 60 + mins;
+// ============================================================
+// THE TIMETABLE
+// ============================================================
+// Both data files carry the published service windows, so operating hours,
+// holiday hours and night hours all come off the phone with no extra request.
+// The shape is  freq["<dayMask>"]["HHMM"] = ["HHMM", "<headwaySeconds>"]  and
+// a null value in place of the array means one departure at that time with no
+// published headway.
+//
+// THE DAY MASK is the Transport Department's own GTFS service_id, passed
+// through unchanged by hk-bus-crawling. Its calendar.txt settles the layout
+// for all 511 values: bit0 Monday … bit6 Sunday. Bit 7 (128) means "and on
+// gazetted public holidays" — calendar_dates.txt ADDS those services on every
+// such date and REMOVES the ones without it. Bit 8 (256) changes nothing
+// about the calendar (a mask and mask|256 are identical rows) but it says
+// where the row came from: set means the TD feed, where the holiday bit is
+// authoritative; clear means the green-minibus API, which publishes no
+// holiday information at all and so can only ever be honest about not knowing.
+const DAY_BITS = [1, 2, 4, 8, 16, 32, 64];     // Mon..Sun
+const PH_BIT   = 128;
+const GTFS_BIT = 256;
+
+// A gazetted public holiday, which is NOT the same question as dayType().
+// dayType() answers "does the Sunday timetable apply", so it calls every
+// Sunday a holiday. Here that would withdraw the Monday-to-Friday service on
+// an ordinary Sunday and tell the rider the route was closed.
+function isPublicHoliday(date) {
+  return !!(holidays && holidays.has(todayKey(date || new Date())));
 }
 
-// Some timetables are split by kind of day. If we can find a branch matching
-// today, use only that; otherwise fall back to reading the whole thing.
-const DAY_KEYS = {
-  weekday:  ['weekday','wd','mon-fri','monfri','1'],
-  saturday: ['saturday','sat','6'],
-  holiday:  ['holiday','sun','sunday','ph','publicholiday','0']
-};
+// Which day patterns apply today.
+// state: 'day' | 'ph' | 'phUnknown' (minibus, no holiday data) | 'closed' | 'noData'
+function patternsForToday(freq) {
+  const masks = Object.keys(freq || {}).map(Number).filter(n => isFinite(n) && n > 0);
+  if (!masks.length) return { masks: [], state: 'noData' };
 
-function branchForToday(freq) {
-  if (!freq || typeof freq !== 'object') return null;
-  const wanted = DAY_KEYS[dayType()] || [];
+  const jsDay = new Date().getDay();             // 0 = Sunday
+  const todayBit = DAY_BITS[(jsDay + 6) % 7];    // Sunday -> bit6
 
-  for (const [key, value] of Object.entries(freq)) {
-    const plain = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (wanted.includes(plain) && value && typeof value === 'object') return value;
+  if (isPublicHoliday()) {
+    const ph = masks.filter(m => m & PH_BIT);
+    if (ph.length) return { masks: ph, state: 'ph' };
+    // No holiday pattern. From the TD feed that is a statement: the timetable
+    // is withdrawn today. From the minibus feed it is only silence.
+    const sameDay = masks.filter(m => m & todayBit);
+    if (masks.some(m => m & GTFS_BIT)) return { masks: [], state: 'closedPh' };
+    return sameDay.length ? { masks: sameDay, state: 'phUnknown' } : { masks: [], state: 'closedPh' };
   }
-  return null;
+
+  // Not running today, and it is NOT a holiday — the route simply does not
+  // serve this day of the week. Saying "suspended for the public holiday" on
+  // an ordinary Monday would be a plain untruth.
+  const today = masks.filter(m => m & todayBit);
+  return today.length ? { masks: today, state: 'day' } : { masks: [], state: 'closed' };
 }
 
-// Pull every [start, end] window we can find, whatever shape the data is in.
-function serviceWindows(freq) {
-  if (!freq || typeof freq !== 'object') return [];
-  freq = branchForToday(freq) || freq;
-  const windows = [];
+// "2430" -> 1470. Four digits, and the hour may run past midnight: KMB,
+// Citybus and NLB keep counting (the largest value in the files is "3000"),
+// so an hour of 24 to 30 is data, not a typo. The old reader rejected
+// anything above 23 and threw away one entry in seven.
+function svcMinutes(hhmm) {
+  const digits = String(hhmm).replace(/[^0-9]/g, '');
+  if (digits.length !== 4) return null;
+  const h = Number(digits.slice(0, 2)), m = Number(digits.slice(2, 4));
+  if (!isFinite(h) || !isFinite(m) || m > 59 || h > 30) return null;
+  return h * 60 + m;
+}
 
-  const walk = node => {
-    if (!node || typeof node !== 'object') return;
-    for (const [key, value] of Object.entries(node)) {
-      const start = parseClock(key);
-      // A timetable entry looks like "0530": ["2350", 600]
-      if (start !== null && Array.isArray(value) && value.length >= 1) {
-        const finish = parseClock(value[0]);
-        if (finish !== null) windows.push([start, finish]);
-      } else {
-        walk(value);
-      }
+// One entry -> { a, b, hw } in minutes, b possibly past 1440.
+function svcWindow(startRaw, value) {
+  const a = svcMinutes(startRaw);
+  if (a === null) return null;
+  let b = a, hw = null;
+  if (Array.isArray(value)) {
+    const end = svcMinutes(value[0]);
+    if (end !== null) {
+      b = end;
+      // The minibus feed uses the OPPOSITE convention: it wraps round rather
+      // than counting on, so an end before the start means "tomorrow morning".
+      // Trusted only as far as 07:00 — two upstream records (62A, 68S) wrap to
+      // late morning and are simply wrong, which their sister directions prove.
+      if (b < a) b = (b <= 420) ? b + 1440 : a;
     }
+    const secs = Number(value[1]);
+    if (isFinite(secs) && secs > 0) hw = Math.round(secs / 60);
+  }
+  if (b - a > 1439) b = a + 1439;
+  return { a, b, hw };
+}
+
+// Paint every window onto a 24-hour circle and read back the maximal arcs.
+// The circle is what makes night routes work: N281 writes one continuous run
+// as "2350"->"2520" AND "0120"->"0510", and only a circle joins those into a
+// single 23:50–05:10. It also folds 60X's dozens of chained micro-windows
+// into the one span a rider actually wants, with no chaining logic.
+function svcArcs(windows) {
+  if (!windows.length) return [];
+  const cov = new Uint8Array(1440);
+  for (const w of windows)
+    for (let t = w.a; t <= w.b; t++) cov[((t % 1440) + 1440) % 1440] = 1;
+
+  let full = true;
+  for (let i = 0; i < 1440; i++) if (!cov[i]) { full = false; break; }
+  if (full) return [{ from: 0, to: 1439, len: 1440 }];
+
+  let start = -1;
+  for (let i = 0; i < 1440; i++) if (cov[i] && !cov[(i + 1439) % 1440]) { start = i; break; }
+  const out = [];
+  let i = start;
+  for (let guard = 0; guard < 1440; guard++) {
+    let j = i;
+    while (cov[(j + 1) % 1440] && j - i < 1439) j++;
+    out.push({ from: i % 1440, to: j % 1440, len: j - i + 1 });
+    let next = (j + 1) % 1440;
+    while (!cov[next] && next !== start) next = (next + 1) % 1440;
+    if (next === start) break;
+    i = next;
+  }
+  return out;
+}
+
+// Nocturnal means EVERY minute of the arc falls between 22:00 and 06:00 —
+// not merely that it ends after midnight, which is true of most ordinary
+// routes and would have labelled 60X a night bus.
+function arcIsNight(arc) {
+  const end = arc.from + arc.len - 1;
+  return (arc.from >= 1320 && end <= 1440 + 360) || (end <= 360);
+}
+
+function svcClock(min) {
+  const m = ((min % 1440) + 1440) % 1440;
+  return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+}
+
+// Everything the screen needs about one set of day patterns.
+function svcSummary(freq, masks) {
+  const wins = [];
+  for (const mask of masks)
+    for (const [start, value] of Object.entries((freq && freq[mask]) || {})) {
+      const w = svcWindow(start, value);
+      if (w) wins.push(w);
+    }
+  if (!wins.length) return null;
+  wins.sort((x, y) => x.a - y.a);
+  const arcs = svcArcs(wins);
+  const hws = wins.map(w => w.hw).filter(Boolean);
+  const singles = wins.filter(w => w.hw === null && w.a === w.b).map(w => w.a).sort((a, b) => a - b);
+  return {
+    arcs,
+    first: arcs.length ? arcs[0].from : null,
+    last:  arcs.length ? (arcs[arcs.length - 1].from + arcs[arcs.length - 1].len - 1) : null,
+    hwMin: hws.length ? Math.min(...hws) : null,
+    hwMax: hws.length ? Math.max(...hws) : null,
+    singles,                                   // only meaningful when hws is empty
+    allDay: arcs.length === 1 && arcs[0].len >= 1440,
+    night: arcs.length > 0 && arcs.every(arcIsNight)
   };
-  walk(freq);
-  return windows;
+}
+
+// The mask as words. Traditional in storage; sc() converts at render time.
+const DAY_TC = ['一', '二', '三', '四', '五', '六', '日'];
+const DAY_EN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function maskLabel(mask) {
+  const zh = lang === 'zh';
+  const days = [];
+  for (let i = 0; i < 7; i++) if (mask & DAY_BITS[i]) days.push(i);
+  const ph = !!(mask & PH_BIT);
+  if (!days.length) return ph ? T('dayPhOnly') : '';
+  // A run of consecutive days reads as a range, which is how a timetable
+  // board writes it: 星期一至五, not 星期一、二、三、四、五.
+  const run = days.length > 1 && days[days.length - 1] - days[0] === days.length - 1;
+  const name = i => zh ? DAY_TC[i] : DAY_EN[i];
+  let out = zh ? '星期' : '';
+  out += run ? name(days[0]) + (zh ? '至' : '–') + name(days[days.length - 1])
+             : days.map(name).join(zh ? '、' : ', ');
+  if (ph) out += zh ? '及公眾假期' : ' & public holidays';
+  return out;
 }
 
 function isRunningNow(routeKey) {
   const nowMins = minutesNow();
   const info = serviceInfo.get(routeKey);
-  const windows = info ? serviceWindows(info.freq) : [];
+  const today = info ? patternsForToday(info.freq) : { masks: [], state: 'noData' };
 
-  if (windows.length > 0) {
-    return windows.some(([start, finish]) => finish >= start
-      ? nowMins >= start && nowMins <= finish      // ordinary daytime window
-      : nowMins >= start || nowMins <= finish);    // window crossing midnight
+  if (today.state === 'closed' || today.state === 'closedPh') return false;
+  const summary = today.masks.length ? svcSummary(info.freq, today.masks) : null;
+
+  if (summary && summary.arcs.length) {
+    return summary.arcs.some(arc => {
+      const end = arc.from + arc.len - 1;
+      return (nowMins >= arc.from && nowMins <= end) ||
+             (end >= 1440 && nowMins + 1440 <= end);   // arc running past midnight
+    });
   }
 
   // No readable timetable — fall back to the naming convention.
@@ -4499,7 +4771,7 @@ function paintBottomBar() {
   const labels = { bus: withCount(T('tabBus'), busPicks.length),
                    mtr: withCount(T('tabMtr'), railPicks.length),
                    fav: T('tabFav') + ' (' +
-                        (favStart.length + favEnd.length + departures.length + trainFavs.length + stopFavs.length) + ')',
+                        (stopFavs.length + stopDests.length + departures.length + trainFavs.length) + ')',
                    stop: T('tabStop'), set: T('tabSet') };
 
   for (const button of bar.querySelectorAll('.bnav')) {
@@ -4862,18 +5134,20 @@ function whichLinesServe(code) {
 
 // A saved place counts as a station when it sits on top of one. Storing the
 // code at save time would be neater, but this also picks up stations saved
-// before the app knew about them.
+// before the app knew about them. Reads the saved STARTING STOPS, which is
+// where saved places live now — 太子站 saved as a bus stop should offer the
+// train from 太子 too, because to the rider it is one place.
 function savedStations() {
   if (!mtrData) return [];
   const out = [];
-  for (const fav of allFavourites()) {
+  for (const fav of stopFavs) {
     let best = null, bestMetres = Infinity;
     for (const [code, s] of Object.entries(mtrData.stations)) {
-      const m = metresBetween(fav.lat, fav.lng, s[2], s[3]);
+      const m = metresBetween(fav.lat, fav.long, s[2], s[3]);
       if (m < bestMetres) { bestMetres = m; best = code; }
     }
     if (best && bestMetres <= 200 && !out.some(x => x.code === best))
-      out.push({ code: best, label: fav.label });
+      out.push({ code: best, label: stopName(fav) });
   }
   return out.slice(0, 3);
 }
@@ -5056,6 +5330,61 @@ async function resolveNearestStop(dep) {
   return best ? best.stop : null;
 }
 
+// RENAMING A SAVED PLACE.
+// Only the LABEL changes. The stop id, the real stop name and the text every
+// search and traffic-alert match runs on are left exactly as they were, so
+// calling a stop 「返屋企」 can never stop the app finding it. Clearing the box
+// puts the real name back.
+function startRename(row, list, index, isStart, real, label) {
+  const wrap = document.createElement('div');
+  wrap.className = 'fprename';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = label;
+  input.maxLength = 24;
+  input.setAttribute('aria-label', T('renameTitle'));
+  input.placeholder = real;
+
+  const save = document.createElement('button');
+  save.className = 'fpsave';
+  save.textContent = T('renameSave');
+
+  const cancel = document.createElement('button');
+  cancel.className = 'fpcancel';
+  cancel.textContent = '✕';
+  cancel.title = T('cancel');
+  cancel.setAttribute('aria-label', T('cancel'));
+
+  const commit = () => {
+    const nick = String(input.value || '').trim().slice(0, 24);
+    // The rider typed the real name back, or emptied the box: drop the
+    // nickname rather than storing a copy of what we already know.
+    const keep = (nick && nick !== real) ? nick : '';
+    if (isStart) {
+      list[index] = Object.assign({}, list[index], { nick: keep });
+      saveStopFavs();
+    } else {
+      list[index] = keep ? { name: real, nick: keep } : real;
+      saveStopDests();
+    }
+    renderFavouriteList();
+    status.textContent = keep ? T('renameDone').replace('{n}', keep) : T('renameCleared').replace('{n}', real);
+  };
+
+  save.addEventListener('click', commit);
+  cancel.addEventListener('click', renderFavouriteList);
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); commit(); }
+    if (event.key === 'Escape') renderFavouriteList();
+  });
+
+  wrap.appendChild(input); wrap.appendChild(save); wrap.appendChild(cancel);
+  row.replaceWith(wrap);
+  input.focus();
+  input.select();
+}
+
 function renderFavouriteList() {
   const view = document.getElementById('favview');
   view.innerHTML = '';
@@ -5077,123 +5406,107 @@ function renderFavouriteList() {
     return div;
   };
 
-  const leaveFavourites = () => {
-    document.getElementById('panel').classList.remove('favmode');
-    document.getElementById('favview').style.display = 'none';
-    activeMode = 'bus';
-    paintBottomBar();
-  };
-
-  // ---- THE TRIP PICKER ----
-  // Departures on top, arrivals underneath, each a full-width list of up to
-  // eight. Side-by-side columns had to fit two names across a phone, so long
-  // stop names were cut in half; down the page each one gets the whole width.
-  //
-  // Once both ends are known there is nothing left to ask, so search.
-  // Two taps from opening this screen to seeing the answer.
-  function afterPick() {
-    renderFavouriteList();
-    if (startPoint && endPoint) {
-      leaveFavourites();
-      setResultsMode(false);
-      findBuses();
-    }
-  }
-
-  const section = (which, icon, title, colour) => {
-    const list = favList(which);
-    heading(icon, title, list.length + '/' + MAX_FAVS);
+  // ---- THE TWO PLACE LISTS ----
+  // Eight starting stops and eight destinations — and they are THE SAME two
+  // lists the 車站 tab fills, not a second copy. There used to be a separate
+  // pair here belonging to the old trip-planner form, so a place saved on the
+  // 車站 tab was invisible on this screen and this screen sat permanently at
+  // 0/8. The planner's form is hidden for good and its ⭐ buttons with it, so
+  // there is nothing left for a second pair to hold. One list, saved once,
+  // shown on both screens.
+  const placeSection = kind => {
+    const isStart = kind === 'start';
+    const list = isStart ? stopFavs : stopDests;
+    const cap  = isStart ? MAX_STOPS : MAX_DESTS;
+    heading(isStart ? '🟢' : '🔴', T(isStart ? 'favFrom' : 'favTo'),
+            list.length + '/' + cap);
 
     const box = document.createElement('div');
-    box.className = 'triplist';
     view.appendChild(box);
 
-    // "My location" only makes sense as a starting point.
-    if (which === 'start') {
-      const here = document.createElement('button');
-      here.className = 'tripitem here';
-      here.textContent = '📍 ' + T('myLocationLabel');
-      here.addEventListener('click', () => {
-        if (!navigator.geolocation) { status.textContent = T('noGeo'); return; }
-        here.disabled = true; status.textContent = T('findingYou');
-        navigator.geolocation.getCurrentPosition(
-          position => {
-            setPoint('start', position.coords.latitude, position.coords.longitude,
-                     T('myLocationLabel'));
-            here.disabled = false;
-            afterPick();
-          },
-          error => { here.disabled = false; status.textContent = T('locationFailed'); },
-          { enableHighAccuracy:true, timeout:10000 });
-      });
-      box.appendChild(here);
+    if (list.length === 0) {
+      appendHTML(box, '<div class="favempty">' +
+                      esc(T(isStart ? 'noFavStart' : 'noFavEnd')) + '</div>');
+      return;
     }
 
-    list.forEach((fav, index) => {
-      // A row, not one button inside another: nesting them would fire both
-      // handlers on one tap, so deleting would also pick the place.
+    list.forEach((entry, index) => {
+      // A saved start is a whole pole record; a saved destination is just the
+      // name, because which pole you leave from depends on where you stand.
+      // Either may carry a nickname, and the nickname is all the rider sees.
+      const real  = isStart ? stopName(entry) : destName(entry);
+      const label = isStart ? favLabel(entry) : destLabel(entry);
+      const named = label !== real;              // renamed by the rider
+
       const row = document.createElement('div');
-      row.className = 'triprow';
+      row.className = 'favplace';
 
-      const item = document.createElement('button');
-      item.className = 'tripitem';
-      item.style.borderLeftColor = FAV_COLOUR_HEX[(fav.c || 1) - 1];
-      const chosen = (which === 'start' ? startPoint : endPoint);
-      if (chosen && chosen.label === fav.label) item.classList.add('on');
-      item.textContent = fav.label;
-      item.title = fav.label;
-      item.addEventListener('click', () => {
-        setPoint(which, fav.lat, fav.lng, fav.label);
-        afterPick();
-      });
+      // The whole row is the button. A separate "open" bar underneath read
+      // more clearly but doubled the height, and sixteen of those is a screen
+      // nobody reaches the bottom of.
+      const open = document.createElement('button');
+      open.className = 'fpopen';
+      const code = isStart ? poleCodeOf(entry) : '';
+      // innerHTML, not appendHTML: that helper wraps what it is given in a
+      // div, which would leave the button one flex child instead of three and
+      // strand the arrow beside the name rather than out at the right edge.
+      // A renamed stop keeps its real name underneath in small type: 「返屋企」
+      // is what you remember, 屯門公路轉車站 is what is painted on the pole, and
+      // at the roadside you need both.
+      // Two lines, because the row now carries a rename button as well as a
+      // delete one and a name squeezed between four things is unreadable on a
+      // 375px phone. The rider's own word gets the whole width; the pole code
+      // and the facing sit under it, with the real name in front of them when
+      // the place has been renamed — at the roadside you need both.
+      // Pole code and facing FIRST, the real name after it. Both are on one
+      // line and the line will run out of room on a 375px phone, so what
+      // survives the ellipsis has to be the part that gets you to the right
+      // kerb — TM744 往東 — not the name you have already replaced.
+      const dir = isStart ? poleDirHtml(entry.stop) : '';
+      const meta = (code ? '<span class="polecode">' + esc(code) + '</span>' : '') + dir +
+                   (named ? ((code || dir) ? ' · ' : '') + esc(real) : '');
+      open.innerHTML = '<span class="fpbody">' +
+                         '<span class="fpname">' + esc(label) + '</span>' +
+                         (meta ? '<span class="fpmeta">' + meta + '</span>' : '') +
+                       '</span>' +
+                       '<span class="fparrow">›</span>';
+      open.title = T(isStart ? 'favStopOpen' : 'favDestOpen');
+      // The stored string, never the one on screen: in 简体 the two differ and
+      // the search that follows has to match the data.
+      open.addEventListener('click', () =>
+        isStart ? stopOpenSaved(entry) : stopOpenDest(destName(entry)));
+      row.appendChild(open);
 
-      // Copy to the other list. A place saved as a departure is very often
-      // somewhere you also come back to, and re-typing it on the other side
-      // was the obvious cost of splitting the lists in two.
-      const other = which === 'start' ? 'end' : 'start';
-      const already = favList(other).some(f => f.label === fav.label);
-      const full = favList(other).length >= MAX_FAVS;
-      const copy = document.createElement('button');
-      copy.className = 'tripcopy' + (already ? ' done' : '');
-      copy.textContent = which === 'start' ? '→🔴' : '→🟢';
-      copy.disabled = already || full;
-      copy.title = already ? T('favAlreadyOther')
-                 : full   ? T('favOtherFull')
-                 : T(which === 'start' ? 'favAlsoArrival' : 'favAlsoDeparture');
-      copy.setAttribute('aria-label', copy.title);
-      copy.addEventListener('click', () => {
-        addFavourite(other, fav);
-        renderFavouriteList();
-      });
+      // RENAME. The row turns into a text box in place rather than opening a
+      // dialog: one fewer screen to understand, and the name being changed
+      // stays visible while it is typed.
+      const rename = document.createElement('button');
+      rename.className = 'fpedit';
+      rename.textContent = '✎';
+      rename.title = T('renameTitle');
+      rename.setAttribute('aria-label', T('renameTitle') + ' ' + label);
+      rename.addEventListener('click', () => startRename(row, list, index, isStart, real, label));
+      row.appendChild(rename);
 
-      // Deleting sits on the row itself. With two lists, a place removed from
-      // one must stay in the other, and a single shared "manage" button could
-      // not say which side it was about.
       const del = document.createElement('button');
-      del.className = 'tripdel';
+      del.className = 'fpdel';
       del.textContent = '✕';
-      del.setAttribute('aria-label', 'Remove ' + fav.label);
+      del.setAttribute('aria-label', 'Remove ' + name);
+      del.setAttribute('aria-label', T('removeLabel') + ' ' + label);
       del.addEventListener('click', () => {
-        removeFavourite(which, index);
+        if (isStart) { stopFavs.splice(index, 1); saveStopFavs(); }
+        else         { stopDests.splice(index, 1); saveStopDests(); }
         renderFavouriteList();
+        paintBottomBar();
       });
-
-      row.appendChild(item);
-      row.appendChild(copy);
       row.appendChild(del);
+
       box.appendChild(row);
     });
-
-    if (list.length === 0) {
-      const empty = document.createElement('div');
-      empty.className = 'favempty';
-      empty.textContent = T(which === 'start' ? 'noFavStart' : 'noFavEnd');
-      box.appendChild(empty);
-    }
   };
 
-  section('start', '🟢', T('favFrom'), '#166534');
-  section('end',   '🔴', T('favTo'),   '#991b1b');
+  placeSection('start');
+  placeSection('end');
 
   // ---- SAVED DEPARTURES: no tap at all ----
   const depHead = heading('🚌', T('favRoutes'), departures.length + '/' + MAX_DEPARTURES);
@@ -5291,32 +5604,8 @@ function renderFavouriteList() {
     trainFavs.forEach((t, index) => loadTrainFavEta(t, index));
   }
 
-  // ---- SAVED STOPS ----
-  heading('🚏', T('favStops'), stopFavs.length + '/' + MAX_STOPS);
-  const stopsBox = document.createElement('div');
-  view.appendChild(stopsBox);
-  if (stopFavs.length === 0) {
-    appendHTML(stopsBox, '<div class="favempty">' + T('noStopsLong') + '</div>');
-  }
-  stopFavs.forEach((sf, index) => {
-    const row = document.createElement('div');
-    row.className = 'deprow';
-    const code = poleCodeOf(sf);
-    row.innerHTML =
-      '<div class="depmain"><span class="deproute">' + esc(stopName(sf)) + '</span>' +
-        (code ? '<span class="polecode">' + esc(code) + '</span>' : '') + '</div>';
-    const del = document.createElement('button');
-    del.className = 'go-del depdel'; del.textContent = '✕';
-    del.setAttribute('aria-label', 'Remove ' + stopName(sf));
-    del.addEventListener('click', () => { stopFavs.splice(index, 1); saveStopFavs(); renderFavouriteList(); });
-    row.appendChild(del);
-    const open = document.createElement('button');
-    open.className = 'depopen';
-    open.textContent = '🚏 ' + T('favStopOpen');
-    open.addEventListener('click', () => stopOpenSaved(sf));
-    row.appendChild(open);
-    stopsBox.appendChild(row);
-  });
+  // The saved stops that used to be repeated here are now the 常用起點
+  // list at the top of this screen — the same eight, shown once.
 }
 
 // Open the whole line for a saved bus. The saved entry already knows the
@@ -5414,6 +5703,80 @@ document.getElementById('bottombar').addEventListener('click', event => {
   const button = event.target.closest('.bnav');
   if (button && !button.disabled) showMode(button.dataset.nav);
 });
+
+// ============================================================
+// SLIDING BETWEEN SECTIONS
+// ============================================================
+// Left to right moves one section back, right to left moves one on — the
+// same order as the buttons along the top.
+//
+// WHY IT ONLY WORKS FROM THE EDGES. The middle of this app is full of things
+// that already slide sideways: the MTR station strip, the rows of saved
+// buses, the destination chips. A swipe anywhere on the screen would fight
+// every one of them, and the loser would usually be the one the rider meant.
+// The outer 44px of each side belongs to no such control, so a slide that
+// STARTS there is unambiguous. It also has to travel 60px and be clearly more
+// sideways than up-down before it counts — an older thumb resting on the edge
+// of a phone while scrolling must never be able to change the screen by
+// accident.
+const TAB_ORDER  = ['stop', 'bus', 'mtr', 'fav', 'set'];
+const SWIPE_EDGE = 44;   // px from either side a slide must begin in
+const SWIPE_MIN  = 60;   // px it must travel before the section changes
+const SWIPE_SLOP = 40;   // px of up-down movement that abandons it
+
+let swipe = null;
+
+function swipeToTab(step) {
+  const at = TAB_ORDER.indexOf(activeMode);
+  const to = TAB_ORDER[(at < 0 ? 0 : at) + step];
+  if (!to) return;                       // already at one end: nothing to do
+  showMode(to);
+  // A section that simply appears leaves the rider wondering whether they
+  // pressed something. The panel slides in from the side it came from, once,
+  // for a fifth of a second.
+  const panel = document.getElementById('panel');
+  panel.classList.remove('slidefromleft', 'slidefromright');
+  void panel.offsetWidth;                // restart the animation
+  panel.classList.add(step > 0 ? 'slidefromright' : 'slidefromleft');
+}
+
+document.addEventListener('touchstart', event => {
+  swipe = null;
+  if (event.touches.length !== 1) return;
+  // Not while a sheet is up, and not while a search box has the keyboard.
+  if (document.querySelector('#dirsheet.open, #alertsheet.open')) return;
+  if (event.target.closest('input, textarea, select')) return;
+  const touch = event.touches[0];
+  const width = window.innerWidth;
+  const side  = touch.clientX <= SWIPE_EDGE ? 'left'
+              : touch.clientX >= width - SWIPE_EDGE ? 'right' : null;
+  if (!side) return;
+  swipe = { x: touch.clientX, y: touch.clientY, side, decided: false };
+}, { passive: true });
+
+document.addEventListener('touchmove', event => {
+  if (!swipe || event.touches.length !== 1) return;
+  const touch = event.touches[0];
+  const dx = touch.clientX - swipe.x;
+  const dy = touch.clientY - swipe.y;
+  if (Math.abs(dy) > SWIPE_SLOP && Math.abs(dy) > Math.abs(dx)) { swipe = null; return; }
+  if (Math.abs(dx) < SWIPE_MIN) return;
+  // Only the direction that leads away from the edge counts. A right-to-left
+  // drag beginning on the LEFT edge is somebody swiping back into the screen,
+  // not asking for the next section.
+  const step = swipe.side === 'left' ? -1 : 1;
+  if ((step === -1 && dx < 0) || (step === 1 && dx > 0)) { swipe = null; return; }
+  if (!swipe.decided) {
+    swipe.decided = true;
+    // Stops the browser treating the rest of this drag as a back-gesture or
+    // a scroll. Only possible because this listener is not passive.
+    if (event.cancelable) event.preventDefault();
+    swipeToTab(step);
+  }
+}, { passive: false });
+
+document.addEventListener('touchend', () => { swipe = null; }, { passive: true });
+document.addEventListener('touchcancel', () => { swipe = null; }, { passive: true });
 
 let chosenNumber = 1;
 
@@ -5700,8 +6063,8 @@ async function loadTrainTimes(pick, line) {
     if (trains.length === 0) throw new Error('no trains listed');
 
     const minutes = trains.slice(0, 3)
-      .map(t => Number(t.ttnt))
-      .filter(n => isFinite(n) && n >= 0)
+      .map(t => usableWait(t.ttnt))
+      .filter(n => n !== null)
       .map(n => n === 0 ? T('due') : n + ' ' + T('min'));
     if (minutes.length === 0) throw new Error('no usable times');
 
@@ -5967,6 +6330,22 @@ function formatArrivals(entries, opts) {
         ' title="' + T('saveDeparture') + '">' + (saved ? '★' : '☆') + '</button>'
       : '';
 
+    // WHICH POLE THIS BUS LEAVES FROM.
+    // Only when the screen is showing several. A station like 太子站,旺角花墟
+    // is eleven poles on both sides of Prince Edward Road, and merging them
+    // into one card is only honest if the row then says where to stand. The
+    // facing comes from the same measurement the search cards use.
+    let poleTag = '';
+    if (opts && opts.multiPole && sample.stop) {
+      const at = findStopById(sample.stop);
+      const code = at ? poleCodeOf(at) : '';
+      const face = poleFacing(sample.stop);
+      if (code || face >= 0) {
+        poleTag = '<span class="eta-pole">' + (code ? esc(code) : '') +
+                  (face >= 0 ? (code ? ' ' : '') + esc(T(FACE_KEYS[face])) : '') + '</span>';
+      }
+    }
+
     // With a place set on the 車站 tab: how many stops, and roughly when the
     // first bus gets there. MINUTES_PER_STOP is the planner's own rough figure.
     let arriveTag = '';
@@ -5979,7 +6358,7 @@ function formatArrivals(entries, opts) {
     const sortKey = stopsAway !== undefined ? group.minutes[0] + stopsAway * MINUTES_PER_STOP : group.minutes[0];
     items.push({ sortKey, html:
       '<div class="eta-row">' + star + '<span class="eta-route">' + route + '</span>' +
-      '<span class="eta-dest">' + dest + '</span>' + fareTag +
+      '<span class="eta-dest">' + dest + '</span>' + fareTag + poleTag +
       '<span class="eta-times">' +
       group.minutes.slice(0,3).map(m => m === 0 ? T('due') : m + T('min')).join(', ') +
       '</span>' + arriveTag + '</div>' });
@@ -6454,6 +6833,113 @@ function routesServing(stopId) {
   servingMemo.set(memoKey, out);
   return out;
 }
+// ============================================================
+// WHICH WAY THE BUSES LEAVE THIS POLE
+// ============================================================
+// 屯門公路轉車站 has two banks 536 m apart with the same name, and standing on
+// the wrong one means watching your bus go past on the far carriageway.
+// Nothing in the feed says which side you are on: not one of the 6,739 KMB
+// stop names contains 往, 向 or 方向, and the pole code encodes nothing. What
+// the feed DOES carry is every route's stop order, so the facing can be
+// measured instead of read.
+//
+// 800 m, not "the next stop": off both banks here the next stop is called
+// 大欖涌, and the first hop from the northbound bank climbs a slip road NORTH
+// before the bus turns west. One hop says 北. A kilometre says 西北, which is
+// where the bus is actually going.
+const FACE_FAR_M  = 800;    // look this far along the route before taking a bearing
+const FACE_MIN_M  = 150;    // a tight loop that never gets that far: use the farthest stop
+const FACE_AGREE  = 0.70;   // how much the routes must agree before we say anything
+
+function bearingBetween(lat1, lng1, lat2, lng2) {
+  const toRad = d => d * Math.PI / 180;
+  const dLng = toRad(lng2 - lng1);
+  const y = Math.sin(dLng) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+            Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLng);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+// One pole's routes as direction vectors. Returned rather than reduced so a
+// whole station's bays can be pooled into ONE average — averaging the bays'
+// separate answers instead blanks the 屯門公路轉車站 card, because two of its
+// thirteen eastbound bays measure a few degrees off the other eleven.
+function poleVectors(stopId) {
+  const out = { sin: 0, cos: 0, n: 0, octants: [] };
+  const me = lookupStop(stopId);
+  if (!me) return out;
+  const lat = Number(me.lat), lng = Number(me.long);
+  if (!isFinite(lat) || !isFinite(lng)) return out;
+
+  for (const r of routesServing(stopId)) {
+    let best = null, bestSeq = Infinity, far = null, farM = 0;
+    for (const e of (routeIndex.get(r.key) || [])) {
+      if (e.seq <= r.seq) continue;                       // only what is ahead of us
+      const s = lookupStop(e.stopId); if (!s) continue;
+      const m = metresBetween(lat, lng, Number(s.lat), Number(s.long));
+      // Track the sequence, not the stop: a stop record carries no .seq, and
+      // comparing against one silently takes the first far stop in array order.
+      if (m >= FACE_FAR_M && e.seq < bestSeq) { best = s; bestSeq = e.seq; }
+      if (m > farM) { farM = m; far = s; }
+    }
+    const pick = best || (farM >= FACE_MIN_M ? far : null);
+    if (!pick) continue;                    // the route ends here, or loops back to it
+    const deg = bearingBetween(lat, lng, Number(pick.lat), Number(pick.long));
+    const rad = deg * Math.PI / 180;
+    out.sin += Math.sin(rad); out.cos += Math.cos(rad); out.n++;
+    out.octants.push(Math.round(deg / 45) % 8);
+  }
+  return out;
+}
+
+// Vectors -> one compass point, or -1 for "say nothing".
+// Two gates, and both matter. The first is agreement: a pole whose routes fan
+// out in every direction has no single facing, and R below 0.70 says so. The
+// second is that the answer must be a direction some real bus actually takes
+// — without it a pole served by routes at 337° and 37° averages to 北 (16°),
+// which is a way no bus leaves, and 往北 would walk the rider to the wrong deck.
+function facingOf(v) {
+  if (!v.n) return -1;
+  if (Math.sqrt(v.sin * v.sin + v.cos * v.cos) / v.n < FACE_AGREE) return -1;
+  const mean = (Math.atan2(v.sin, v.cos) * 180 / Math.PI + 360) % 360;
+  const octant = Math.round(mean / 45) % 8;
+  return v.octants.includes(octant) ? octant : -1;
+}
+
+// Memoised on the STOP DATA, not just the route index. The two arrive from
+// different places at different times, and a pole asked before its
+// coordinates land has no facing — caching that miss would freeze it blank
+// for the rest of the session. routeTerminus guards the same way.
+const facingMemo = new Map(); let facingMemoStamp = null;
+function poleFacing(stopId) {
+  if (!stopIndex) return -1;
+  const stamp = dataStamp();
+  if (facingMemoStamp !== stamp) { facingMemo.clear(); facingMemoStamp = stamp; }
+  const hit = facingMemo.get(stopId);
+  if (hit !== undefined) return hit;
+  const out = facingOf(poleVectors(stopId));
+  if (out >= 0) facingMemo.set(stopId, out);   // a miss may just be stops not loaded yet
+  return out;
+}
+
+const FACE_KEYS = ['faceN', 'faceNE', 'faceE', 'faceSE', 'faceS', 'faceSW', 'faceW', 'faceNW'];
+function faceHtml(index) {
+  return index < 0 ? '' : ' <span class="poledir">' + esc(T(FACE_KEYS[index])) + '</span>';
+}
+function poleDirHtml(stopId) { return faceHtml(poleFacing(stopId)); }
+
+// A whole station's bays pooled into one answer.
+function groupDirHtml(ids) {
+  if (!stopIndex || !ids || !ids.length) return '';
+  const all = { sin: 0, cos: 0, n: 0, octants: [] };
+  for (const id of ids) {
+    const v = poleVectors(id);
+    all.sin += v.sin; all.cos += v.cos; all.n += v.n;
+    for (const o of v.octants) all.octants.push(o);
+  }
+  return faceHtml(facingOf(all));
+}
+
 function poleRoutesLine(stopId, max, destIds) {
   let items;
   if (destIds && destIds.size) {
@@ -6683,6 +7169,19 @@ function stopOpenSaved(sf) {
   renderStopView(); stopLoadRows();
 }
 
+// One tap on a saved destination is the 車站 tab with 我要去 already filled in
+// and the picker open, so the next tap is the stop you are standing at. No
+// stop is chosen here on purpose: which pole you leave from depends on where
+// you are today, which is the whole reason a destination is stored as a name.
+function stopOpenDest(name) {
+  name = String(name || '').trim();
+  stopState = Object.assign(freshStopState(), { locateTried: stopState.locateTried,
+                                                destQuery: name, destPicked: true,
+                                                indexing: stopState.indexing });
+  if (activeMode !== 'stop') { showMode('stop'); return; }
+  renderStopView();
+}
+
 // Live rows for one pole: an array, or null when its company has no feed.
 async function fetchPoleRows(stop) {
   const co = stopCompany(stop.stop);
@@ -6765,6 +7264,7 @@ function stopPickerParts() {
     const chip = group.length > 1 ? T('stopBays').replace('{n}', group.length) : poleCodeOf(stop);
     return '<button data-stop-id="' + esc(stop.stop) + '"><span class="pickmain">📍 ' + esc(stopName(stop)) +
       (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
+      groupDirHtml(group.map(g => g.stop)) +
       poleRoutesLine(group.map(g => g.stop), 4, filtering ? destIds : null) + '</span>' +
       (metres != null ? '<span class="mtrdist">' + Math.round(metres) + ' m</span>' : '') + '</button>';
   };
@@ -6798,7 +7298,9 @@ function stopPickerParts() {
   if (stopDests.length) {
     // One tap sets the place; tapping the lit one again clears it.
     rest += '<div class="mtrsub">' + T('stopDestSaved') + '</div><div class="destchips">' +
-      stopDests.map(d => '<button class="destchip' + (d === destTyped ? ' on' : '') + '" data-stop-act="dest" data-name="' + esc(d) + '">' + (d === destTyped ? '★ ' : '') + esc(d) + '</button>').join('') +
+      stopDests.map(d => { const n = destName(d), on = n === destTyped;
+        return '<button class="destchip' + (on ? ' on' : '') + '" data-stop-act="dest" data-name="' + esc(n) + '">' +
+               (on ? '★ ' : '') + esc(destLabel(d)) + '</button>'; }).join('') +
       '</div>';
   }
   // The starting stop: type it, or tap one saved. The nearest poles come
@@ -6810,8 +7312,9 @@ function stopPickerParts() {
   const savedShown = stopFavs.slice(0, MAX_STOPS);   // always shown — they are yours, whatever the place
   if (savedShown.length) {
     rest += '<div class="mtrsub">' + T('stopSavedPicks') + '</div><div class="destchips">' +
-      savedShown.map(f => '<button class="destchip" data-stop-act="fav" data-index="' + stopFavs.indexOf(f) + '">📍 ' + esc(stopName(f)) +
-        (poleCodeOf(f) ? ' <small>' + esc(poleCodeOf(f)) + '</small>' : '') + '</button>').join('') + '</div>';
+      savedShown.map(f => '<button class="destchip" data-stop-act="fav" data-index="' + stopFavs.indexOf(f) + '">📍 ' + esc(favLabel(f)) +
+        (poleCodeOf(f) ? ' <small>' + esc(poleCodeOf(f)) + '</small>' : '') +
+        poleDirHtml(f.stop) + '</button>').join('') + '</div>';
   }
   if (st.destQuery && destIds && !destIds.size)
     rest += '<div class="favempty">' + T('stopDestNoName').replace('{d}', esc(st.destQuery)) + '</div>';
@@ -6872,6 +7375,7 @@ function renderStopView() {
   const chip = group.length > 1 ? T('stopBays').replace('{n}', group.length) : code;
   html += '<div class="mtrsta"><div class="mtrname">🚏 ' + esc(stopName(stop)) +
           (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
+          groupDirHtml(group.map(x => x.stop)) +
           (here !== null ? '<small>' + T('mtrAway').replace('{m}', here) + '</small>' : '') + '</div>' +
           // Save / unsave is one small star beside 更改 — the full-width
           // 已收藏 bar it replaces was a whole line saying something the
@@ -6927,7 +7431,9 @@ function stopRowsHtml() {
     } else {
       html += '<div class="rshint">' + T('stopTapRoute') + '</div>';
     }
-    html += formatArrivals(rows, arrive ? { arrive, destName: st.destFilter } : null);
+    const multiPole = groupIds.length > 1;
+    html += formatArrivals(rows, (arrive || multiPole)
+      ? { arrive, destName: st.destFilter, multiPole } : null);
     if (stamp) html += '<div class="mtrupdated">' + T('updatedAt').replace('{t}', stamp) + '</div>';
   }
   return html;
@@ -7041,6 +7547,7 @@ function stopRenderSearch(query) {
       const chip = g.stops.length > 1 ? T('stopBays').replace('{n}', g.stops.length) : poleCodeOf(lead);
       return '<button' + (g.reaches ? '' : ' class="dim" data-nofilter="1"') + ' data-stop-id="' + esc(lead.stop) + '" data-stop-group="' + esc(ids.join(',')) + '"><span class="pickmain">🚏 ' + esc(stopName(lead)) +
         (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
+        groupDirHtml(ids) +
         (g.reaches ? poleRoutesLine(ids, 6, destIds) : '<small class="poleroutes">' + T('stopNoReach').replace('{d}', place) + '</small>') +
         '</span></button>';
     };
@@ -7059,14 +7566,44 @@ function stopRenderSearch(query) {
     box.innerHTML = html || '<div class="favempty">' + T('noMatch') + '</div>';
     return;
   }
-  const keep = stop => true;
-  const hits = groupPoles(named, keep, 8);
+  // ONE CARD PER STATION NAME, whatever the bays are called.
+  // 太子站,旺角花墟 is ELEVEN poles — MK184-188, MK500-503, MK751-752 — and
+  // the QR code on the pole in the street says only "MK187". Splitting them
+  // by facing gave three cards with the same name, which is a puzzle to solve
+  // before you can look up a bus. They are one place to a rider, so they are
+  // one card, exactly as the destination-filtered search has always done.
+  //
+  // What makes that safe is the other half of this change: once a card holds
+  // more than one pole, every arrival row says WHICH pole its bus leaves from
+  // and which way that pole faces. Merging without that would have quietly
+  // offered a rider the 6C from the far side of Prince Edward Road.
+  const stations = new Map();
+  for (const stop of named) {
+    const k = stationKey(stop);
+    if (!stations.has(k)) stations.set(k, { stops: [], rank: 1 });
+    const g = stations.get(k);
+    g.stops.push(stop);
+    g.rank = Math.min(g.rank, prefixRank(stop));
+  }
+  const hits = [...stations.values()]
+    .sort((a, b) => a.rank - b.rank || b.stops.length - a.stops.length ||
+                    stopName(a.stops[0]).length - stopName(b.stops[0]).length)
+    .slice(0, 8);
   box.innerHTML = hits.length
-    ? hits.map(h => { const stop = h.group[0];
-        const chip = h.group.length > 1 ? T('stopBays').replace('{n}', h.group.length) : poleCodeOf(stop);
-        return '<button data-stop-id="' + esc(stop.stop) + '"><span class="pickmain">🚏 ' + esc(stopName(stop)) +
+    ? hits.map(h => {
+        // Lead with the pole nearest the phone, so the screen opens on the
+        // one the rider can actually see.
+        const lead = herePoint
+          ? h.stops.slice().sort((a, b) => metresBetween(herePoint.lat, herePoint.lng, Number(a.lat), Number(a.long)) -
+                                           metresBetween(herePoint.lat, herePoint.lng, Number(b.lat), Number(b.long)))[0]
+          : h.stops[0];
+        const ids = h.stops.map(x => x.stop);
+        const chip = h.stops.length > 1 ? T('stopBays').replace('{n}', h.stops.length) : poleCodeOf(lead);
+        return '<button data-stop-id="' + esc(lead.stop) + '" data-stop-group="' + esc(ids.join(',')) + '">' +
+        '<span class="pickmain">🚏 ' + esc(stopName(lead)) +
         (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
-        poleRoutesLine(h.group.map(g => g.stop), 4, filtering ? destIds : null) + '</span></button>'; }).join('')
+        groupDirHtml(ids) +
+        poleRoutesLine(ids, 4, filtering ? destIds : null) + '</span></button>'; }).join('')
     : '<div class="favempty">' + (filtering && named.length ? T('stopSearchNoneTo').replace('{d}', esc(stopState.destQuery)) : T('noMatch')) + '</div>';
 }
 
@@ -7205,6 +7742,19 @@ async function fetchTrainBlock(line, station) {
   return (data.data || {})[line + '-' + station] || {};
 }
 
+// A COUNTDOWN NOBODY CAN USE IS NOT A COUNTDOWN.
+// The MTR feed keeps answering after the last train, and what it returns is
+// the wait for the FIRST train of the next service day — "1423 分鐘" on the
+// 收藏 tab at twenty past midnight. Nobody stands on a platform for
+// twenty-three hours, and the number reads as a fault in the app rather than
+// the end of the service. Past two hours we say there is nothing due, which
+// is the true and useful answer.
+const TRAIN_MAX_WAIT = 120;
+function usableWait(value) {
+  const n = Number(value);
+  return isFinite(n) && n >= 0 && n <= TRAIN_MAX_WAIT ? n : null;
+}
+
 async function loadTrainFavEta(t, index) {
   const cell = document.getElementById('trainfav-eta-' + index);
   if (!cell) return;
@@ -7212,8 +7762,8 @@ async function loadTrainFavEta(t, index) {
     const block = await fetchTrainBlock(t.line, t.station);
     if (!document.getElementById('trainfav-eta-' + index)) return;
     if (block.alert) { cell.textContent = block.alert; cell.classList.add('quiet'); return; }
-    const mins = (block[t.dir] || []).filter(x => x.valid !== 'N').map(x => Number(x.ttnt))
-      .filter(n => isFinite(n) && n >= 0).slice(0, 3);
+    const mins = (block[t.dir] || []).filter(x => x.valid !== 'N').map(x => usableWait(x.ttnt))
+      .filter(n => n !== null).slice(0, 3);
     if (!mins.length) { cell.textContent = T('noneDue'); cell.classList.add('quiet'); return; }
     cell.textContent = mins.map(n => n === 0 ? T('due') : n + T('min')).join(' · ');
     cell.classList.remove('quiet');
@@ -7339,8 +7889,8 @@ function mtrLoaded(line) {
 function mtrTrains(key, line) {
   const block = (mtrState.blocks || {})[line || mtrState.line] || {};
   return (block[key] || []).filter(t => t.valid !== 'N')
-    .map(t => ({ min: Number(t.ttnt), dest: t.dest, plat: t.plat }))
-    .filter(t => isFinite(t.min) && t.min >= 0);
+    .map(t => ({ min: usableWait(t.ttnt), dest: t.dest, plat: t.plat }))
+    .filter(t => t.min !== null);
 }
 
 // Directions are named by where the trains are actually going, read from the
@@ -7659,11 +8209,10 @@ document.getElementById('mtrview').addEventListener('input', event => {
 const TD_NEWS_URL = 'https://www.td.gov.hk/tc/special_news/trafficnews.xml';
 const ALERT_REFRESH_MS = 5 * 60 * 1000;
 const BUS_TROUBLE = /延誤|受阻|擠塞|改道|暫停|取消|停駛|延遲|delay|congest|divert|suspend|cancel/i;
-let tdNotices = [];
-let alertFlags = { mtr: {}, bus: {} };        // line → {since}; 'route|stop' → {since, text, label}
-let currentAlerts = [];
-let alertsSeen = {};
-try { alertsSeen = JSON.parse(localStorage.getItem('hkfast-alerts-seen') || '{}'); } catch (e) { alertsSeen = {}; }
+// The four values this section works on are declared much earlier in the
+// file, beside the other saved state — see "TRAFFIC ALERT STATE". They have
+// to exist before the start-up block runs, because the weather bar is drawn
+// there and it reads them.
 function rememberSeen(keys) {
   const now = Date.now();
   for (const k of keys) alertsSeen[k] = now;
@@ -7719,8 +8268,9 @@ function alertWatchItems() {
     addRoute(dep.route, T('alertMyBus').replace('{r}', dep.route));
     addName(dep.stopName_tc, dep.stopName_en, T('alertMyBus').replace('{r}', dep.route));
   }
-  for (const f of stopFavs) addName(f.name_tc, f.name_en, T('alertSavedStop').replace('{s}', stopName(f)));
-  for (const d of stopDests) addName(d, d, T('alertPlace').replace('{s}', d));
+  // Matched on the real stop name, announced in the rider's own word for it.
+  for (const f of stopFavs) addName(f.name_tc, f.name_en, T('alertSavedStop').replace('{s}', favLabel(f)));
+  for (const d of stopDests) addName(destName(d), destName(d), T('alertPlace').replace('{s}', destLabel(d)));
   for (const t of trainFavs) { stations.set(t.station, T('alertTrain').replace('{s}', stationName(t.station))); lines.add(t.line); }
   if (activeMode === 'stop' && stopState.stop) {
     const group = stopGroupNow();
@@ -8042,10 +8592,10 @@ function renderWeatherBar() {
   if (updateWaiting) parts.push(updateChip());
   if (!navigator.onLine) parts.push(offlineChip());
   if (weatherData) parts.push(...weatherParts());
-  const near = (typeof tdNotices !== 'undefined' && tdNotices.length) ? nearbyNotices() : [];
+  const near = tdNotices.length ? nearbyNotices() : [];
   if (near.length) parts.push(tickerChip(near));
-  if (typeof currentAlerts !== 'undefined' && currentAlerts.length) parts.push(alertChip());
-  bar.classList.toggle('hasalert', (typeof currentAlerts !== 'undefined' && currentAlerts.length > 0) || near.length > 0);
+  if (currentAlerts.length) parts.push(alertChip());
+  bar.classList.toggle('hasalert', currentAlerts.length > 0 || near.length > 0);
 
   if (parts.length === 0) { hideWeatherBar(); return; }
   for (const part of parts) bar.appendChild(part);
@@ -8159,6 +8709,117 @@ function clearRouteStops() {
   if (box) box.innerHTML = '';
 }
 
+// The timetable row for the route on screen. serviceInfo is keyed
+// ROUTE|BOUND|TYPE|CO. Citybus files its 70 circular routes under a
+// two-letter bound ("962|IO|1|ctb") that a single-letter direction can never
+// match, so those are tried too.
+function serviceInfoFor(context) {
+  if (!context) return null;
+  const route = String(context.routeNo || '').toUpperCase();
+  let co = String(context.co || 'kmb').toLowerCase();
+  if (co === 'lwb') co = 'kmb';
+  const type = String(context.serviceType || '1');
+  const dir = context.dir;
+  const tries = [route + '|' + dir + '|' + type + '|' + co,
+                 route + '|' + dir + '|1|' + co,
+                 route + '|IO|' + type + '|' + co, route + '|OI|' + type + '|' + co,
+                 route + '|IO|1|' + co,            route + '|OI|1|' + co];
+  for (const key of tries) {
+    const hit = serviceInfo.get(key);
+    if (hit && hit.freq) return hit;
+  }
+  return null;
+}
+
+// A summary as words. A single scheduled departure is ONE time, not a range:
+// 82B's four morning runs read "07:15、07:25、07:40、08:05", never
+// "07:15–07:15".
+function svcSpan(sum) {
+  if (sum.allDay) return T('svcAllDay');
+  return sum.arcs.map(a => a.len === 1 ? svcClock(a.from)
+                                       : svcClock(a.from) + '–' + svcClock(a.from + a.len - 1))
+                 .join('、');
+}
+function svcHeadway(sum) {
+  if (sum.hwMin) return ' · ' + (sum.hwMin === sum.hwMax
+    ? T('svcEvery').replace('{a}', sum.hwMin)
+    : T('svcEveryRange').replace('{a}', sum.hwMin).replace('{b}', sum.hwMax));
+  // Every window was a single departure, so the count IS the timetable.
+  if (sum.singles.length > 1) return ' · ' + T('svcDepartures').replace('{n}', sum.singles.length);
+  return '';
+}
+
+// WHAT THIS ROUTE COSTS AND WHEN IT RUNS.
+// Both come off the phone — the fare table and the timetable are in the two
+// JSON files beside this page — so this block is drawn before a single
+// arrival time has been fetched, and it is still there with no signal.
+//
+// The fare shown is the fare for boarding at the FIRST stop, which is the
+// number printed on the bus. It is not labelled "up to": on route 23 the
+// fare goes UP mid-route, so "up to" would be a lie. Every rider's own fare
+// sits on their own row further down, and both come from stopFare(), so the
+// two can never disagree.
+function routeInfoBlock(context) {
+  const box = document.createElement('div');
+  box.className = 'rsinfo';
+  const lines = [];
+
+  const fare = stopFare(context.routeNo, context.dir, context.serviceType, 1, context.co);
+  if (fare !== null) lines.push('<span class="rsi">💰 ' + T('fullFare') + ' ' + fareText(fare) + '</span>');
+
+  const info = serviceInfoFor(context);
+  const today = info ? patternsForToday(info.freq) : { masks: [], state: 'noData' };
+  const summary = today.masks.length ? svcSummary(info.freq, today.masks) : null;
+
+  if (today.state === 'closed' || today.state === 'closedPh') {
+    lines.push('<span class="rsi warn">🕘 ' +
+               T(today.state === 'closedPh' ? 'svcClosedPh' : 'svcClosedToday') + '</span>');
+  } else if (summary) {
+    let line = '🕘 ' + T(today.state === 'phUnknown' ? 'svcUsual' : 'svcToday') + ' ' +
+               svcSpan(summary) + svcHeadway(summary);
+    lines.push('<span class="rsi">' + esc(line) + '</span>');
+    if (summary.night) lines.push('<span class="rsi">🌙 ' + T('svcNight') + '</span>');
+  }
+
+  if (!lines.length) return null;
+  box.innerHTML = lines.join('');
+
+  // Every other day pattern, folded away. A rider who wants Sunday hours on a
+  // Tuesday can ask for them; nobody has to scroll past them who does not.
+  const all = info ? Object.keys(info.freq || {}).map(Number).filter(n => isFinite(n) && n > 0) : [];
+  if (all.length) {
+    const more = document.createElement('button');
+    more.className = 'rsmore';
+    more.textContent = T('svcMore');
+    const detail = document.createElement('div');
+    detail.className = 'rsdetail';
+    detail.style.display = 'none';
+    // Masks that read the same have to be shown together. Route 82B files an
+    // extra 07:25 departure under mask 31 on top of mask 287's timetable, and
+    // both say "星期一至五" — two rows under one heading is a puzzle, not a
+    // timetable, so their windows are pooled into a single line.
+    const byLabel = new Map();
+    for (const mask of all.sort((a, b) => a - b)) {
+      const label = maskLabel(mask);
+      (byLabel.get(label) || byLabel.set(label, []).get(label)).push(mask);
+    }
+    detail.innerHTML = [...byLabel].map(([label, masks]) => {
+      const sum = svcSummary(info.freq, masks);
+      if (!sum) return '';
+      return '<div class="rsdrow"><b>' + esc(label) + '</b> ' +
+             esc(svcSpan(sum) + svcHeadway(sum)) + '</div>';
+    }).join('');
+    more.addEventListener('click', () => {
+      const open = detail.style.display !== 'none';
+      detail.style.display = open ? 'none' : 'block';
+      more.textContent = T(open ? 'svcMore' : 'svcLess');
+    });
+    box.appendChild(more);
+    box.appendChild(detail);
+  }
+  return box;
+}
+
 function renderRouteStops(context, stops) {
   clearRouteStops();
   const box = document.getElementById('routestops');
@@ -8207,6 +8868,9 @@ function renderRouteStops(context, stops) {
   hint.className = 'rshint';
   hint.textContent = T('rsHint');
   box.appendChild(hint);
+
+  const info = routeInfoBlock(context);
+  if (info) box.appendChild(info);
 
   // The ride banner: filled in once both marks are set, hidden otherwise.
   const ride = document.createElement('div');
