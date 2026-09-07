@@ -1255,7 +1255,7 @@ const TEXT = {
     etaArrive:'about {n} stops · reach {d} around {t}',
     stopDestSavedMsg:'Saved "{d}" to places you go.', stopDestRemovedMsg:'Removed "{d}".',
     stopDestPh:'Going to… (type a place)',
-    stopDestNeedLoc:'Allow location to find which nearby stops have a direct bus.',
+    stopDestNeedLoc:'Tap 📍 to find which stops near you have a direct bus.',
     stopFilterPh:'Only buses towards…', stopFilterNone:'No bus from this stop towards {d}.',
     stopFilterOn:'Showing buses towards {d}', stopsAwayShort:'{n} stops', stopMore:'+{n} more',
     stopIndexing:'Loading the bus network — first time only…',
@@ -1443,7 +1443,7 @@ const TEXT = {
     etaArrive:'約 {n} 個站，預計 {t} 到 {d}',
     stopDestSavedMsg:'已收藏目的地「{d}」。', stopDestRemovedMsg:'已移除「{d}」。',
     stopDestPh:'我要去…（輸入目的地）',
-    stopDestNeedLoc:'允許使用位置，才可找出附近哪個站有直達巴士。',
+    stopDestNeedLoc:'按 📍 就可找出你附近哪個站有直達巴士。',
     stopFilterPh:'只顯示往…', stopFilterNone:'此站沒有往 {d} 的巴士。',
     stopFilterOn:'只顯示往 {d} 的巴士', stopsAwayShort:'{n} 個站', stopMore:'另有 {n} 條',
     stopIndexing:'正在載入巴士路線網絡（只需一次）…',
@@ -7312,9 +7312,13 @@ function stopPickerParts() {
            '<div class="geobody">' + T('stopGeoBody') + '</div>' +
            '<div class="geobtns"><button class="geoyes" data-stop-act="geo-yes">' + T('geoYes') + '</button>' +
            '<button class="geono" data-stop-act="geo-no">' + T('geoNo') + '</button></div></div>';
-  } else if (navigator.geolocation && !herePoint) {
-    top += '<div class="mtrpick"><button data-stop-act="geo-yes">' + T('myLocation') + '</button></div>';
   }
+  // No 我的位置 bar here any more. It was a whole row at the top of the
+  // landing screen doing what the 📍 on the left of each search box now does,
+  // and doing it less precisely — the bar only fetched a fix, while the pins
+  // fetch one AND act on it. The card above still runs on a first visit,
+  // because asking in our own words before the browser's own prompt appears
+  // is the one thing a pin cannot do.
   if (st.indexing || !stopIndex) top += '<div class="rshint">' + T('stopIndexing') + '</div>';
 
   // Where are you going? The star saves the place once it names real stops.
