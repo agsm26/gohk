@@ -43,7 +43,7 @@
    halfway through reading.
    ========================================================================= */
 
-const VERSION = 'hkfast-2026-09-07k';
+const VERSION = 'gohk-2026-09-07l';
 const CACHE   = VERSION;
 
 // Fetched at install, before the app is ever called ready. Kept small on
@@ -51,7 +51,7 @@ const CACHE   = VERSION;
 // fare files are NOT here — the app asks for those itself on first load and
 // they are stored as they arrive (see cacheFirst below).
 const SHELL = [
-  './hkfast.html',
+  './index.html',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
@@ -168,7 +168,7 @@ async function networkFirst(request) {
     // stored at install — a rider opening the app from their home screen with
     // no signal must land on the app, not on the browser's dinosaur.
     return (await cache.match(request))
-        || (await cache.match('./hkfast.html'))
+        || (await cache.match('./index.html'))
         || new Response('Offline', { status: 503, statusText: 'Offline' });
   }
 }

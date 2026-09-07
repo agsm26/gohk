@@ -4,7 +4,7 @@
   "description": "香港巴士及港鐵路線規劃 — 為長者而設。A Hong Kong bus and MTR journey planner designed for older riders.",
   "lang": "zh-Hant",
   "dir": "ltr",
-  "start_url": "./hkfast.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
