@@ -592,6 +592,9 @@
      faded, matching the greyed station cards in the search above — still
      yours, still tappable, just not for this trip. Kept above the 4.5:1
      floor so the name stays readable rather than becoming decoration. */
+  /* A saved stop that CAN get you there — the same amber as the chosen
+     destination chip above it, so the pair reads as one answer. */
+  .destchip.ok { border-color:var(--amber); background:var(--amber-tint); color:var(--amber); }
   .destchip.dim { border-style:dashed; background:var(--surface-2); color:var(--ink-3); }
   .destchip.dim .polecode { background:var(--ink-3); }
   .destchip .noreach { display:inline-block; margin-left:8px; font-size:0.88rem;
@@ -7390,8 +7393,15 @@ function stopPickerParts() {
       savedShown.map(f => {
         const ids = poleGroup(f).map(g => g.stop);
         const reaches = !filtering || reachingRoutes(ids, destIds).length > 0;
-        return '<button class="destchip' + (reaches ? '' : ' dim') + '" data-stop-act="fav" data-index="' +
-          stopFavs.indexOf(f) + '"' + (reaches ? '' : ' data-nofilter="1"') + '>📍 ' + esc(favLabel(f)) +
+        // Both halves of the answer are marked, not just the bad half. Greying
+        // the wrong ones tells you where NOT to go; lighting the right ones
+        // tells you where to go, which is the question actually being asked.
+        // Same amber as the chosen destination above, so one glance down the
+        // screen reads "here → there" in one colour.
+        const mark = !filtering ? '' : (reaches ? ' ok' : ' dim');
+        return '<button class="destchip' + mark + '" data-stop-act="fav" data-index="' +
+          stopFavs.indexOf(f) + '"' + (reaches ? '' : ' data-nofilter="1"') + '>' +
+          (filtering && reaches ? '✓ ' : '📍 ') + esc(favLabel(f)) +
           (poleCodeOf(f) ? ' <small>' + esc(poleCodeOf(f)) + '</small>' : '') +
           poleDirHtml(f.stop) +
           (reaches ? '' : '<small class="noreach">' + esc(T('stopNoDirect')) + '</small>') +
