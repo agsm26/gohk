@@ -1338,6 +1338,10 @@ const TEXT = {
     favDestOpen:'Buses going there',
     locationFailed:'Could not find your location.',
     saveDeparture:'Save this bus', departureSaved:'Saved {r} to favourites.',
+    rsStarLabel:'Save this stop and this bus',
+    rsStarSavedBoth:'Saved {s} as a starting stop, and bus {r}.',
+    rsStarSavedBus:'Saved bus {r}. {s} was already a saved starting stop.',
+    rsStarStopFull:'Saved bus {r}. Your starting stops are full (8) — remove one first.',
     departureRemoved:'Removed {r} from favourites.',
     noDepsLong:'No buses saved. Tap a stop on the map, then tap \u2606 next to a route to keep it here with live times.',
     noneDue:'None due right now', etaOffline:'Times unavailable',
@@ -1381,7 +1385,7 @@ const TEXT = {
     someDataFailed:'Some bus data could not load:',
     loadingNetwork:'Loading the bus network… first time only, then it is saved', lookingFor:'Looking for buses…',
     stopsOnRoute:'{n} stops on this route', cleared:'Cleared.',
-    rsHint:'Tap where you get on, then tap where you get off — the app counts the stops down as you ride. Tap ☆ to keep a stop in FAVOURITES with live times.',
+    rsHint:'Tap where you get on, then tap where you get off — the app counts the stops down as you ride. Tap ☆ to save that stop AND this bus to FAVOURITES.',
     rsBoarding:'● GETTING ON HERE', rsStopsAway:'{n} stops from your stop',
     rsOneStopAway:'1 stop from your stop', rsBefore:'before your stop',
     rsCheckingEta:'checking…', rsNoEta:'no times listed',
@@ -1529,6 +1533,10 @@ const TEXT = {
     favDestOpen:'去呢度嘅巴士',
     locationFailed:'無法取得你的位置。',
     saveDeparture:'收藏此路線', departureSaved:'已收藏 {r}。',
+    rsStarLabel:'收藏此站及此路線',
+    rsStarSavedBoth:'已收藏起點車站 {s}，同埋 {r}。',
+    rsStarSavedBus:'已收藏 {r}。{s} 本來已在你的常用起點。',
+    rsStarStopFull:'已收藏 {r}。常用起點已滿（8 個），請先移除一個。',
     departureRemoved:'已移除 {r}。',
     noDepsLong:'尚未收藏巴士。在地圖上點選車站，再按路線旁的 \u2606，即可在此看到實時班次。',
     noneDue:'暫時沒有班次', etaOffline:'無法取得班次',
@@ -1572,7 +1580,7 @@ const TEXT = {
     someDataFailed:'部分巴士資料未能載入：',
     loadingNetwork:'正在載入巴士路線網絡…只需一次，之後會自動儲存', lookingFor:'正在搜尋巴士…',
     stopsOnRoute:'此路線共 {n} 個站', cleared:'已清除。',
-    rsHint:'先按上車站，再按下車站，乘車時會自動倒數剩餘車站。按 ☆ 收藏車站，可在「收藏」查看實時班次。',
+    rsHint:'先按上車站，再按下車站，乘車時會自動倒數剩餘車站。按 ☆ 可同時收藏該車站及此路線，在「收藏」查看。',
     rsBoarding:'● 在此上車', rsStopsAway:'距離上車站 {n} 個站',
     rsOneStopAway:'距離上車站 1 個站', rsBefore:'在上車站之前',
     rsCheckingEta:'查詢中…', rsNoEta:'沒有班次資料',
@@ -9185,7 +9193,19 @@ function renderRouteStops(context, stops) {
     const star = document.createElement('button');
     star.className = 'rsstar';
     star.textContent = '☆';
-    star.setAttribute('aria-label', 'Save this stop');
+    star.setAttribute('aria-label', T('rsStarLabel'));
+    // ONE STAR, BOTH LISTS.
+    // This used to save only a DEPARTURE — this bus, this way, from this stop
+    // — while its own label and the hint above both said 收藏車站, "save the
+    // station". So a rider starred a station here and then could not find it
+    // under 你收藏的起點車站, because it had never been put there. It now saves
+    // the stop as well, which is what the words on the button have always
+    // promised.
+    //
+    // Unstarring drops the departure only. The saved stop stays: it may well
+    // have been saved deliberately from somewhere else, and quietly deleting
+    // one of a rider's eight starting points to undo a different action is
+    // not a trade worth making. It is one tap to remove in 收藏.
     star.addEventListener('click', () => {
       const added = toggleDeparture({
         route: context.routeNo, dir: context.dir, serviceType: context.serviceType,
@@ -9195,8 +9215,23 @@ function renderRouteStops(context, stops) {
       });
       star.textContent = added ? '★' : '☆';
       star.classList.toggle('on', added);
-      status.textContent = (added ? T('departureSaved') : T('departureRemoved'))
-        .replace('{r}', context.routeNo);
+
+      const here = plainStopName(lang === 'zh' ? (stop.name_tc || stop.name_en) : stop.name_en);
+      if (!added) {
+        status.textContent = T('departureRemoved').replace('{r}', context.routeNo);
+        return;
+      }
+      if (isSavedStop(stop.stop)) {
+        status.textContent = T('rsStarSavedBus').replace('{r}', context.routeNo).replace('{s}', here);
+      } else if (toggleStopFav({ stop: stop.stop, name_en: stop.name_en, name_tc: stop.name_tc,
+                                 lat: stop.lat, long: stop.long }) === null) {
+        // The starting-stop list is full. The bus is saved either way; say so
+        // rather than letting the station silently not appear again.
+        status.textContent = T('rsStarStopFull').replace('{r}', context.routeNo);
+      } else {
+        status.textContent = T('rsStarSavedBoth').replace('{r}', context.routeNo).replace('{s}', here);
+      }
+      paintBottomBar();
     });
     if (isSavedDeparture(context.routeNo, context.dir, stop.stop)) {
       star.textContent = '★';
