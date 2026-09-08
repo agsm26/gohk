@@ -43,7 +43,7 @@
    halfway through reading.
    ========================================================================= */
 
-const VERSION = 'gohk-2026-09-08o';
+const VERSION = 'gohk-2026-09-08p';
 const CACHE   = VERSION;
 
 // Fetched at install, before the app is ever called ready. Kept small on
@@ -74,6 +74,7 @@ const LEAFLET = [
 const NEVER_STORE = new Set([
   'data.etabus.gov.hk',        // KMB routes and arrival times
   'resource.data.one.gov.hk',  // TD road speeds + traffic news — live, never a copy
+  'data.etagmb.gov.hk',        // green minibus arrival times
   'rt.data.gov.hk',            // Citybus and MTR arrival times
   'data.weather.gov.hk',       // Observatory readings and warnings
   'www.1823.gov.hk',           // public holidays

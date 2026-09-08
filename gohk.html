@@ -8275,6 +8275,67 @@ function stopOpenDest(name) {
   renderStopView();
 }
 
+// ============================================================
+// GREEN MINIBUS LIVE TIMES
+// ============================================================
+// 4,478 poles — a third of the network — had no arrival times at all, because
+// fetchPoleRows only ever knew KMB and Citybus. The government does publish
+// them, and better than Citybus does: ONE request returns every route at the
+// stop, it accepts the very stop ids this app already holds, and it sends
+// access-control-allow-origin:*.
+//
+// The catch is that the feed names routes by a numeric route_id (2006408),
+// not by the number painted on the minibus ("1"). Only /route/{region}/{code}
+// resolves that, one request per route, which is no good at the roadside — so
+// the 779 ids are resolved once, offline, and bundled as gmb-routes.json.
+// Checked against the whole network: all 476 GMB route numbers we carry are
+// covered.
+const GMB_ETA_URL = 'https://data.etagmb.gov.hk/eta/stop/';
+let gmbRoutes = null;
+async function loadGmbRoutes() {
+  if (gmbRoutes) return gmbRoutes;
+  try {
+    const response = await fetch('./gmb-routes.json', { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error('server said ' + response.status);
+    gmbRoutes = (await response.json()).routes || {};
+  } catch (error) { console.warn('GMB route map unavailable:', error); gmbRoutes = {}; }
+  return gmbRoutes;
+}
+// WHICH DIRECTION THIS SIGHTING BELONGS TO.
+// Guessing that route_seq 1 means outbound would be a guess; the stop's own
+// position in the route is not. Our index already knows, for every GMB route
+// through this pole, which bound it was travelling and at what seq — so the
+// sighting is matched on that and the direction comes out of our own data.
+function gmbKeyFor(stopId, code, stopSeq) {
+  const keys = ((typeof stopIndex !== 'undefined' && stopIndex && stopIndex.get(stopId)) || [])
+    .filter(k => { const parts = String(k.routeKey).split('|');
+                   return parts[3] === 'gmb' && parts[0] === code; });
+  return keys.find(k => k.seq === stopSeq) || keys[0] || null;
+}
+async function fetchGmbRows(stop) {
+  await loadGmbRoutes();
+  const response = await fetch(GMB_ETA_URL + encodeURIComponent(stop.stop),
+                               { signal: AbortSignal.timeout(10000) });
+  if (!response.ok) throw new Error('server said ' + response.status);
+  const data = (await response.json()).data || [];
+  const rows = [];
+  for (const entry of data) {
+    const info = gmbRoutes[String(entry.route_id)];
+    if (!info || !entry.eta || !entry.eta.length) continue;
+    const seq = Number(entry.stop_seq) || 0;
+    const hit = gmbKeyFor(stop.stop, info.c, seq);
+    const dir = hit ? String(hit.routeKey).split('|')[1] : 'O';
+    const dest = (info.d || {})[String(entry.route_seq)] || {};
+    for (const e of entry.eta) {
+      if (!e.timestamp) continue;
+      rows.push({ route: info.c, dir, service_type: '1', seq, eta: e.timestamp,
+                  dest_tc: dest.tc || '', dest_en: dest.en || '',
+                  rmk_tc: e.remarks_tc || '', rmk_en: e.remarks_en || '' });
+    }
+  }
+  return rows;
+}
+
 // Live rows for one pole: an array, or null when its company has no feed.
 // `wantRoutes` narrows the Citybus half. Citybus answers PER ROUTE, so a pole
 // with a dozen routes costs a dozen requests — and the ranking only ever cares
@@ -8302,6 +8363,8 @@ async function fetchPoleRows(stop, wantRoutes) {
       } catch (error) { return []; }
     }));
     rows = lists.flat();
+  } else if (co === 'GMB') {
+    rows = await fetchGmbRows(stop);
   }
   return rows === null ? null : rows.map(row => Object.assign({}, row,
     { stop: stop.stop, stopName_en: stop.name_en, stopName_tc: stop.name_tc, co: row.co || co }));
