@@ -133,7 +133,7 @@
      control here that trades tap size for the row it used to occupy — the
      pin is still 64px wide and carries a title and aria-label, because the
      word "location" is gone from the face of it. */
-  .gpsbtn { min-height:42px; height:42px; flex:0 0 auto; font-size:1.1765rem;
+  .gpsbtn { min-height:48px; height:48px; flex:0 0 auto; font-size:1.1765rem;
             padding:0; line-height:1; }
   .btn:hover { background:var(--surface-2); }
   .btn.armed { background:var(--navy); color:white; border-color:var(--navy); }
@@ -771,8 +771,10 @@
                       border:2px solid #bfdbfe; background:var(--navy-tint); color:var(--blue);
                       font-size:1rem; font-weight:800; cursor:pointer; }
   #favview .depopen:hover { background:var(--blue-tint); }
+  /* This one removes a saved bus, so a mis-tap costs the rider something they
+     set up on purpose. 48px, like every other target in this file. */
   #favview .depdel { position:absolute; top:10px; right:10px; flex:0 0 auto;
-                     width:40px; min-height:40px; }
+                     width:48px; min-height:48px; }
 
   /* SAVED PLACES. Eight starting stops and eight destinations is sixteen rows,
      so each one is a single line: the whole row opens it, ✕ removes it, and
@@ -847,6 +849,15 @@
   #panel.routemode #routefield { position:sticky; top:0; z-index:2;
                                  background:white; padding-bottom:6px; margin-bottom:0; }
   #panel.routemode #route-exit { display:block !important; }
+  /* MAP MODE: the panel gets out of the way entirely. */
+  #panel.mapmode { display:none !important; }
+  /* THE MAP IS NO LONGER BEHIND THE READING SCREENS.
+     The grip cycles the sheet's height, and the only thing under the sheet
+     was the map — so on 巴士 and 港鐵 it was a handle whose whole purpose was
+     to uncover something that now has its own tab. Left in place it would
+     still slide a half-read arrival list off the screen. */
+  #panel.favmode > #sheetgrip, #panel.setmode > #sheetgrip,
+  #panel.mtrmode > #sheetgrip, #panel.stopmode > #sheetgrip { display:none !important; }
   #panel.favmode, #panel.setmode, #panel.mtrmode, #panel.stopmode { top:var(--toph); max-height:calc(100vh - var(--toph));
                   max-height:calc(100dvh - var(--toph)); border-radius:0;
                    padding-top:16px; }
@@ -1248,6 +1259,7 @@
   <button class="bnav on" data-nav="stop"><span class="bicon">🚌</span><span class="blabel"></span></button>
   <button class="bnav"    data-nav="mtr"><span class="bicon">🚇</span><span class="blabel"></span></button>
   <button class="bnav"    data-nav="fav"><span class="bicon">⭐</span><span class="blabel"></span></button>
+  <button class="bnav"    data-nav="map"><span class="bicon">🗺️</span><span class="blabel"></span></button>
   <button class="bnav"    data-nav="set"><span class="bicon">⚙️</span><span class="blabel"></span></button>
 </nav>
 
@@ -1337,7 +1349,7 @@ const TEXT = {
     boardHere:'✓ Board right here at', walkTo:'🚶 Walk', minTo:'min to',
     rideTo:'Ride to', stops:'stops', stations:'stations', changeBus:'↓ CHANGE BUS',
     changeTrain:'↓ CHANGE TRAIN', trainsFrequent:'Trains every few minutes', here:'here',
-    tabBus:'BUS', tabStop:'BUS', tabMtr:'MTR', tabFav:'SAVED', tabSet:'SETTINGS',
+    tabBus:'BUS', tabStop:'BUS', tabMtr:'MTR', tabFav:'SAVED', tabMap:'MAP', tabSet:'SETTINGS',
     settings:'Settings', settingLanguage:'Language',
     settingsNote:'Your choice is remembered on this phone.',
     goShort:'\u27a4 Go',
@@ -1538,7 +1550,7 @@ const TEXT = {
     boardHere:'✓ 就在此處上車：', walkTo:'🚶 步行', minTo:'分鐘至',
     rideTo:'乘搭至', stops:'個站', stations:'個站', changeBus:'↓ 轉乘巴士',
     changeTrain:'↓ 轉綫', trainsFrequent:'港鐵班次頻密，數分鐘一班', here:'於此處',
-    tabBus:'巴士', tabStop:'巴士', tabMtr:'港鐵', tabFav:'收藏', tabSet:'設定',
+    tabBus:'巴士', tabStop:'巴士', tabMtr:'港鐵', tabFav:'收藏', tabMap:'地圖', tabSet:'設定',
     settings:'設定', settingLanguage:'語言',
     settingsNote:'你的選擇會記在這部手機。',
     goShort:'\u27a4 前往',
@@ -4862,7 +4874,7 @@ function paintBottomBar() {
   const labels = { mtr: withCount(T('tabMtr'), railPicks.length),
                    fav: T('tabFav') + ' (' +
                         (stopFavs.length + stopDests.length + departures.length + trainFavs.length) + ')',
-                   stop: T('tabStop'), set: T('tabSet') };
+                   stop: T('tabStop'), map: T('tabMap'), set: T('tabSet') };
 
   // Looking up a route number is no longer a tab of its own — it is what the
   // 巴士 tab's own search box does — so route mode lights the 巴士 button
@@ -4879,6 +4891,7 @@ function paintBottomBar() {
   }
 }
 
+let mapCentredOnce = false;
 function showMode(mode) {
   const panel   = document.getElementById('panel');
   const favView = document.getElementById('favview');
@@ -4904,7 +4917,7 @@ function showMode(mode) {
   if (mode === 'fav') {
     activeMode = 'fav';
     document.getElementById('livestrip').innerHTML = '';
-    panel.classList.remove('setmode', 'mtrmode', 'stopmode');
+    panel.classList.remove('setmode', 'mtrmode', 'stopmode', 'mapmode');
     setView.style.display = 'none';
     mtrView.style.display = 'none';
     stopView.style.display = 'none';
@@ -4920,7 +4933,7 @@ function showMode(mode) {
   if (mode === 'stop') {
     activeMode = 'stop';
     document.getElementById('livestrip').innerHTML = '';
-    panel.classList.remove('favmode', 'setmode', 'mtrmode');
+    panel.classList.remove('favmode', 'setmode', 'mtrmode', 'mapmode');
     favView.style.display = 'none';
     setView.style.display = 'none';
     mtrView.style.display = 'none';
@@ -4935,11 +4948,44 @@ function showMode(mode) {
   if (mode === 'mtr') {
     activeMode = 'mtr';
     document.getElementById('livestrip').innerHTML = '';
-    panel.classList.remove('favmode', 'setmode', 'stopmode');
+    panel.classList.remove('favmode', 'setmode', 'stopmode', 'mapmode');
     favView.style.display = 'none';
     setView.style.display = 'none';
     stopView.style.display = 'none';
     openMtrView();
+    paintBottomBar();
+    return;
+  }
+
+  // ---- MAP ----
+  // THE MAP HAS ITS OWN TAB NOW.
+  // It used to be the backdrop to every screen, reachable only by dragging
+  // the sheet down off whatever you were reading — so it was both underfoot
+  // and hard to find. A rider looking up a bus does not want a map behind the
+  // times, and a rider who wants the map wants all of it. One tap, whole
+  // screen, and nothing else competing for it.
+  if (mode === 'map') {
+    activeMode = 'map';
+    document.getElementById('livestrip').innerHTML = '';
+    panel.classList.remove('favmode', 'setmode', 'mtrmode', 'stopmode');
+    favView.style.display = 'none';
+    setView.style.display = 'none';
+    mtrView.style.display = 'none';
+    stopView.style.display = 'none';
+    panel.classList.add('mapmode');
+    // Leaflet sized itself against a panel that was covering it; it has to be
+    // told the shape changed or it draws the tiles for the old rectangle.
+    setTimeout(() => {
+      map.invalidateSize();
+      drawStops();
+      // Open on the rider, not on the whole territory — but only the FIRST
+      // time. Someone who panned to Sha Tin and came back to check a bus is
+      // owed Sha Tin again, not a map that keeps snapping home.
+      if (herePoint && !mapCentredOnce) {
+        mapCentredOnce = true;
+        map.setView([herePoint.lat, herePoint.lng], Math.max(map.getZoom(), 15));
+      }
+    }, 60);
     paintBottomBar();
     return;
   }
@@ -4949,7 +4995,7 @@ function showMode(mode) {
   if (mode === 'set') {
     activeMode = 'set';
     document.getElementById('livestrip').innerHTML = '';
-    panel.classList.remove('favmode', 'mtrmode', 'stopmode');
+    panel.classList.remove('favmode', 'mtrmode', 'stopmode', 'mapmode');
     favView.style.display = 'none';
     mtrView.style.display = 'none';
     stopView.style.display = 'none';
@@ -4960,7 +5006,7 @@ function showMode(mode) {
     return;
   }
 
-  panel.classList.remove('favmode', 'setmode', 'mtrmode', 'stopmode');
+  panel.classList.remove('favmode', 'setmode', 'mtrmode', 'stopmode', 'mapmode');
   favView.style.display = 'none';
   setView.style.display = 'none';
   mtrView.style.display = 'none';
@@ -5814,7 +5860,7 @@ document.getElementById('bottombar').addEventListener('click', event => {
 // sideways than up-down before it counts — an older thumb resting on the edge
 // of a phone while scrolling must never be able to change the screen by
 // accident.
-const TAB_ORDER  = ['stop', 'mtr', 'fav', 'set'];
+const TAB_ORDER  = ['stop', 'mtr', 'fav', 'map', 'set'];
 const SWIPE_EDGE = 44;   // px from either side a slide must begin in
 const SWIPE_MIN  = 60;   // px it must travel before the section changes
 const SWIPE_SLOP = 40;   // px of up-down movement that abandons it
@@ -8381,7 +8427,10 @@ function renderStopView() {
           '<button class="refreshbtn" data-stop-act="refresh"' + (st.loading ? ' disabled' : '') + '>' +
           T(st.loading ? 'refreshing' : 'refresh') + '</button></div>' +
           '<div id="stop-filter-suggest"></div>' +
-          '<div id="stop-rows">' + stopRowsHtml() + '</div>';
+          // The times rewrite themselves every 15 seconds now. Without this a
+          // screen-reader user is read the arrivals once and never told they
+          // changed. "polite" so it waits for a pause rather than interrupting.
+          '<div id="stop-rows" aria-live="polite" aria-atomic="false">' + stopRowsHtml() + '</div>';
   view.innerHTML = html;
 }
 
