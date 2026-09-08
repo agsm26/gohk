@@ -93,6 +93,11 @@
                -webkit-text-size-adjust:100%;      /* iOS must not re-inflate it */
                -webkit-tap-highlight-color:rgba(0,0,0,.08); }
   #map { height:100%; width:100%; }
+  /* Off everywhere but 地圖 — see the panel rules further down. `visibility`
+     and not `display`, so the map keeps its real width and height while it
+     is out of sight and every fitBounds stays correct. */
+  #map, #landsdlogo { visibility:hidden; }
+  body.mapopen #map, body.mapopen #landsdlogo { visibility:visible; }
 
   /* The Lands Department logo. Their terms require it on the map face. */
   #landsdlogo { position:absolute; bottom:6px; left:8px; z-index:1000;
@@ -1125,35 +1130,37 @@
   #panel.tall { max-height:min(88vh, calc(100vh - var(--toph)));
                 max-height:min(88dvh, calc(100dvh - var(--toph))); }
 
-  /* RESULTS: the whole screen, same as the entry form.
-     Comparing three journeys means reading three cards, and a 55vh sheet
-     showed barely one and a half of them. The map is behind the sheet at
-     this moment anyway, so the options take the screen. The sheet still
-     hangs from the bottom, so pulling the grip down brings the map back. */
-  #panel.results { max-height:calc(100vh - var(--toph));
-                   max-height:calc(100dvh - var(--toph)); }
-  #panel.results.peek { max-height:150px; }
-  #panel.results.tall { max-height:min(88vh, calc(100vh - var(--toph)));
-                        max-height:min(88dvh, calc(100dvh - var(--toph))); }
-
-  /* ENTERING A TRIP: full screen, no map.
-     On a phone, hunting for a stop on a small map is fiddly and slow.
-     Typing a name is far easier, so the form gets the whole screen and
-     the map only appears once there is a journey worth looking at. */
-  #panel:not(.results) {
+  /* THE MAP BELONGS TO THE MAP TAB AND TO NOTHING ELSE.
+     It used to lie behind every screen, reachable by pulling this sheet
+     down — which is how a journey planned days ago was still drawn under
+     the bus times with no way to be rid of it. 地圖 is a tab of its own
+     now, so every other screen is opaque and takes the whole screen: the
+     results list included, which was the last one still hanging over the
+     map as a sheet. */
+  #panel {
     top:var(--toph); max-height:calc(100vh - var(--toph));
     max-height:calc(100dvh - var(--toph)); border-radius:0;
     padding-top:16px; box-shadow:none;
   }
-  #panel:not(.results) #sheetgrip { display:none; }
+  /* Three sheet heights and a grip to cycle them existed ONLY so the map
+     could be brought back into view. Nothing is under the panel to look at
+     any more, so a short panel would show bare background and the grip
+     would read as broken. Both go; every state is the full screen. */
+  #panel.peek, #panel.tall, #panel.results,
+  #panel.results.peek, #panel.results.tall {
+    max-height:calc(100vh - var(--toph));
+    max-height:calc(100dvh - var(--toph));
+    overflow-y:auto;
+  }
+  #sheetgrip { display:none; }
   /* The bar is overhead now, so the sheet only needs to clear the iPhone
      home indicator at the bottom, not a 84px bar. */
   #panel { padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px)); }
 
-  /* "Tap on map" cannot work when the map is hidden, so it goes away
-     until the map is back. Typing and GPS still cover both ends. */
-  #panel:not(.results) .btn[id$="-pin"] { display:none; }
-  #panel:not(.results) .btns { gap:0; }
+  /* "Tap on map" cannot work when there is no map behind the panel, and
+     there never is now. Typing and GPS cover both ends. */
+  .btn[id$="-pin"] { display:none; }
+  .btns { gap:0; }
 
   /* The grip needs a real tap target, not a 6px hairline. The bar itself
      stays slim, but the area around it is 44px tall and grabs the touch. */
@@ -1225,6 +1232,15 @@
                     font-size:1.06rem; padding:10px 6px; color:var(--ink); }
   .mtsearch button { flex:0 0 auto; min-width:44px; min-height:44px; border:none; background:transparent;
                      font-size:1.1rem; font-weight:800; color:var(--ink-3); border-radius:var(--r-sm); }
+  /* The one thing on this screen that UNDOES something, so it is the one
+     thing here that is red, and it is a full-width bar rather than another
+     round chip — nothing else should be mistakable for it. */
+  #spot-reset { display:none; width:100%; box-sizing:border-box; min-height:50px;
+                margin-top:6px; border:none; border-radius:var(--r-md);
+                background:var(--red); color:#fff; font-size:1.04rem; font-weight:800;
+                box-shadow:0 2px 10px rgba(0,0,0,.22); }
+  #spot-reset.on { display:block; }
+  #spot-reset:active { background:#7f1d1d; }
   /* The chips SCROLL sideways and never wrap. Nine categories in Chinese at
      特大 are far wider than a 375px phone, and a wrapped second row would
      push the map itself out from under the rider's thumb. */
@@ -1469,6 +1485,10 @@
     <input id="spot-search" type="search" autocomplete="off" enterkeyhint="search">
     <button id="spot-clear" type="button" aria-label="Clear">✕</button>
   </div>
+  <!-- Takes a finished journey, and the blue you-are-here dot, back off the
+       map. Hidden until there is something to take off, so a clean map is
+       never carrying a button about nothing. -->
+  <button id="spot-reset" type="button"></button>
   <div id="spotchips"></div>
   <div id="spotresults"></div>
 </div>
@@ -1495,11 +1515,14 @@
 </div>
 
 <nav id="bottombar">
-  <!-- 車站 first: "which bus is coming to take me there" is the daily question. -->
+  <!-- 地圖 first, by the owner's decision. It is also the only tab that shows
+       a map at all now, so it leads rather than sitting between 收藏 and 設定.
+       The app still OPENS on 車站 — "which bus is coming" is the daily
+       question — which is why the .on class starts there and not here. -->
+  <button class="bnav"    data-nav="map"><span class="bicon">🗺️</span><span class="blabel"></span></button>
   <button class="bnav on" data-nav="stop"><span class="bicon">🚌</span><span class="blabel"></span></button>
   <button class="bnav"    data-nav="mtr"><span class="bicon">🚇</span><span class="blabel"></span></button>
   <button class="bnav"    data-nav="fav"><span class="bicon">⭐</span><span class="blabel"></span></button>
-  <button class="bnav"    data-nav="map"><span class="bicon">🗺️</span><span class="blabel"></span></button>
   <button class="bnav"    data-nav="set"><span class="bicon">⚙️</span><span class="blabel"></span></button>
 </nav>
 
@@ -1618,6 +1641,8 @@ const TEXT = {
     spotVisitHead:'Places to visit', spotPlacesHead:'Other places',
     spotStopsHead:'Stops and stations', spotNearbyStops:'{n} stops here',
     mapRail:'Show or hide the MTR',
+    mapReset:'\u2715 Clear the map',
+    mapResetDone:'The map is clear.',
     spotPlanning:'Working out how to get you there\u2026',
     hereTitle:'You are here',
     hereAccuracy:'Accurate to about {m} m',
@@ -1858,6 +1883,8 @@ const TEXT = {
     spotVisitHead:'景點', spotPlacesHead:'其他地點',
     spotStopsHead:'車站', spotNearbyStops:'這裡有 {n} 個站',
     mapRail:'顯示或隱藏港鐵',
+    mapReset:'\u2715 清除地圖上的路線',
+    mapResetDone:'地圖已清除。',
     spotPlanning:'正在為你規劃路線…',
     hereTitle:'你在這裡',
     hereAccuracy:'誤差約 {m} 米',
@@ -2064,6 +2091,26 @@ function stopName(stop) {
 // 1. MAP
 // ============================================================
 const map = L.map('map').setView([22.3193, 114.1694], 11);
+
+// A MAP THAT CANNOT BE SEEN CANNOT FINISH AN ANIMATION.
+// Leaflet zooms by running a CSS transition and committing the new zoom when
+// it ends. A hidden element never fires that transitionend, so the move is
+// computed, started, and silently abandoned — getZoom() still reports the old
+// value and the route was never framed. Now that the map only appears on the
+// 地圖 tab, most framing happens while it is out of sight: a journey is drawn
+// from the results screen and the rider meets it later.
+//
+// Every programmatic move therefore snaps while 地圖 is closed. fitBounds
+// goes through setView, so wrapping this one method covers both. Panning and
+// pinching by hand are untouched — they can only happen on the map itself.
+const mapSetView = map.setView.bind(map);
+map.setView = function (centre, zoom, options) {
+  if (!document.body.classList.contains('mapopen')) {
+    options = Object.assign({}, options, { animate: false });
+  }
+  return mapSetView(centre, zoom, options);
+};
+
 const status = document.getElementById('status');
 
 // Mirror #status into the toast. Dozens of places write status.textContent;
@@ -2114,30 +2161,45 @@ L.tileLayer('https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/label/hk/en/{z}/{x}
 // function stays so the sheet code below still reads clearly.
 function isPhone() { return true; }
 
-function mapPadding() {
-  const panel  = document.getElementById('panel');
-  const banner = document.getElementById('routebanner');
-  const bar    = document.getElementById('bottombar');
+// WHAT ACTUALLY COVERS THE MAP FACE.
+// This used to reserve room for the panel, because the panel used to sit
+// over the map. It does not any more: 地圖 is its own tab and the panel is
+// hidden there, so a route framed against a 55%-of-the-screen sheet was
+// squeezed into a sliver — Sham Shui Po to Tuen Mun came out at zoom 11,
+// the whole territory, with the line off-centre.
+//
+// What genuinely covers the map is the map tab's own furniture: the search
+// box, the clear bar and the chip row at the top, and the 📍 / 🚇 buttons
+// at the bottom. Those are only measurable while that tab is open, and a
+// journey is usually framed from the results screen — so the last real
+// measurement is kept and re-used. The starting figures match a 375px
+// phone, so even the very first framing lands close.
+let mapChromeTop = 200, mapChromeBottom = 96;
 
+function measureMapChrome() {
+  const seen = el => el && el.getBoundingClientRect().height > 0;
+  const tools  = document.getElementById('maptools');
+  const locate = document.getElementById('maplocate');
+  if (seen(tools))  mapChromeTop = Math.round(tools.getBoundingClientRect().bottom) + 12;
+  if (seen(locate)) mapChromeBottom =
+    Math.round(window.innerHeight - locate.getBoundingClientRect().top) + 12;
+}
+
+function mapPadding() {
+  const banner = document.getElementById('routebanner');
   // offsetParent is null for a position:fixed element even when it is on
-  // screen, so the nav bar would measure as hidden. Its rectangle does not
-  // lie, so ask that instead.
+  // screen, so a fixed element would measure as hidden. Its rectangle does
+  // not lie, so ask that instead.
   const visible = el => el && el.getBoundingClientRect().height > 0;
   const bannerH = visible(banner) ? banner.offsetHeight : 0;
 
-  // The nav bar covers the top of the map. Measured rather than assumed:
-  // it grows with the notch, and a route framed under it is a route the
-  // user cannot see.
-  const barH = visible(bar) ? bar.offsetHeight : 0;
-
-  // The sheet covers the bottom of the map, so reserve that much space when
-  // framing a route. Cap it at 55% — beyond that the sheet is covering the
-  // map anyway and there is nothing left worth framing.
-  const sheetH = visible(panel)
-    ? Math.min(panel.offsetHeight, window.innerHeight * 0.55) : 0;
-
-  return { paddingTopLeft: [20, barH + 20],
-           paddingBottomRight: [20, sheetH + bannerH + 20] };
+  // Never let the reserved bands swallow the map: on a short screen an
+  // over-large padding makes fitBounds zoom out to nothing. 40% clears the
+  // real measurement on a 375x812 phone (283px of top furniture) and only
+  // bites on something much shorter.
+  const cap = Math.round(Math.max(40, window.innerHeight * 0.4));
+  return { paddingTopLeft:     [20, Math.min(mapChromeTop, cap)],
+           paddingBottomRight: [20, Math.min(mapChromeBottom + bannerH, cap)] };
 }
 
 const stopLayer    = L.layerGroup().addTo(map);   // browsable bus stops
@@ -2263,7 +2325,11 @@ loadOnce('kmb-stops', 'https://data.etabus.gov.hk/v1/transport/kmb/stop',
     allStops = data;                 // this REPLACES the array...
     addStationsToSearch();           // ...so the stations have to go back in
     drawStops();
-    status.textContent = T('readyZoom');
+    // Not 「放大地圖可見巴士站」 any more: there is no map on this screen to
+    // zoom, and the dots it spoke of were switched off when the map tab
+    // started showing places instead. Telling a rider to do something the
+    // app cannot do reads as the app being broken.
+    status.textContent = T('ready');
     // The app opens on the 車站 tab, usually before this list has arrived.
     if (typeof activeMode !== 'undefined' && activeMode === 'stop' && typeof renderStopView === 'function') renderStopView();
   });
@@ -6268,7 +6334,9 @@ document.getElementById('bottombar').addEventListener('click', event => {
 // sideways than up-down before it counts — an older thumb resting on the edge
 // of a phone while scrolling must never be able to change the screen by
 // accident.
-const TAB_ORDER  = ['stop', 'mtr', 'fav', 'map', 'set'];
+// Must stay in the same order as the buttons in #bottombar, or a slide goes
+// somewhere the rider did not point at.
+const TAB_ORDER  = ['map', 'stop', 'mtr', 'fav', 'set'];
 const SWIPE_MIN  = 60;   // px it must travel before the section changes
 const SWIPE_SLOP = 40;   // px of up-down movement that abandons it
 const PULL_MIN   = 70;   // px of downward drag, from the top, that refreshes
@@ -11821,6 +11889,51 @@ function renderSpotChips() {
   box.innerHTML = html;
   const search = document.getElementById('spot-search');
   if (search) search.placeholder = T('spotSearch');
+  paintMapReset();
+}
+
+// ------------------------------------------------- taking the map back
+// A JOURNEY OUTLIVES THE SCREEN THAT DREW IT.
+// The route, the A and B pins and the 上車 / 目的地 labels are drawn straight
+// onto the map, and until now nothing ever took them off: the ✕ in the search
+// box only emptied the search box, and the ✕ that DOES clear a trip lives on
+// the blue banner, which the map tab never shows. So a rider who had once
+// planned a trip to 屯門市中心 was still looking at it days later, over
+// whatever they were trying to find now, with no way to say "enough".
+function mapHasOverlay() {
+  return journeyLayer.getLayers().length > 0 ||
+         routeLayer.getLayers().length > 0 ||
+         detailLayer.getLayers().length > 0 ||
+         !!hereMarker;
+}
+
+// The button only exists when there is something for it to do. A clear map
+// carrying a red 清除 button invites the question "clear what?".
+function paintMapReset() {
+  const button = document.getElementById('spot-reset');
+  if (!button) return;
+  button.textContent = T('mapReset');
+  button.classList.toggle('on', mapHasOverlay());
+}
+
+function resetMapView() {
+  // resetTrip is what the banner's ✕ already does: the drawn route, the
+  // pins, the stored options and the two ends of the trip, all together.
+  // Anything less leaves the map and the 巴士 tab disagreeing about whether
+  // a journey exists.
+  resetTrip();
+  if (hereMarker) { map.removeLayer(hereMarker); hereMarker = null; }
+  if (hereRing)   { map.removeLayer(hereRing);   hereRing = null; }
+  const locate = document.getElementById('maplocate');
+  if (locate) locate.classList.remove('on', 'busy');
+  // A search list still floating over the map is not a cleared map.
+  const input = document.getElementById('spot-search');
+  if (input) input.value = '';
+  spotQuery = ''; spotPlaces = []; spotPlacesFor = '';
+  renderSpotResults();
+  closeSpotSheet();
+  paintMapReset();
+  status.textContent = T('mapResetDone');
 }
 
 // ---------------------------------------------------------- search by name
@@ -12336,6 +12449,7 @@ function showHere(point) {
   map.setView([point.lat, point.lng], Math.max(map.getZoom(), 16));
   mapCentredOnce = true;
   drawSpots();
+  paintMapReset();          // there is now a dot to take back off
   openHereSheet(point);
 }
 
@@ -12492,6 +12606,9 @@ function openMapLayer() {
   renderSpotChips();
   paintRailButton();
   setTimeout(fitLocateButton, 0);
+  // The only moment the map's own furniture can be measured is while it is
+  // on screen. Framing a journey happens elsewhere, so take the reading now.
+  setTimeout(measureMapChrome, 30);
   // The railway comes back the way the rider left it last time.
   if (railShown) {
     (mtrData ? Promise.resolve() : loadMtr().catch(() => {}))
@@ -12585,6 +12702,8 @@ document.getElementById('mtrtoggle').addEventListener('click', toggleRail);
     input.value = ''; spotQuery = ''; spotPlaces = []; spotPlacesFor = '';
     renderSpotResults(); input.blur();
   });
+  const reset = document.getElementById('spot-reset');
+  if (reset) reset.addEventListener('click', () => { resetMapView(); input.blur(); });
 })();
 
 
