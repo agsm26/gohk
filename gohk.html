@@ -279,12 +279,37 @@
   /* border-box keeps the button exactly 60px including its underline, which
      is what --navh above assumes. Without it the 4px border is added on top
      and every panel sits 4px too low. */
-  .bnav { flex:1; height:60px; box-sizing:border-box; border:none; background:none;
-          cursor:pointer;
+  /* THE BAR MUST SURVIVE 特大.
+     Four things were breaking it at the largest text size, and all four had
+     to go: without min-width:0 a flex child refuses to shrink below its own
+     text, so five tabs overflowed and 設定 was cut off the right edge; without
+     nowrap "收藏 (11)" broke onto a second line and burst the 60px height; the
+     label scaled with the reader's setting until it was 26px, which five
+     labels cannot share on a 375px phone; and the count made the widest label
+     wider still.
+     The bar is chrome, not reading matter. It still grows with the setting —
+     an older rider must be able to read it — but it stops growing before it
+     stops working. The count moved to a badge on the icon, where it costs no
+     width at all.
+     20px is measured, not guessed: a tab is 69px wide inside its padding, the
+     widest Chinese label is 40px at 20px type, and the widest English one is
+     61px. "SETTINGS" needed 80px and so had never fitted at ANY text size —
+     it is "SETUP" now, which does. */
+  .bnav { position:relative; flex:1 1 0; min-width:0; height:60px; box-sizing:border-box;
+          border:none; background:none; cursor:pointer;
           display:flex; flex-direction:column; align-items:center; justify-content:center;
-          gap:2px; padding:8px 2px; color:var(--ink-3); font-weight:800;
-          font-size:0.94rem; border-bottom:4px solid transparent; }
-  .bnav .bicon { font-size:1.2941rem; line-height:1; }
+          gap:2px; padding:6px 2px; color:var(--ink-3); font-weight:800;
+          font-size:min(0.94rem, 20px); border-bottom:4px solid transparent; }
+  .bnav .bicon { font-size:min(1.2941rem, 20px); line-height:1; }
+  .bnav .blabel { white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+                  max-width:100%; letter-spacing:-0.01em; }
+  /* The count, as a badge over the icon. Its own size is fixed for the same
+     reason the label's is capped: it has to fit whatever the reader chose. */
+  .bnav .bcount { position:absolute; top:4px; left:50%; margin-left:2px;
+                  min-width:18px; height:18px; padding:0 5px; box-sizing:border-box;
+                  border-radius:9px; background:var(--navy); color:white;
+                  font-size:11px; font-weight:800; line-height:18px; text-align:center; }
+  .bnav.on .bcount { background:var(--navy); }
   /* The active marker moves to the underside now that the bar is on top, so
      it still points at the panel it belongs to. */
   .bnav.on { color:var(--navy); border-bottom-color:var(--navy); background:var(--navy-tint); }
@@ -1385,7 +1410,7 @@ const TEXT = {
     boardHere:'✓ Board right here at', walkTo:'🚶 Walk', minTo:'min to',
     rideTo:'Ride to', stops:'stops', stations:'stations', changeBus:'↓ CHANGE BUS',
     changeTrain:'↓ CHANGE TRAIN', trainsFrequent:'Trains every few minutes', here:'here',
-    tabBus:'BUS', tabStop:'BUS', tabMtr:'MTR', tabFav:'SAVED', tabMap:'MAP', tabSet:'SETTINGS',
+    tabBus:'BUS', tabStop:'BUS', tabMtr:'MTR', tabFav:'SAVED', tabMap:'MAP', tabSet:'SETUP',
     settings:'Settings', settingLanguage:'Language',
     settingsNote:'Your choice is remembered on this phone.',
     goShort:'\u27a4 Go',
@@ -4909,11 +4934,12 @@ function paintBottomBar() {
   // beside it would read as a section not worth opening.
   // "(0)" on a section that has simply not been searched yet reads as a
   // fault. The count appears once there are results to count.
-  const withCount = (label, n) => n > 0 ? label + ' (' + n + ')' : label;
-  const labels = { mtr: withCount(T('tabMtr'), railPicks.length),
-                   fav: T('tabFav') + ' (' +
-                        (stopFavs.length + stopDests.length + departures.length + trainFavs.length) + ')',
+  // The number no longer rides inside the label — it is a badge on the icon,
+  // so a big count cannot widen a tab and push its neighbours off the screen.
+  const labels = { mtr: T('tabMtr'), fav: T('tabFav'),
                    stop: T('tabStop'), map: T('tabMap'), set: T('tabSet') };
+  const counts = { mtr: railPicks.length,
+                   fav: stopFavs.length + stopDests.length + departures.length + trainFavs.length };
 
   // Looking up a route number is no longer a tab of its own — it is what the
   // 巴士 tab's own search box does — so route mode lights the 巴士 button
@@ -4923,6 +4949,16 @@ function paintBottomBar() {
   for (const button of bar.querySelectorAll('.bnav')) {
     const name = button.dataset.nav;
     button.querySelector('.blabel').textContent = labels[name];
+    // The badge is decoration; the count still has to reach a screen reader,
+    // so it goes in the button's own label as words.
+    const n = counts[name] || 0;
+    let badge = button.querySelector('.bcount');
+    if (n > 0) {
+      if (!badge) { badge = document.createElement('span'); badge.className = 'bcount'; button.appendChild(badge); }
+      badge.textContent = n > 99 ? '99+' : String(n);
+      badge.setAttribute('aria-hidden', 'true');
+    } else if (badge) badge.remove();
+    button.setAttribute('aria-label', labels[name] + (n > 0 ? ' (' + n + ')' : ''));
     // Nothing is ever disabled. The bar is how you move around the app, and
     // a dead button is a dead end — an empty section still has something
     // worth saying, and favourites is where you learn how to fill it.
