@@ -9415,9 +9415,7 @@ function alertWatchItems() {
   if (activeMode === 'stop' && stopState.stop) {
     const group = stopGroupNow();
     for (const g of group) addName(g.name_tc, g.name_en, T('alertOnScreen').replace('{s}', stopName(g)));
-    const shown = (stopState.rows || []).map(r => String(r.route).toUpperCase());
-    const list = shown.length ? [...new Set(shown)] : routesServingAny(group.map(g => g.stop)).map(r => r.route);
-    for (const r of list) addRoute(r, T('alertOnScreen').replace('{s}', r));
+    for (const r of (routesOnScreen() || new Set())) addRoute(r, T('alertOnScreen').replace('{s}', r));
   }
   if (activeMode === 'bus' && routeStopsState && routeStopsState.context) {
     const r = String(routeStopsState.context.routeNo || '').toUpperCase();
@@ -9428,6 +9426,39 @@ function alertWatchItems() {
     for (const l of whichLinesServe(mtrState.station)) lines.add(l);
   }
   return { routes, names, stations, lines };
+}
+
+// THE ROUTES THE RIDER IS ACTUALLY LOOKING AT.
+// stopState.rows holds every bus fetched from every bay of the group; the
+// screen then narrows them to the place typed in the 往… box. Alerts have to
+// follow the SCREEN, not the fetch. They followed the fetch, so standing at
+// 安定邨 looking only at the 60X to 太子站 raised "your route is affected" for
+// the 261 — a bus that was not on the screen and had nothing to do with the
+// trip. Returns null when no stop is open.
+function routesOnScreen() {
+  if (activeMode !== 'stop' || !stopState.stop) return null;
+  const group = stopGroupNow();
+  const destIds = stopState.destFilter ? stopIdsMatching(stopState.destFilter) : null;
+  const filtering = !!(destIds && destIds.size);
+  const out = new Set();
+  const rows = stopState.rows || [];
+  if (rows.length) {
+    for (const row of rows) {
+      if (filtering) {
+        const key = routeKeyForRow(row);
+        const seq = Number(row.seq) ||
+                    (routesServing(row.stop || stopState.stop.stop).find(r => r.key === key) || {}).seq || 0;
+        if (!routeReaches(key, seq, destIds)) continue;
+      }
+      const r = String(row.route || '').toUpperCase();
+      if (r) out.add(r);
+    }
+  } else {
+    let list = routesServingAny(group.map(g => g.stop));
+    if (filtering) list = list.filter(r => routeReaches(r.key, r.seq, destIds));
+    for (const r of list) out.add(String(r.route).toUpperCase());
+  }
+  return out;
 }
 
 // Does this notice touch any of them? Certain when it names the bus or the
@@ -9510,12 +9541,25 @@ function composeAlerts() {
     list.push({ key: 'mtr:' + line + '@' + f.since, kind: 'mtr', line, hits: [{ sure: true, label: railLineName(line) }] });
   }
   const onScreenStops = (activeMode === 'stop' && stopState.stop) ? new Set(stopGroupNow().map(g => g.stop)) : new Set();
+  const onScreenRoutes = routesOnScreen();
+  // ONE CARD PER ROUTE AND REMARK, not one per bay.
+  // The flags are keyed route|pole, so a six-bay stop where every bay reports
+  // the same trouble filed six identical alerts — and because the pole id was
+  // in the key, "seen once" never collapsed them either. 安定邨 showed the 261
+  // notice five times over.
+  const busSeen = new Map();
   for (const [k, f] of Object.entries(alertFlags.bus)) {
     const [route, stopId] = k.split('|');
-    const relevant = departures.some(d => String(d.route).toUpperCase() === route && d.stop === stopId) || onScreenStops.has(stopId);
-    if (!relevant) continue;
-    list.push({ key: 'bus:' + k + '@' + f.since, kind: 'bus', route, text: f.text, hits: [{ sure: true, label: f.label }] });
+    const saved = departures.some(d => String(d.route).toUpperCase() === route && d.stop === stopId);
+    const onScreen = onScreenStops.has(stopId) && onScreenRoutes && onScreenRoutes.has(route);
+    if (!saved && !onScreen) continue;
+    const dk = route + '|' + (f.text || '');
+    const prev = busSeen.get(dk);
+    if (!prev || f.since < prev.since) busSeen.set(dk, { route, text: f.text, label: f.label, since: f.since });
   }
+  for (const [dk, b] of busSeen)
+    list.push({ key: 'bus:' + dk + '@' + b.since, kind: 'bus', route: b.route, text: b.text,
+                hits: [{ sure: true, label: b.label }] });
   return list;
 }
 function refreshAlerts() {
