@@ -1290,6 +1290,11 @@
   #spotsheet { display:none; position:fixed; inset:0; z-index:2000; background:rgba(15,23,42,.55);
                align-items:flex-end; justify-content:center; padding:10px; }
   #spotsheet.open { display:flex; }
+  /* The bar you push down on. It is also the only hint that the card CAN be
+     pushed down, so it is drawn even though it does nothing on its own. */
+  #spotcard .sheetgrip { width:44px; height:5px; margin:2px auto 10px; border-radius:3px;
+                         background:var(--line); }
+  #spotcard { touch-action: pan-y; will-change: transform; }
   .spothead { display:flex; gap:10px; align-items:flex-start; }
   .spothead .sh-icon { flex:0 0 auto; font-size:1.9rem; line-height:1.2; }
   .spothead .sh-name { flex:1 1 auto; min-width:0; }
@@ -1615,6 +1620,7 @@ const TEXT = {
     wxHere:'Hong Kong',
     useMyLocation:'Use my location', hereIs:'You are at {s}', stopNoDirect:'no direct bus',
     stopNoneDueNow:'No bus due right now. These routes run from this stop towards {d}:',
+    spotHotel:'Hotels', spotNone:'No pins', spotPhone:'Phone', spotHotelLoading:'Getting the hotel list…',
     startNearestTo:'Nearest stop with a bus to {d}: {s} ({m} m away)',
     startNoneReach:'No stop within {m} m has a direct bus to {d}. Try the MTR, or a different destination.',
     stopCrossOver:'→ cross over', stopWholePlace:'all {n} bays',
@@ -1854,6 +1860,7 @@ const TEXT = {
     wxHere:'香港',
     useMyLocation:'用我的位置', hereIs:'你在 {s}', stopNoDirect:'冇直達',
     stopNoneDueNow:'現時沒有班次。以下路線由此站開往 {d}：',
+    spotHotel:'酒店賓館', spotNone:'不顯示', spotPhone:'電話', spotHotelLoading:'正在取得酒店名單…',
     startNearestTo:'最近有直達 {d} 的車站：{s}（{m} 米）',
     startNoneReach:'你附近 {m} 米內，沒有車站有巴士直達 {d}。可考慮乘港鐵或轉搭其他交通工具。',
     stopCrossOver:'→ 過對面', stopWholePlace:'全部 {n} 個站位',
@@ -11601,6 +11608,42 @@ document.addEventListener('visibilitychange', () => {
 //   Planning Department                 strategic viewing points
 //   Home and Youth Affairs Bureau       Chinese Temples Committee temples
 const SPOTS_URL = 'attractions.json';
+
+// HOTELS AND GUESTHOUSES — every licensed one in Hong Kong.
+// Source: Home Affairs Department, "List of licensed hotels and guesthouses",
+// via CSDI / data.gov.hk, updated 4 Sep 2026. 1,683 premises with the name in
+// both languages, the address, the district and the telephone number. It is
+// the licence register, so it is complete and official — and it includes the
+// small guesthouses a big travel site will never show you.
+//
+// Kept in its OWN file and fetched only when somebody asks for hotels: at
+// 104 KB over the wire it is half the size of the attractions file again, and
+// a rider looking up a bus should never pay for it.
+const HOTELS_URL = 'hotels.json';
+let hotelsLoading = null;
+let hotelsLoaded = false;
+
+async function loadHotels() {
+  if (hotelsLoaded) return;
+  if (hotelsLoading) return hotelsLoading;
+  hotelsLoading = (async () => {
+    try {
+      await loadSpots();                       // hotels are appended to the same list
+      const response = await fetch(HOTELS_URL, { signal: AbortSignal.timeout(20000) });
+      if (!response.ok) throw new Error('server said ' + response.status);
+      const json = await response.json();
+      const base = spots.length;
+      for (const [n, h] of (json.items || []).entries())
+        spots.push(Object.assign({ i: base + n }, h));
+      hotelsLoaded = true;
+    } catch (error) {
+      console.warn('Hotels unavailable:', error);
+      hotelsLoaded = true;                     // asked and answered
+    }
+    hotelsLoading = null;
+  })();
+  return hotelsLoading;
+}
 let spots = null;              // null = not loaded, [] = tried and empty
 let spotsLoading = null;
 let spotFilter = '';           // '' = every category the zoom allows
@@ -11639,6 +11682,7 @@ const SPOT_CATS = [
   { c:'beach',    icon:'🏖', colour:'#0369a1', key:'spotBeach' },
   { c:'view',     icon:'🔭', colour:'#0f766e', key:'spotView' },
   { c:'nature',   icon:'⛰', colour:'#4d7c0f', key:'spotNature' },
+  { c:'hotel',    icon:'🛏', colour:'#1d4ed8', key:'spotHotel' },
 ];
 const SPOT_CAT = new Map(SPOT_CATS.map(c => [c.c, c]));
 
@@ -11649,7 +11693,11 @@ const SPOT_CAT = new Map(SPOT_CATS.map(c => [c.c, c]));
 // are on. Choosing a category from the chips overrides all of this — asking
 // for temples means temples, wherever you happen to be looking.
 const SPOT_TIER = { sight:11, museum:13, nature:13, beach:13,
-                    monument:14, park:14, temple:14, view:14, heritage:15 };
+                    monument:14, park:14, temple:14, view:14, heritage:15,
+                    // 1,683 of them, most on one street in Tsim Sha Tsui:
+                    // shown only when the hotel chip is chosen, never in the
+                    // everything view, or they bury the rest of Hong Kong.
+                    hotel:99 };
 const SPOT_MAX_PINS = 240;     // beyond this the map is unreadable anyway
 const SPOT_LABEL_ZOOM = 16;
 const SPOT_TRANSPORT_M = 800;  // the same walk the planner asks of anyone else
@@ -11696,6 +11744,7 @@ function drawSpots() {
   if (activeMode !== 'map' || journeyMode) return;
   if (!spots || !spots.length) return;
 
+  if (spotFilter === 'none') return;          // the rider asked for a clear map
   const zoom = map.getZoom(), area = map.getBounds(), centre = map.getCenter();
   const wanted = [];
   for (const s of spots) {
@@ -11724,7 +11773,11 @@ function renderSpotChips() {
   const box = document.getElementById('spotchips');
   if (!box) return;
   let html = '<button class="spotchip' + (spotFilter ? '' : ' on') +
-             '" data-cat="">' + T('spotAll') + '</button>';
+             '" data-cat="">' + T('spotAll') + '</button>' +
+             // Somebody reading the streets, or looking for their own bus
+             // stop, wants the pins out of the way. One tap, and back.
+             '<button class="spotchip' + (spotFilter === 'none' ? ' on' : '') +
+             '" data-cat="none">🚫 ' + T('spotNone') + '</button>';
   for (const cat of SPOT_CATS) {
     html += '<button class="spotchip' + (spotFilter === cat.c ? ' on' : '') +
             '" data-cat="' + cat.c + '">' + cat.icon + ' ' + T(cat.key) + '</button>';
@@ -11938,10 +11991,59 @@ function openSpotSheet(s) {
   spotSheetFor = s;
   const card = document.getElementById('spotcard');
   if (!card) return;
-  card.innerHTML = spotCardHtml(s);
-  document.getElementById('spotsheet').classList.add('open');
+  card.innerHTML = '<div class="sheetgrip" aria-hidden="true"></div>' + spotCardHtml(s);
+  const sheet = document.getElementById('spotsheet');
+  sheet.classList.add('open');
+  card.style.transform = '';
   loadSpotTransport(s);
 }
+
+// SWIPE THE CARD DOWN TO PUT IT AWAY.
+// Tapping a pin covers the map with the answer, and the way to get back was
+// a ✕ or a tap on the dimmed strip above it. On a phone the natural thing is
+// to push the card off the bottom, so that works too: the card follows the
+// finger, and past a third of its height — or on a quick flick — it goes.
+// Anything shorter springs back, so a half-swipe never loses the place.
+(function enableSheetSwipe() {
+  const sheet = document.getElementById('spotsheet');
+  const card = document.getElementById('spotcard');
+  if (!sheet || !card) return;
+  let startY = 0, startAt = 0, dragging = false, moved = 0;
+
+  card.addEventListener('touchstart', event => {
+    if (event.touches.length !== 1) return;
+    // Only from the top of the card, and only when its own list is scrolled
+    // to the top — otherwise this would fight reading the bus times inside.
+    if (card.scrollTop > 0) return;
+    startY = event.touches[0].clientY;
+    startAt = Date.now();
+    dragging = true; moved = 0;
+    card.style.transition = 'none';
+  }, { passive: true });
+
+  card.addEventListener('touchmove', event => {
+    if (!dragging || event.touches.length !== 1) return;
+    moved = event.touches[0].clientY - startY;
+    if (moved <= 0) { card.style.transform = ''; return; }   // upward: leave it alone
+    if (event.cancelable) event.preventDefault();
+    card.style.transform = 'translateY(' + moved + 'px)';
+  }, { passive: false });
+
+  const settle = () => {
+    if (!dragging) return;
+    dragging = false;
+    card.style.transition = 'transform .18s ease-out';
+    const quickFlick = moved > 60 && (Date.now() - startAt) < 300;
+    if (moved > card.offsetHeight / 3 || quickFlick) {
+      card.style.transform = 'translateY(110%)';
+      setTimeout(() => { closeSpotSheet(); card.style.transition = ''; card.style.transform = ''; }, 170);
+    } else {
+      card.style.transform = '';
+    }
+  };
+  card.addEventListener('touchend', settle, { passive: true });
+  card.addEventListener('touchcancel', settle, { passive: true });
+})();
 
 function closeSpotSheet() {
   spotSheetFor = null;
@@ -11958,6 +12060,10 @@ function spotCardHtml(s) {
   if (trail)   meta += '<div><span class="k">' + T('spotTrail') + ':</span> ' + esc(trail) + '</div>';
   if (address) meta += '<div><span class="k">' + T('spotAddress') + ':</span> ' + esc(address) + '</div>';
   if (hours)   meta += '<div><span class="k">' + T('spotHours') + ':</span> ' + esc(hours) + '</div>';
+  // A guesthouse is worth ringing before you walk to it, so the licence
+  // register's telephone number is a tappable link rather than text.
+  if (s.p) meta += '<div><span class="k">' + T('spotPhone') + ':</span> ' +
+                   '<a href="tel:' + esc(String(s.p).replace(/[^0-9+]/g, '')) + '">' + esc(s.p) + '</a></div>';
   // How far it is from the rider, once the rider has said where that is.
   if (herePoint) {
     const away = metresBetween(herePoint.lat, herePoint.lng, s.y, s.x);
@@ -12362,6 +12468,12 @@ document.addEventListener('click', event => {
     spotFilter = chip.dataset.cat || '';
     renderSpotChips();
     drawSpots();
+    // The hotel list is a separate download. Ask for it the moment it is
+    // wanted, then redraw — the map stays usable while it arrives.
+    if (spotFilter === 'hotel' && !hotelsLoaded) {
+      status.textContent = T('spotHotelLoading');
+      loadHotels().then(() => { if (spotFilter === 'hotel') { drawSpots(); renderSpotResults(); } });
+    }
     return;
   }
   const hit = event.target.closest('.spothit');
@@ -12414,6 +12526,10 @@ document.getElementById('mtrtoggle').addEventListener('click', toggleRail);
   input.addEventListener('input', () => {
     spotQuery = input.value;
     if (spotQuery.trim() && !spots) loadSpots().then(renderSpotResults);
+    // Typing a name is a deliberate act, so this is the moment to pay for the
+    // hotel list: somebody hunting for their guesthouse by name should find
+    // it whether or not they thought to press the 🛏 chip first.
+    if (spotQuery.trim().length >= 2 && !hotelsLoaded) loadHotels().then(renderSpotResults);
     renderSpotResults();
     // The bundled places answer instantly; the gazetteer is a network call,
     // so it waits until the typing settles rather than firing per keystroke.
