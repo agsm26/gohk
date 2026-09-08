@@ -612,6 +612,11 @@
   .destchip.dim .polecode { background:var(--ink-3); }
   .destchip .noreach { display:inline-block; margin-left:8px; font-size:0.88rem;
                        font-weight:800; color:var(--red); }
+  /* "Cross to the other side" — the same weight as 冇直達 above, because it
+     is the same kind of fact (you cannot board where you are standing), but
+     amber not red: there IS a bus, it just leaves from over there. */
+  .destchip .crossover { display:inline-block; margin-left:8px; font-size:0.88rem;
+                         font-weight:800; color:var(--amber, #b45309); }
   /* The "which way?" sheet for a looked-up bus: one big button per direction. */
   #dirsheet, #alertsheet { display:none; position:fixed; inset:0; z-index:2000; background:rgba(15,23,42,.55);
               align-items:flex-end; justify-content:center; padding:10px; }
@@ -1321,6 +1326,7 @@ const TEXT = {
     routeNotFound:'Route {r} is not in the timetable right now.',
     wxHere:'Hong Kong',
     useMyLocation:'Use my location', hereIs:'You are at {s}', stopNoDirect:'no direct bus',
+    stopCrossOver:'→ cross over',
     rsNearestStop:'Nearest stop', rsNearestFound:'Nearest on this route: {s} ({m} m)',
     rsWalkNeedStop:'Tap 📍 first to find your stop', rsWalkTo:'Walking directions to {s}',
     rsPickRouteFirst:'Pick a bus route first.',
@@ -1516,6 +1522,7 @@ const TEXT = {
     routeNotFound:'暫時找不到 {r} 的班次資料。',
     wxHere:'香港',
     useMyLocation:'用我的位置', hereIs:'你在 {s}', stopNoDirect:'冇直達',
+    stopCrossOver:'→ 過對面',
     rsNearestStop:'最近車站', rsNearestFound:'此路線最近的站：{s}（{m} 米）',
     rsWalkNeedStop:'請先按 📍 找出最近車站', rsWalkTo:'步行前往 {s}',
     rsPickRouteFirst:'請先選擇巴士路線。',
@@ -7102,6 +7109,63 @@ function stationKey(stop) {
   }
   return m.sk;
 }
+// THE PLACE A POLE BELONGS TO — the name before the comma.
+// KMB names a pole "<place>, <nearby landmark> (CODE)". 太子站 is THIRTEEN
+// bays under two different sub-names: 太子站,旺角花墟 (MK184-188, MK500-503,
+// MK751-752) and 太子站, 旺角警署 (MK356-357). Only routes 1, 1A, 104 and 203C
+// call at the 警署 pair; every bus in from the New Territories calls at the
+// 花墟 ones. So "我要去 太子站, 旺角警署" — which is what tapping the saved
+// place put in the box — matched two poles out of thirteen and answered
+// "no direct bus" for the whole of Tuen Mun. True of that pole. Useless as
+// an answer: the rider said Prince Edward Station, and the 60X goes there.
+//
+// stationKey (above) is the tighter key that decides which bays share a CARD,
+// and it must stay tight — 太子站,旺角花墟 and 太子站, 旺角警署 are 272 m apart
+// and are not one place to stand. This one decides what counts as ARRIVING,
+// which is a walk away, not a step away.
+function placeKey(stop) {
+  const m = memoOf(stop);
+  if (m.pk === undefined) {
+    const raw = String(stop.name_tc || stop.name_en || '').replace(/[（(][^)）]*[)）]/g, '');
+    m.pk = tidyName(raw.split(/[,，]/)[0]);
+  }
+  return m.pk;
+}
+// place key -> its poles. Rebuilt only when the stop lists change.
+let placeFamily = null, placeFamilyStamp = '';
+function placeFamilyNow() {
+  const stamp = dataStamp();
+  if (placeFamily && placeFamilyStamp === stamp) return placeFamily;
+  placeFamily = new Map(); placeFamilyStamp = stamp;
+  for (const stop of plannableStops()) {
+    const k = placeKey(stop);
+    if (!k) continue;
+    if (!placeFamily.has(k)) placeFamily.set(k, []);
+    placeFamily.get(k).push(stop);
+  }
+  return placeFamily;
+}
+// 400 m, and only between poles that share a place name. The thirteen 太子站
+// bays span 272 m; the four unrelated 水邊村 stops that happen to share a name
+// sit 29 km apart, so the name alone can never be the test.
+const DEST_FAMILY_M = 400;
+// Text this broad is not naming a place, so do not spread it any wider.
+const DEST_FAMILY_MAX = 400;
+function addPlaceFamily(named, ids) {
+  if (!named.length || named.length > DEST_FAMILY_MAX) return ids;
+  const families = placeFamilyNow();
+  for (const stop of named) {
+    const kin = families.get(placeKey(stop));
+    if (!kin || kin.length < 2) continue;
+    const lat = Number(stop.lat), lng = Number(stop.long);
+    if (!isFinite(lat) || !isFinite(lng)) continue;
+    for (const other of kin)
+      if (!ids.has(other.stop) &&
+          metresBetween(lat, lng, Number(other.lat), Number(other.long)) <= DEST_FAMILY_M)
+        ids.add(other.stop);
+  }
+  return ids;
+}
 // In 简体 the typed text and the stop keys are both taken to 简体 before
 // they meet, so 屯门 finds 屯門 and 屯門 still finds it too.
 function needleOf(q) { return sc(tidyName(q)); }
@@ -7130,10 +7194,13 @@ function stopIdsMatching(q) {
   if (stamp !== matchMemoStamp) { matchMemo.clear(); matchMemoStamp = stamp; }
   const hit = matchMemo.get(needle);
   if (hit) return hit;
-  const ids = new Set();
   const stops = plannableStops();
-  for (const stop of stops) if (nameMatches(stop, needle, false)) ids.add(stop.stop);
-  if (!ids.size && needle.length >= 2) for (const stop of stops) if (nameMatches(stop, needle, true)) ids.add(stop.stop);
+  let named = stops.filter(stop => nameMatches(stop, needle, false));
+  if (!named.length && needle.length >= 2) named = stops.filter(stop => nameMatches(stop, needle, true));
+  const ids = new Set(named.map(stop => stop.stop));
+  // ...and every other bay of the same place within walking distance, so
+  // naming one pole of a station means the station.
+  addPlaceFamily(named, ids);
   if (matchMemo.size >= 60) matchMemo.delete(matchMemo.keys().next().value);
   matchMemo.set(needle, ids);
   return ids;
@@ -7184,6 +7251,32 @@ function poleGroup(stop) {
     boundsByRoute(other.stop, bounds);
   }
   return members;
+}
+// THE OTHER BANK OF THE SAME STATION.
+// A saved stop is one pole, and at a big interchange that pole may be the
+// wrong side of the road: 屯門公路轉車站 TM101 is the Tuen Mun-bound bank, so
+// once 太子站 is the destination it can only ever say 冇直達 — while the 60X
+// to 太子站 leaves TM750, the same station, 672 m away over the footbridge.
+// Saying "no direct bus" there is true of the pole and wrong about the
+// station, and it leaves the rider with nothing to tap.
+//
+// So: this pole's own bays that get there; failing that, the bays of the SAME
+// STATION NAME that do. stationKey must match exactly and the walk is capped,
+// because names repeat across Hong Kong — the four 水邊村 stops are 29 km apart.
+const CROSS_STATION_M = 800;
+function reachingBays(stop, destIds) {
+  const mine = poleGroup(stop);
+  if (!destIds || !destIds.size) return { bays: mine, crossed: false };
+  const hits = mine.filter(s => reachingRoutes(s.stop, destIds).length);
+  if (hits.length) return { bays: hits, crossed: false };
+  const key = stationKey(stop);
+  const lat = Number(stop.lat), lng = Number(stop.long);
+  if (!key || !isFinite(lat) || !isFinite(lng)) return { bays: mine, crossed: false };
+  const kin = (placeFamilyNow().get(placeKey(stop)) || []).filter(s =>
+    stationKey(s) === key &&
+    metresBetween(lat, lng, Number(s.lat), Number(s.long)) <= CROSS_STATION_M &&
+    reachingRoutes(s.stop, destIds).length);
+  return kin.length ? { bays: kin, crossed: true } : { bays: mine, crossed: false };
 }
 // Dedupe a distance-ordered or search-ordered list into groups. `keep` says
 // which poles are allowed at all (the destination filter).
@@ -7312,7 +7405,7 @@ function stopSetStop(stop, groupStops) {
 }
 
 // One tap on a saved stop is this screen with the stop already chosen.
-function stopOpenSaved(sf, noFilter) {
+function stopOpenSaved(sf, noFilter, group) {
   // The place typed above stays with you: it becomes the 往… filter here —
   // unless this stop has no bus there at all, in which case filtering by it
   // would open an empty screen. Show everything the stop does have instead.
@@ -7320,7 +7413,10 @@ function stopOpenSaved(sf, noFilter) {
   // picker has to still say 屯門市中心. destFilter is the narrowing applied to
   // THIS stop's rows, and that is the only thing dropped.
   const dest = String(stopState.destQuery || '').trim();
-  stopState = Object.assign(freshStopState(), { locateTried: true, stop: sf, group: poleGroup(sf),
+  // `group` is the other bank of the same station, when that is where the
+  // bus the rider wants actually leaves from. Open THAT, not the saved pole.
+  const bays = (group && group.length) ? group : poleGroup(sf);
+  stopState = Object.assign(freshStopState(), { locateTried: true, stop: bays[0], group: bays,
                                                 destQuery: dest, destFilter: noFilter ? '' : dest,
                                                 destPicked: stopState.destPicked, indexing: stopState.indexing });
   if (activeMode !== 'stop') { showMode('stop'); return; }
@@ -7497,7 +7593,8 @@ function stopPickerParts() {
   if (savedShown.length) {
     rest += '<div class="mtrsub">' + T('stopSavedPicks') + '</div><div class="destchips">' +
       savedShown.map(f => {
-        const ids = poleGroup(f).map(g => g.stop);
+        const found = reachingBays(f, filtering ? destIds : null);
+        const ids = found.bays.map(g => g.stop);
         const reaches = !filtering || reachingRoutes(ids, destIds).length > 0;
         // Both halves of the answer are marked, not just the bad half. Greying
         // the wrong ones tells you where NOT to go; lighting the right ones
@@ -7505,11 +7602,18 @@ function stopPickerParts() {
         // Same amber as the chosen destination above, so one glance down the
         // screen reads "here → there" in one colour.
         const mark = !filtering ? '' : (reaches ? ' ok' : ' dim');
+        // When the answer is across the road, the pill says so and names the
+        // bay it will open — the pole code on it is no longer the saved one,
+        // and a rider standing at TM101 has to be told to move.
+        const lead = found.bays[0];
+        const code = found.crossed ? poleCodeOf(lead) : poleCodeOf(f);
         return '<button class="destchip' + mark + '" data-stop-act="fav" data-index="' +
-          stopFavs.indexOf(f) + '"' + (reaches ? '' : ' data-nofilter="1"') + '>' +
+          stopFavs.indexOf(f) + '"' + (found.crossed ? ' data-stop-group="' + esc(ids.join(',')) + '"' : '') +
+          (reaches ? '' : ' data-nofilter="1"') + '>' +
           (filtering && reaches ? '✓ ' : '📍 ') + esc(favLabel(f)) +
-          (poleCodeOf(f) ? ' <small>' + esc(poleCodeOf(f)) + '</small>' : '') +
-          poleDirHtml(f.stop) +
+          (code ? ' <small>' + esc(code) + '</small>' : '') +
+          (found.crossed ? '' : poleDirHtml(f.stop)) +
+          (found.crossed ? groupDirHtml(ids) + '<small class="crossover">' + esc(T('stopCrossOver')) + '</small>' : '') +
           (reaches ? '' : '<small class="noreach">' + esc(T('stopNoDirect')) + '</small>') +
           '</button>';
       }).join('') + '</div>';
@@ -7751,38 +7855,55 @@ function stopRenderSearch(query) {
   // tap opens every one of those poles together, filtered to the place and
   // sorted soonest-arrival first — the full answer, with live times.
   if (filtering) {
-    // One card per station name (all its bays). Stations with a direct bus
-    // to the place come first, with those buses; the other matching names
-    // still follow, dimmed, and open WITHOUT the filter — typing 太 must
-    // always find 太子站, whatever the place.
+    // ONE CARD PER STATION NAME, AND ONLY THE BAYS THAT GO YOUR WAY.
+    // 屯門公路轉車站 is twenty-five bays in two banks either side of Tuen Mun
+    // Road, 536 m apart. Two of them — TM750 and TM756 on the Kowloon-bound
+    // side — carry the 60X to 太子站. The other twenty-three carry buses back
+    // to Tuen Mun. Pooling all twenty-five under one card offered the rider a
+    // stop where their bus goes past on the far carriageway, and averaged the
+    // facing of two opposite banks into no arrow at all.
+    //
+    // So the destination does not merely SORT the cards any more, it decides
+    // what a card contains: g.hits, the bays with a bus that actually gets
+    // there. The bay count, the direction arrow, the route lines and the
+    // group opened by a tap are all built from those, never from g.stops.
     const groups = new Map();
     for (const stop of named) {
       const k = stationKey(stop);
-      if (!groups.has(k)) groups.set(k, { stops: [], best: Infinity, rank: 1, reaches: false });
+      if (!groups.has(k)) groups.set(k, { stops: [], hits: [], best: Infinity, rank: 1 });
       const g = groups.get(k);
       g.stops.push(stop);
       g.rank = Math.min(g.rank, prefixRank(stop));
       const reach = reachingRoutes(stop.stop, destIds);
-      if (reach.length) { g.reaches = true; g.best = Math.min(g.best, ...reach.map(x => x.reach.stopsAway)); }
+      if (reach.length) { g.hits.push(stop); g.best = Math.min(g.best, ...reach.map(x => x.reach.stopsAway)); }
     }
     // Busier names (more poles) before quieter ones: 太子站 before 太祥街.
-    const list = [...groups.values()]
-      .sort((a, b) => (b.reaches - a.reaches) || a.rank - b.rank || a.best - b.best ||
-                      b.stops.length - a.stops.length || stopName(a.stops[0]).length - stopName(b.stops[0]).length)
-      .slice(0, 8);
-    const reachList = list.filter(g => g.reaches);
+    const ranked = [...groups.values()]
+      .sort((a, b) => ((b.hits.length > 0) - (a.hits.length > 0)) || a.rank - b.rank || a.best - b.best ||
+                      b.stops.length - a.stops.length || stopName(a.stops[0]).length - stopName(b.stops[0]).length);
+    // Once ONE station can get you there, the ones that cannot are not
+    // options and are not shown. They are only listed when nothing at all
+    // matches and gets there — then there is no right answer to bury them
+    // under, and a dimmed list that opens without the filter beats a blank
+    // screen: typing 太 must always find 太子站, whatever the place.
+    const reaching = ranked.filter(g => g.hits.length);
+    const list = (reaching.length ? reaching : ranked).slice(0, 8);
+    // What the "every bus from any 屯門轉車 stop" button pools is what is on
+    // screen, not every match there was.
+    const reachList = list.filter(g => g.hits.length);
     const place = esc(stopState.destQuery);
     const card = g => {
+      const bays = g.hits.length ? g.hits : g.stops;
       // Board at the pole nearest the phone, else the first named.
       const lead = herePoint
-        ? g.stops.slice().sort((a, b) => metresBetween(herePoint.lat, herePoint.lng, Number(a.lat), Number(a.long)) - metresBetween(herePoint.lat, herePoint.lng, Number(b.lat), Number(b.long)))[0]
-        : g.stops[0];
-      const ids = g.stops.map(x => x.stop);
-      const chip = g.stops.length > 1 ? T('stopBays').replace('{n}', g.stops.length) : poleCodeOf(lead);
-      return '<button' + (g.reaches ? '' : ' class="dim" data-nofilter="1"') + ' data-stop-id="' + esc(lead.stop) + '" data-stop-group="' + esc(ids.join(',')) + '"><span class="pickmain">🚏 ' + esc(stopName(lead)) +
+        ? bays.slice().sort((a, b) => metresBetween(herePoint.lat, herePoint.lng, Number(a.lat), Number(a.long)) - metresBetween(herePoint.lat, herePoint.lng, Number(b.lat), Number(b.long)))[0]
+        : bays[0];
+      const ids = bays.map(x => x.stop);
+      const chip = bays.length > 1 ? T('stopBays').replace('{n}', bays.length) : poleCodeOf(lead);
+      return '<button' + (g.hits.length ? '' : ' class="dim" data-nofilter="1"') + ' data-stop-id="' + esc(lead.stop) + '" data-stop-group="' + esc(ids.join(',')) + '"><span class="pickmain">🚏 ' + esc(stopName(lead)) +
         (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
         groupDirHtml(ids) +
-        (g.reaches ? poleRoutesLine(ids, 6, destIds) : '<small class="poleroutes">' + T('stopNoReach').replace('{d}', place) + '</small>') +
+        (g.hits.length ? poleRoutesLine(ids, 6, destIds) : '<small class="poleroutes">' + T('stopNoReach').replace('{d}', place) + '</small>') +
         '</span></button>';
     };
     let html = '';
@@ -7790,7 +7911,7 @@ function stopRenderSearch(query) {
     // The typed name matched more than one station name that gets there:
     // offer them all at once first — "every bus from any 屯門轉車 stop".
     if (reachList.length > 1) {
-      const all = reachList.flatMap(g => g.stops);
+      const all = reachList.flatMap(g => g.hits);
       const ids = all.map(x => x.stop);
       html += '<button data-stop-id="' + esc(all[0].stop) + '" data-stop-group="' + esc(ids.join(',')) + '"><span class="pickmain">🚏 ' +
         esc(T('stopAllFrom').replace('{s}', query.trim())) + ' <span class="polecode">' + esc(T('stopBays').replace('{n}', all.length)) + '</span>' +
@@ -7924,7 +8045,12 @@ document.getElementById('stopview').addEventListener('click', event => {
       renderStopView();
       break;
     }
-    case 'fav':     stopOpenSaved(stopFavs[Number(el.dataset.index)], !!el.dataset.nofilter); break;
+    case 'fav': {
+      const sf = stopFavs[Number(el.dataset.index)];
+      const across = el.dataset.stopGroup ? el.dataset.stopGroup.split(',').map(findStopById).filter(Boolean) : null;
+      stopOpenSaved(sf, !!el.dataset.nofilter, across);
+      break;
+    }
     case 'star': {
       const result = toggleStopFav(stopState.stop);
       if (result === null) { status.textContent = T('stopFull'); break; }
