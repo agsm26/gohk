@@ -2214,9 +2214,15 @@ function metresBetween(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+// The nearest stop to a point — over BOTH companies. This walked allStops,
+// which is KMB and the railway only, so on Hong Kong Island it answered with
+// whatever KMB stop happened to be nearest: for 深水灣泳灘 it named the
+// Aberdeen Tunnel 1,240 m away while the Citybus stop 48 m from the beach
+// was invisible to it. allPlannableStops is the same list the planner itself
+// searches, and including ctbStops can only ever move the answer closer.
 function findNearestStop(lat, lng) {
   let best = null, bestMetres = Infinity;
-  for (const stop of allStops) {
+  for (const stop of allPlannableStops()) {
     const m = metresBetween(lat, lng, Number(stop.lat), Number(stop.long));
     if (m < bestMetres) { bestMetres = m; best = stop; }
   }
@@ -2660,6 +2666,19 @@ function redrawJourney() {
   findButton.textContent = findButton.disabled ? T('setBoth') : T('findBuses');
 
   if (!endPoint) { walkInfo.style.display = 'none'; return; }
+
+  // ONE SET OF INSTRUCTIONS AT A TIME.
+  // This block is the hint shown while a trip is being ENTERED: "set this
+  // destination and the nearest stop is X". Once real routes are on screen
+  // the journey card names the stop the rider actually gets off at, leg by
+  // leg, and the two disagree whenever the route alights somewhere better —
+  // 深水灣, 香島道 and a 1-minute walk in the card, against the Aberdeen
+  // Tunnel and 28 minutes here. A rider following the wrong one ends up
+  // walking half an hour, so the guess stands down once the answer exists.
+  if (document.getElementById('panel').classList.contains('results')) {
+    walkInfo.style.display = 'none';
+    return;
+  }
 
   const walk = walkingEstimate(endPoint.stopMetres);
   walkInfo.style.display = 'block';
@@ -4916,6 +4935,11 @@ function reserveRoomForBanner() {
 function setResultsMode(on) {
   const panel = document.getElementById('panel');
   panel.classList.toggle('results', on);
+  // redrawJourney may have run before the results existed, so the standing
+  // "get off here" hint is taken down (and put back) from here as well.
+  const walkInfo = document.getElementById('walkinfo');
+  if (walkInfo && on) walkInfo.style.display = 'none';
+  else if (walkInfo && endPoint) redrawJourney();
 
   // The bar stays put on every screen. Leaving the results should never mean
   // losing the way back to them.
@@ -4923,6 +4947,7 @@ function setResultsMode(on) {
   const trip = document.getElementById('rb-trip');
 
   if (!on) {
+    routeFromMap = false;          // back to browsing
     trip.style.display = 'none';
     panel.style.paddingBottom = '';        // back to the CSS default
     // Back to the entry form: clear any height left over from dragging.
@@ -4971,6 +4996,13 @@ function coClass(co) { return (OPERATORS[co] || OPERATORS.kmb).css; }
 function buildCompareStrip(picks) {
   const strip = document.getElementById('compare');
   strip.innerHTML = '';
+
+  // NOTHING TO COMPARE. A "choose one of these" strip holding a single tile
+  // is a decision with one answer: it takes a band across the top of the
+  // screen to ask the rider to pick what has already been picked, and pushes
+  // the actual journey — the walk, the bus, the stops, the fare — below the
+  // fold. With one option the summary IS the answer, so it goes straight up.
+  if (picks.length < 2) return;
 
   for (const pick of picks) {
     const journey = pick.journey;
@@ -5177,6 +5209,12 @@ function paintBottomBar() {
 }
 
 let mapCentredOnce = false;
+// Set when the results on screen came from asking the MAP "how do I get
+// there". That question deserves its answer at the top of the screen: the
+// saved-buses and buses-near-you strip is standing context, useful when you
+// are browsing and pure obstruction when you have just asked where to go.
+let routeFromMap = false;
+
 function showMode(mode) {
   const panel   = document.getElementById('panel');
   const favView = document.getElementById('favview');
@@ -5306,8 +5344,11 @@ function showMode(mode) {
   currentPicks = (mode === 'mtr' ? railPicks : busPicks);
   paintBottomBar();
 
-  // The saved buses or stations, with live times, before anything else.
-  renderLiveStrip(mode);
+  // The saved buses or stations, with live times, before anything else —
+  // unless the rider asked the map a direct question, in which case the
+  // answer comes first and this stays out of the way.
+  if (routeFromMap) document.getElementById('livestrip').innerHTML = '';
+  else renderLiveStrip(mode);
 
   // Nothing searched yet, or nothing found for this mode: the useful thing
   // to show is the form, not an empty list. Tapping a section is then a way
@@ -11146,7 +11187,12 @@ document.getElementById('rb-close').addEventListener('click', resetTrip);
 
 function resetTrip() {
   startPoint = null; endPoint = null; arm(null);
-  currentPicks = [];
+  // The stored results describe a trip that no longer exists. Only
+  // currentPicks was cleared, so tapping 巴士 afterwards restored the old
+  // busPicks and rebuilt their cards against a startPoint that is now null —
+  // makeCard reads startPoint.stop and the whole screen threw. Long-standing,
+  // and easy to reach now that a journey is one tap from the map.
+  currentPicks = []; busPicks = []; railPicks = []; railOptions = [];
 
   document.getElementById('routebanner').style.display = 'none';
   document.getElementById('stopdetail').style.display = 'none';
@@ -11514,6 +11560,7 @@ function planFromHere(lat, lng, label) {
   withHere(here => {
     status.textContent = T('spotPlanning');
     closeSpotSheet();
+    routeFromMap = true;
     setPoint('start', here.lat, here.lng, T('myLocationLabel'));
     setPoint('end', Number(lat), Number(lng), label || '');
     findBuses().then(() => {
@@ -11530,6 +11577,10 @@ function planFromHere(lat, lng, label) {
       if (isFinite(byRail) && (!isFinite(byBus) || byRail + RAIL_WINS_BY_MIN < byBus)) {
         activeMode = 'mtr';
         paintBottomBar();
+        // showRailResults does not touch the strip, and showMode('bus') has
+        // just filled it. Clear it here or the rail answer opens under a
+        // list of buses that has nothing to do with the question.
+        document.getElementById('livestrip').innerHTML = '';
         showRailResults();
       }
     });
