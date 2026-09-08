@@ -1602,6 +1602,8 @@ const TEXT = {
     routeNotFound:'Route {r} is not in the timetable right now.',
     wxHere:'Hong Kong',
     useMyLocation:'Use my location', hereIs:'You are at {s}', stopNoDirect:'no direct bus',
+    startNearestTo:'Nearest stop with a bus to {d}: {s} ({m} m away)',
+    startNoneReach:'No stop within {m} m has a direct bus to {d}. Try the MTR, or a different destination.',
     stopCrossOver:'→ cross over', stopWholePlace:'all {n} bays',
     stopArriveBy:'{r} in {w} — there by {t}', stopArriveDue:'{r} due now — there by {t}',
     stopRanking:'Finding the soonest way there…', stopRoadSlow:'{s} moving at {k} km/h',
@@ -1838,6 +1840,8 @@ const TEXT = {
     routeNotFound:'暫時找不到 {r} 的班次資料。',
     wxHere:'香港',
     useMyLocation:'用我的位置', hereIs:'你在 {s}', stopNoDirect:'冇直達',
+    startNearestTo:'最近有直達 {d} 的車站：{s}（{m} 米）',
+    startNoneReach:'你附近 {m} 米內，沒有車站有巴士直達 {d}。可考慮乘港鐵或轉搭其他交通工具。',
     stopCrossOver:'→ 過對面', stopWholePlace:'全部 {n} 個站位',
     stopArriveBy:'{r} {w}後開 — {t} 到', stopArriveDue:'{r} 即將開 — {t} 到',
     stopRanking:'搵緊最快到嘅路線…', stopRoadSlow:'{s} 現時只有 {k} 公里/小時',
@@ -8527,6 +8531,12 @@ function withHere(then) {
 }
 
 // The closest pole to a point, ignoring rail stations — this is the bus tab.
+// How far to look for a stop that can actually get the rider where they said.
+// Wider than the everyday nearby list, because "no bus from here" is a heavy
+// thing to tell someone and it should not be said while a stop that works
+// sits five minutes up the road.
+const START_REACH_M = 1000;
+
 function nearestPoleTo(here) {
   const near = stopsNear(here.lat, here.lng, STOP_NEAR_M).filter(n => !n.stop.isStation);
   return near.length ? near[0].stop : null;
@@ -9344,10 +9354,54 @@ document.getElementById('stopview').addEventListener('click', event => {
       status.textContent = T('hereIs').replace('{s}', stopName(near));
     }); break;
     case 'here-start': withHere(here => {
-      const near = nearestPoleTo(here);
-      if (!near) { status.textContent = T('stopNoneNear'); return; }
-      stopSetStop(near);          // straight to the buses leaving from here
-      stopLoadRows();
+      const destIds = destIdsNow();
+      const filtering = !!(destIds && destIds.size);
+
+      // NO DESTINATION SET: the nearest stop IS the answer.
+      if (!filtering) {
+        const near = nearestPoleTo(here);
+        if (!near) { status.textContent = T('stopNoneNear'); return; }
+        stopSetStop(near);
+        // Otherwise the line still reads 正在定位… long after it finished.
+        status.textContent = T('hereIs').replace('{s}', stopName(near));
+        return;
+      }
+
+      // A DESTINATION IS SET, so "which stop is nearest" is the wrong
+      // question — the right one is "which is the nearest stop a bus actually
+      // leaves from towards there". Opening the nearest stop regardless is
+      // how a rider heading for Bonham Road was shown the 203C to Tsim Sha
+      // Tsui East: the closest pole, and no use at all.
+      //
+      // Judged over each pole's whole GROUP, the same as the saved-stop
+      // pills, because tapping one opens the group. Searched further out than
+      // the usual list: refusing to mention a stop 600 m away and reporting
+      // "no bus" instead would be a worse answer, so the distance is shown
+      // and the rider decides whether it is a walk they want.
+      const near = stopsNear(here.lat, here.lng, START_REACH_M).filter(n => !n.stop.isStation);
+      if (!near.length) { status.textContent = T('stopNoneNear'); return; }
+
+      for (const n of near) {
+        const ids = poleGroup(n.stop).map(g => g.stop);
+        if (!reachingRoutes(ids, destIds).length) continue;
+        stopSetStop(n.stop);
+        // Same pattern the stop buttons use: set the filter and redraw. The
+        // rows are already on their way and are filtered as they render.
+        stopState.destFilter = stopState.destQuery;
+        renderStopView();
+        status.textContent = T('startNearestTo')
+          .replace('{s}', stopName(n.stop))
+          .replace('{m}', Math.round(n.metres))
+          .replace('{d}', stopState.destQuery);
+        return;
+      }
+
+      // Nothing within a real walk gets there. Say that plainly and leave the
+      // screen where it is — opening an unrelated stop would look like an
+      // answer, and this rider needs to know to take the MTR or a taxi.
+      status.textContent = T('startNoneReach')
+        .replace('{d}', stopState.destQuery)
+        .replace('{m}', START_REACH_M);
     }); break;
     case 'geo-no':  rememberGeoChoice('no'); renderStopView(); break;
     case 'dest': {
