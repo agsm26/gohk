@@ -1194,9 +1194,9 @@
      over a list of arrival times would be clutter over the one screen
      a rider is actually reading.
      ============================================================== */
-  #maptools, #maplocate { display:none; }
+  #maptools, #maplocate, #mtrtoggle { display:none; }
   body.mapopen #maptools { display:block; }
-  body.mapopen #maplocate { display:flex; }
+  body.mapopen #maplocate, body.mapopen #mtrtoggle { display:flex; }
   #maptools { position:fixed; top:calc(var(--toph) + 8px); left:10px; right:10px; z-index:1150; }
   .mtsearch { display:flex; gap:4px; align-items:center; background:var(--surface);
               border:2px solid var(--line); border-radius:var(--r-md); padding:2px 4px;
@@ -1241,6 +1241,20 @@
                box-shadow:0 4px 16px rgba(0,0,0,.32); }
   #maplocate.on { background:var(--navy); border-color:var(--navy); }
   #maplocate.busy { opacity:.6; }
+  /* The railway switch sits directly above the locate button, in the same
+     stack and measured off the same attribution height, so the two move
+     together when the copyright notice changes size. */
+  #mtrtoggle { position:fixed; right:14px;
+               bottom:calc(var(--attrh, 48px) + 84px + env(safe-area-inset-bottom, 0px));
+               z-index:1150; width:62px; height:62px; border-radius:50%; padding:0;
+               border:2px solid var(--line); background:var(--surface); color:var(--ink);
+               align-items:center; justify-content:center; font-size:1.7rem;
+               box-shadow:0 4px 16px rgba(0,0,0,.32); opacity:.75; }
+  #mtrtoggle.on { background:var(--navy); border-color:var(--navy); opacity:1; }
+  /* Station dots and their names. Kept small: the lines are the shape a
+     rider reads at a glance, and the names are for when they have zoomed in. */
+  .railname { pointer-events:none; font-size:11px; font-weight:800; color:#0f172a;
+              white-space:nowrap; text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; }
 
   /* A place pin. The label rides under it from zoom 16 so a tourist can read
      the map without tapping every dot. The box is wide to make room for the
@@ -1423,6 +1437,9 @@
   <div id="spotresults"></div>
 </div>
 
+<!-- Show or hide the railway on the map. -->
+<button id="mtrtoggle" type="button">🚇</button>
+
 <!-- Where am I, and what leaves from near here. -->
 <button id="maplocate" type="button">📍</button>
 
@@ -1564,6 +1581,7 @@ const TEXT = {
     spotRouteFromYou:'Route from where you are',
     spotVisitHead:'Places to visit', spotPlacesHead:'Other places',
     spotStopsHead:'Stops and stations', spotNearbyStops:'{n} stops here',
+    mapRail:'Show or hide the MTR',
     spotPlanning:'Working out how to get you there\u2026',
     hereTitle:'You are here',
     hereAccuracy:'Accurate to about {m} m',
@@ -1799,6 +1817,7 @@ const TEXT = {
     spotRouteFromYou:'由你的位置規劃路線',
     spotVisitHead:'景點', spotPlacesHead:'其他地點',
     spotStopsHead:'車站', spotNearbyStops:'這裡有 {n} 個站',
+    mapRail:'顯示或隱藏港鐵',
     spotPlanning:'正在為你規劃路線…',
     hereTitle:'你在這裡',
     hereAccuracy:'誤差約 {m} 米',
@@ -11898,6 +11917,80 @@ async function loadHereTransport(point) {
   await fillWayEtas(groups, paint);
 }
 
+// ----------------------------------------------------------- the railway
+// THE MTR, DRAWN ON THE MAP, ON A SWITCH.
+// A visitor works out Hong Kong by its railway first — it is the one network
+// you can read without knowing any Chinese — and "which line am I near" is
+// hard to answer from a list of station names. So the ten lines are drawn in
+// their own colours, with every station on them, and a button turns the whole
+// thing off again when it is in the way.
+//
+// The colours are MTR's own and are not in mtr.json, which carries only the
+// station order; they are stable enough to name here.
+const RAIL_COLOURS = {
+  AEL:'#00888A', DRL:'#F550A7', EAL:'#53B7E8', ISL:'#007DC5', KTL:'#00AB4E',
+  SIL:'#BAC429', TCL:'#F7943E', TKL:'#7D499D', TML:'#923011', TWL:'#ED1D24',
+};
+const RAIL_LABEL_ZOOM = 14;
+const railLayer = L.layerGroup();
+let railShown = false;
+try { railShown = localStorage.getItem('gohk-map-rail') === 'on'; } catch (e) {}
+
+function drawRail() {
+  railLayer.clearLayers();
+  if (!railShown || !mtrData) return;
+
+  // The lines first, so the station dots sit on top of them.
+  for (const [line, variants] of Object.entries(mtrData.lines || {})) {
+    const colour = RAIL_COLOURS[line] || '#334155';
+    for (const run of variants) {
+      const points = run.map(code => mtrData.stations[code])
+                        .filter(Boolean).map(st => [st[2], st[3]]);
+      if (points.length < 2) continue;
+      L.polyline(points, { color: colour, weight: 5, opacity: 0.85,
+                           lineJoin: 'round', lineCap: 'round' }).addTo(railLayer);
+    }
+  }
+
+  // Then every station, once, however many lines call at it.
+  const withLabel = map.getZoom() >= RAIL_LABEL_ZOOM;
+  const area = map.getBounds();
+  for (const [code, st] of Object.entries(mtrData.stations || {})) {
+    const here = [st[2], st[3]];
+    if (withLabel && !area.contains(here)) continue;   // labels only for what is on screen
+    const marker = L.circleMarker(here, {
+      radius: 5, color: '#1f2937', weight: 2, fillColor: '#ffffff', fillOpacity: 1,
+    }).addTo(railLayer);
+    const name = lang === 'zh' ? (st[1] || st[0]) : st[0];
+    marker.bindTooltip(name, { direction: 'right', className: 'railname',
+                               permanent: withLabel, offset: [6, 0] });
+    // A station is a place to catch a train, so a tap goes to the trains.
+    marker.on('click', () => { mtrSetStation(code); showMode('mtr'); });
+  }
+}
+
+async function toggleRail() {
+  railShown = !railShown;
+  try { localStorage.setItem('gohk-map-rail', railShown ? 'on' : 'off'); } catch (e) {}
+  paintRailButton();
+  if (railShown) {
+    if (!mtrData) await loadMtr().catch(error => console.warn('Rail unavailable:', error));
+    railLayer.addTo(map);
+  } else {
+    map.removeLayer(railLayer);
+  }
+  drawRail();
+}
+
+function paintRailButton() {
+  const button = document.getElementById('mtrtoggle');
+  if (!button) return;
+  button.classList.toggle('on', railShown);
+  button.title = T('mapRail');
+  button.setAttribute('aria-label', T('mapRail'));
+  button.setAttribute('aria-pressed', railShown ? 'true' : 'false');
+}
+
 // ------------------------------------------------------------------ wiring
 // Called when the MAP tab opens: load once, draw, and keep drawing as the
 // rider pans. Everything is lazy — a rider who never opens the map never
@@ -11913,12 +12006,19 @@ function fitLocateButton() {
 
 function openMapLayer() {
   renderSpotChips();
+  paintRailButton();
   setTimeout(fitLocateButton, 0);
+  // The railway comes back the way the rider left it last time.
+  if (railShown) {
+    (mtrData ? Promise.resolve() : loadMtr().catch(() => {}))
+      .then(() => { railLayer.addTo(map); drawRail(); });
+  }
   if (spots) { drawSpots(); return; }
   loadSpots().then(() => { renderSpotChips(); drawSpots(); renderSpotResults(); });
 }
 
 map.on('moveend', drawSpots);
+map.on('moveend', drawRail);      // station labels follow the view
 
 document.addEventListener('click', event => {
   const chip = event.target.closest('.spotchip');
@@ -11969,6 +12069,7 @@ document.getElementById('spotsheet').addEventListener('click', event => {
 });
 
 document.getElementById('maplocate').addEventListener('click', mapLocate);
+document.getElementById('mtrtoggle').addEventListener('click', toggleRail);
 
 (function wireSpotSearch() {
   const input = document.getElementById('spot-search');
