@@ -305,6 +305,9 @@
     scrollbar-width:none; font-size:0.94rem; font-weight:700; color:var(--ink-2);
   }
   #weatherbar::-webkit-scrollbar { display:none; }
+  /* A pull that produces nothing visible reads as a pull that did not work. */
+  #weatherbar.refreshing { animation:pullflash .9s ease-out; }
+  @keyframes pullflash { from { background:var(--navy-tint); } to { background:transparent; } }
   .wxitem { flex:0 0 auto; display:flex; align-items:center; gap:4px; }
   .wxlabel { color:var(--ink-3); font-weight:700; }
   .wxtemp { color:#111; font-weight:800; }
@@ -408,6 +411,24 @@
   .filterrow .filtericon { font-size:1.1rem; opacity:.75; flex:none; }
   .filterrow input { flex:1; min-width:0; }
   .filterrow .refreshbtn { flex:none; }
+  /* The ✕ that empties a box. Always present so the row keeps its shape,
+     faded when there is nothing to clear — but still 48px, because a target
+     that is only sometimes hittable is worse than one that always is. */
+  .rsclear { flex:0 0 auto; width:48px; min-height:48px; border:2px solid var(--line);
+             border-radius:10px; background:var(--surface); color:var(--ink-3);
+             font-size:1.1rem; font-weight:800; cursor:pointer; padding:0; line-height:1; }
+  .rsclear.off { opacity:.35; }
+  .rsclear:active { background:var(--surface-2); }
+  /* The naming sheet. The real name is shown small above the box so the
+     rider's own word and the pole's official one are never mistaken. */
+  .namereal { font-size:0.94rem; font-weight:700; color:var(--ink-3); margin:8px 2px 6px; }
+  #destnick { width:100%; box-sizing:border-box; padding:12px 14px; min-height:52px;
+              border:2px solid var(--line); border-radius:10px; font-size:1.12rem;
+              font-weight:700; color:var(--ink); }
+  .namehint { font-size:0.94rem; color:var(--ink-3); margin:6px 2px 10px; }
+  .namedrop { display:block; width:100%; min-height:52px; margin-top:8px; border-radius:10px;
+              border:2px solid var(--line); background:var(--surface); color:var(--red);
+              font-size:1rem; font-weight:800; cursor:pointer; }
   .mtrhead .mtrsub { flex:1; margin:0; }
   .mtrupdated { font-size:0.94rem; color:var(--ink-3); font-weight:700; margin:4px 0 8px; }
   .mtralert { border:2px solid var(--amber); background:var(--amber-tint); color:var(--amber);
@@ -1292,7 +1313,10 @@ const TEXT = {
     readyZoom:'Ready. Zoom in to see bus stops.', noStopLocations:'No stop locations found.',
     loadingRoute:'Loading {r}…', couldNotLoadRoute:'Could not load route {r}.',
     loadingArrivals:'Loading arrivals…', couldNotLoadArrivals:'Could not load arrivals.',
-    noBusesListed:'No buses listed here.', updatedAt:'Updated {t}',
+    noBusesListed:'No buses listed here.', updatedAt:'Updated {t}', pullRefreshing:'Refreshing…', clearBox:'Clear',
+    nameSaveTitle:'Save this place', nameEditTitle:'Rename this place',
+    nameYourWord:'Your name for it', nameHint:'Leave it blank to keep the real name.',
+    nameConfirm:'Save', nameRemove:'Remove from saved',
     etaAbout:'~', etaSchedNote:'~ from the timetable, not a tracked bus',
     refresh:'🔄 Refresh times', refreshing:'Refreshing…',
     textSize:'Text size', textNormal:'Normal', textLarge:'Large', textXLarge:'Extra large',
@@ -1493,7 +1517,10 @@ const TEXT = {
     readyZoom:'準備就緒。放大地圖可見巴士站。', noStopLocations:'找不到車站位置。',
     loadingRoute:'正在載入 {r}…', couldNotLoadRoute:'無法載入路線 {r}。',
     loadingArrivals:'正在查詢班次…', couldNotLoadArrivals:'無法取得班次。',
-    noBusesListed:'此站沒有班次資料。', updatedAt:'更新於 {t}',
+    noBusesListed:'此站沒有班次資料。', updatedAt:'更新於 {t}', pullRefreshing:'更新緊…', clearBox:'清除',
+    nameSaveTitle:'收藏呢個地方', nameEditTitle:'改個名',
+    nameYourWord:'你叫佢乜嘢', nameHint:'唔填就用返原本個名。',
+    nameConfirm:'確定', nameRemove:'從收藏中移除',
     etaAbout:'約', etaSchedNote:'「約」是班次表時間，未有實時追蹤',
     refresh:'🔄 更新班次', refreshing:'更新中…',
     textSize:'文字大小', textNormal:'標準', textLarge:'大', textXLarge:'特大',
@@ -5861,9 +5888,28 @@ document.getElementById('bottombar').addEventListener('click', event => {
 // of a phone while scrolling must never be able to change the screen by
 // accident.
 const TAB_ORDER  = ['stop', 'mtr', 'fav', 'map', 'set'];
-const SWIPE_EDGE = 44;   // px from either side a slide must begin in
 const SWIPE_MIN  = 60;   // px it must travel before the section changes
 const SWIPE_SLOP = 40;   // px of up-down movement that abandons it
+const PULL_MIN   = 70;   // px of downward drag, from the top, that refreshes
+
+// THE SWIPE NOW WORKS FROM ANYWHERE.
+// It used to have to START within 44 px of a screen edge, to keep it clear of
+// the sideways-scrolling strips inside the app. That band is also exactly
+// where Android and iOS put their own back gesture, so the OS won a race the
+// rider never knew they were in and the swipe read as broken.
+//
+// The strips are dodged by asking directly instead: if the finger came down
+// inside something that can actually scroll sideways, that thing gets the
+// gesture. Nothing else has to be guessed at.
+function inSideScroller(el) {
+  for (let n = el; n && n !== document.body; n = n.parentElement) {
+    if (n.scrollWidth > n.clientWidth + 4) {
+      const ox = getComputedStyle(n).overflowX;
+      if (ox === 'auto' || ox === 'scroll') return true;
+    }
+  }
+  return false;
+}
 
 let swipe = null;
 
@@ -5890,12 +5936,15 @@ document.addEventListener('touchstart', event => {
   // Not while a sheet is up, and not while a search box has the keyboard.
   if (document.querySelector('#dirsheet.open, #alertsheet.open')) return;
   if (event.target.closest('input, textarea, select')) return;
+  // The map tab is a map: dragging it is panning, and panning wins.
+  if (activeMode === 'map' || event.target.closest('#map')) return;
+  if (inSideScroller(event.target)) return;
   const touch = event.touches[0];
-  const width = window.innerWidth;
-  const side  = touch.clientX <= SWIPE_EDGE ? 'left'
-              : touch.clientX >= width - SWIPE_EDGE ? 'right' : null;
-  if (!side) return;
-  swipe = { x: touch.clientX, y: touch.clientY, side, decided: false };
+  const panel = document.getElementById('panel');
+  // A pull only counts as a refresh when the list is already at its top —
+  // otherwise it is an ordinary scroll and must stay one.
+  const atTop = !panel || panel.scrollTop <= 0;
+  swipe = { x: touch.clientX, y: touch.clientY, atTop, pulled: false };
 }, { passive: true });
 
 document.addEventListener('touchmove', event => {
@@ -5903,13 +5952,24 @@ document.addEventListener('touchmove', event => {
   const touch = event.touches[0];
   const dx = touch.clientX - swipe.x;
   const dy = touch.clientY - swipe.y;
+
+  // ---- PULL DOWN TO REFRESH ----
+  // Downward, from the top of a list, and clearly more down than sideways.
+  if (swipe.atTop && dy > 0 && Math.abs(dy) > Math.abs(dx)) {
+    if (dy >= PULL_MIN && !swipe.pulled) {
+      swipe.pulled = true;
+      showPullHint();
+      refreshCurrentView();
+    }
+    return;
+  }
+
+  // ---- SIDEWAYS TO CHANGE SECTION ----
   if (Math.abs(dy) > SWIPE_SLOP && Math.abs(dy) > Math.abs(dx)) { swipe = null; return; }
   if (Math.abs(dx) < SWIPE_MIN) return;
-  // Only the direction that leads away from the edge counts. A right-to-left
-  // drag beginning on the LEFT edge is somebody swiping back into the screen,
-  // not asking for the next section.
-  const step = swipe.side === 'left' ? -1 : 1;
-  if ((step === -1 && dx < 0) || (step === 1 && dx > 0)) { swipe = null; return; }
+  // Right means back a section, left means on to the next — the way a stack
+  // of cards moves under the thumb, and the same order as the buttons.
+  const step = dx > 0 ? -1 : 1;
   if (!swipe.decided) {
     swipe.decided = true;
     // Stops the browser treating the rest of this drag as a back-gesture or
@@ -5921,6 +5981,29 @@ document.addEventListener('touchmove', event => {
 
 document.addEventListener('touchend', () => { swipe = null; }, { passive: true });
 document.addEventListener('touchcancel', () => { swipe = null; }, { passive: true });
+
+// A pull that produced nothing visible reads as a pull that did not work, so
+// it always says something even when the answer arrives instantly.
+function showPullHint() {
+  status.textContent = T('pullRefreshing');
+  const bar = document.getElementById('weatherbar');
+  if (bar) { bar.classList.add('refreshing'); setTimeout(() => bar.classList.remove('refreshing'), 900); }
+}
+// Whatever this section is showing, ask for it again.
+function refreshCurrentView() {
+  if (activeMode === 'stop') {
+    if (stopState.stop) { arriveRows.clear(); stopLoadRows(true); }
+    else { renderStopView(); }
+  } else if (activeMode === 'mtr') {
+    mtrLoadBlocks(true);
+  } else if (activeMode === 'fav') {
+    renderFavouriteList();
+  } else if (activeMode === 'map') {
+    map.invalidateSize(); drawStops();
+  }
+  loadWeather();
+  checkAlerts();
+}
 
 let chosenNumber = 1;
 
@@ -8263,11 +8346,22 @@ function stopPickerParts() {
   // is a one-tap destination for ever after.
   const pin = act => '<button class="rspin" data-stop-act="' + act + '" title="' + esc(T('useMyLocation')) +
                      '" aria-label="' + esc(T('useMyLocation')) + '">📍</button>';
+  // Always there, so the row never changes shape as you type — greyed when
+  // there is nothing to clear. A control that appears and disappears under
+  // the thumb is one you learn not to trust.
+  const clearBtn = (act, on) => '<button class="rsclear' + (on ? '' : ' off') + '" data-stop-act="' + act +
+    '" title="' + esc(T('clearBox')) + '" aria-label="' + esc(T('clearBox')) + '">✕</button>';
 
+  // THE ROW READS LEFT TO RIGHT LIKE A SENTENCE.
+  // The two things that ACT on the place — find it near me, keep it under my
+  // own name — sit together on the left where the thumb already is, and the
+  // ✕ that empties the box sits at the far right where a clear always is.
+  // The star used to be marooned on the right, next to nothing it related to.
   top += '<div class="mtrsub">' + T('stopDestPh').replace(/[（(].*$/, '') + '</div>' +
          '<div class="frow">' + pin('here-dest') +
+         '<span id="stop-dest-star">' + star + '</span>' +
          '<input id="stop-dest" type="text" placeholder="' + esc(T('stopDestPh')) + '" autocomplete="off" value="' + esc(st.destQuery || '') + '">' +
-         '<span id="stop-dest-star">' + star + '</span></div>' +
+         clearBtn('clear-dest', !!(st.destQuery || '').trim()) + '</div>' +
          '<div id="stop-dest-results"></div>';
 
   if (stopDests.length) {
@@ -8282,7 +8376,8 @@ function stopPickerParts() {
   // last — they are the fallback when you have not said where you are.
   rest += '<div class="mtrsub sectionbreak">' + T('stopStartHead') + '</div>' +
           '<div class="frow">' + pin('here-start') +
-          '<input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off"></div>' +
+          '<input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off">' +
+          clearBtn('clear-start', false) + '</div>' +
           '<div class="mtrpick" id="stop-search-results"></div>';
   // Saved poles as one-tap pills, same shape as the saved places above.
   // YOUR SAVED STOPS, ALWAYS SHOWN — but greyed when they cannot get you
@@ -8421,9 +8516,12 @@ function renderStopView() {
   // ---- 3. EVERY BUS FROM IT, narrowed to a direction if asked ----
   // The filter and the refresh share one row: the box says what it does, the
   // button sits beside it rather than under a heading that is no longer here.
+  const filterSet = !!String(st.destFilter || '').trim();
   html += '<div class="frow filterrow"><span class="filtericon" aria-hidden="true">🔎</span>' +
           '<input id="stop-filter" type="text" placeholder="' + esc(T('stopFilterPh')) + '" autocomplete="off" value="' + esc(st.destFilter || '') + '"' +
           ' aria-label="' + esc(T('stopFilterPh')) + '">' +
+          '<button class="rsclear' + (filterSet ? '' : ' off') + '" data-stop-act="clear-filter" title="' + esc(T('clearBox')) +
+          '" aria-label="' + esc(T('clearBox')) + '">✕</button>' +
           '<button class="refreshbtn" data-stop-act="refresh"' + (st.loading ? ' disabled' : '') + '>' +
           T(st.loading ? 'refreshing' : 'refresh') + '</button></div>' +
           '<div id="stop-filter-suggest"></div>' +
@@ -8864,12 +8962,27 @@ document.getElementById('stopview').addEventListener('click', event => {
       renderStopView();
       break;
     }
+    case 'clear-dest': {
+      stopState.destQuery = ''; stopState.destPicked = false;
+      renderStopView();
+      const box = document.getElementById('stop-dest'); if (box) box.focus();
+      break;
+    }
+    case 'clear-start': {
+      const box = document.getElementById('stop-search');
+      if (box) { box.value = ''; box.focus(); }
+      stopRenderSearch('');
+      break;
+    }
+    case 'clear-filter': {
+      stopState.destFilter = '';
+      renderStopView();
+      const box = document.getElementById('stop-filter'); if (box) box.focus();
+      break;
+    }
     case 'deststar': {
       const name = String(stopState.destQuery || '').trim();
-      const result = toggleStopDest(name);
-      if (result === null) { status.textContent = T('stopDestFull'); break; }
-      status.textContent = T(result ? 'stopDestSavedMsg' : 'stopDestRemovedMsg').replace('{d}', name);
-      renderStopView();
+      if (name) askDestName(name);
       break;
     }
     case 'fav': {
@@ -9748,11 +9861,61 @@ function askTrafficThen(routeNo, go, slow) {
   heldGo = () => { trafficAcked.add(String(routeNo).toUpperCase()); go(); };
   sheet.classList.add('open');
 }
+// NAMING A PLACE, AT THE MOMENT YOU SAVE IT.
+// The star used to save silently under the stop's official name — 太子站,
+// 旺角警署 — and renaming it to something a person actually says was buried
+// three taps deep in 收藏. But the moment you save a place is exactly when you
+// know what you call it, so it asks then: a box already holding your own word
+// for it if you have one, and the pole's real name underneath so the two are
+// never confused. Confirm keeps it; cancel changes nothing at all.
+function askDestName(realName) {
+  const sheet = document.getElementById('alertsheet'), card = document.getElementById('alertcard');
+  if (!sheet || !card) return;
+  const existing = stopDests.find(d => destName(d) === realName);
+  const nick = existing && existing.nick ? existing.nick : '';
+  card.innerHTML =
+    '<div class="dirhead"><b>★</b><span>' + esc(T(existing ? 'nameEditTitle' : 'nameSaveTitle')) + '</span></div>' +
+    '<div class="namereal">' + esc(realName) + '</div>' +
+    '<input id="destnick" type="text" maxlength="24" autocomplete="off" ' +
+      'placeholder="' + esc(realName) + '" value="' + esc(nick) + '" aria-label="' + esc(T('nameYourWord')) + '">' +
+    '<div class="namehint">' + esc(T('nameHint')) + '</div>' +
+    '<button class="dirbtn" data-name-ok="1"><b>' + esc(T('nameConfirm')) + '</b></button>' +
+    (existing ? '<button class="namedrop" data-name-remove="1">' + esc(T('nameRemove')) + '</button>' : '') +
+    '<button class="dircancel" data-name-cancel="1">' + esc(T('cancel')) + '</button>';
+  sheet.classList.add('open');
+  setTimeout(() => { const i = document.getElementById('destnick'); if (i) i.focus(); }, 50);
+}
+function commitDestName(realName) {
+  const box = document.getElementById('destnick');
+  const nick = String(box ? box.value : '').trim().slice(0, 24);
+  const keep = (nick && nick !== realName) ? nick : '';
+  const at = stopDests.findIndex(d => destName(d) === realName);
+  if (at >= 0) stopDests[at] = keep ? { name: realName, nick: keep } : realName;
+  else {
+    if (stopDests.length >= MAX_STOPS) { status.textContent = T('stopDestFull'); return; }
+    stopDests.unshift(keep ? { name: realName, nick: keep } : realName);
+  }
+  saveStopDests();
+  status.textContent = T('stopDestSavedMsg').replace('{d}', keep || realName);
+  closeAlertSheet();
+  renderStopView();
+}
+function removeDestName(realName) {
+  const at = stopDests.findIndex(d => destName(d) === realName);
+  if (at >= 0) { stopDests.splice(at, 1); saveStopDests(); }
+  status.textContent = T('stopDestRemovedMsg').replace('{d}', realName);
+  closeAlertSheet();
+  renderStopView();
+}
+
 function closeAlertSheet() {
   const sheet = document.getElementById('alertsheet');
   if (sheet) sheet.classList.remove('open');
 }
 document.getElementById('alertsheet').addEventListener('click', event => {
+  if (event.target.closest('[data-name-ok]'))     { commitDestName(String(stopState.destQuery || '').trim()); return; }
+  if (event.target.closest('[data-name-remove]')) { removeDestName(String(stopState.destQuery || '').trim()); return; }
+  if (event.target.closest('[data-name-cancel]')) { closeAlertSheet(); return; }
   if (event.target.closest('[data-held-go]')) { closeAlertSheet(); const go = heldGo; heldGo = null; if (go) go(); return; }
   if (event.target.closest('[data-held-back]')) { closeAlertSheet(); heldGo = null; return; }
   if (event.target.id === 'alertsheet' || event.target.closest('[data-alert-ok]')) { closeAlertSheet(); heldGo = null; }
