@@ -222,8 +222,8 @@
   /* COMPARISON STRIP
      Three tiles side by side, so the whole choice is visible without
      scrolling. The detailed cards stay below for whichever they pick. */
-  #compare { display:flex; gap:8px; margin-bottom:14px; }
-  .ctile { flex:1; min-width:0; border:3px solid var(--line); border-radius:12px;
+  #compare { display:flex; gap:8px; margin-bottom:14px; align-items:stretch; }
+  .ctile { flex:1 1 0; min-width:0; border:3px solid var(--line); border-radius:12px;
            padding:10px 8px; cursor:pointer; background:white; text-align:center; }
   .ctile:hover { background:var(--surface-3); }
   .ctile.on { background:var(--navy-tint); }
@@ -1045,6 +1045,8 @@
   .jheadline { display:grid; grid-template-columns:1fr 1fr; gap:10px 12px;
                margin:10px 0 12px; }
   .jcell { background:var(--surface-3); border-radius:12px; padding:10px 12px; min-width:0; }
+  .jnofare { display:block; font-size:1.0588rem; font-weight:700; color:var(--ink-3);
+             line-height:1.25; padding:6px 0 2px; }
   .jbig { font-size:1.8824rem; font-weight:800; color:#111; line-height:1.1;
           white-space:nowrap; }
   .junit { display:block; font-size:1rem; font-weight:700; color:var(--ink-3);
@@ -1191,6 +1193,12 @@
                  background:var(--navy); color:white; padding:14px 18px; display:none;
                  padding-bottom:calc(14px + env(safe-area-inset-bottom, 0px)); }
   #routebanner.ctb { background:#9a3412; }
+  /* Planning a trip: the card below carries the route, the terminals and the
+     total, so the banner drops all four and keeps the trip and the ✎. */
+  #routebanner.tripmode .rb-line,
+  #routebanner.tripmode .rb-note,
+  #routebanner.tripmode > div:not(#rb-trip) { display:none; }
+  #routebanner.tripmode #rb-trip { margin:0; }
   #routebanner .rb-route { font-size:1.8824rem; font-weight:800; }
   #routebanner .rb-company { font-size:1rem; opacity:.85; margin-left:10px; }
   #routebanner .rb-line { font-size:1.2941rem; margin-top:8px; }
@@ -1620,7 +1628,7 @@ const TEXT = {
     wxHere:'Hong Kong',
     useMyLocation:'Use my location', hereIs:'You are at {s}', stopNoDirect:'no direct bus',
     stopNoneDueNow:'No bus due right now. These routes run from this stop towards {d}:',
-    spotHotel:'Hotels', spotNone:'No pins', spotPhone:'Phone', spotHotelLoading:'Getting the hotel list…',
+    spotHotel:'Hotels', spotNone:'No pins', spotPhone:'Phone', fareUnknown:'Not published', spotHotelLoading:'Getting the hotel list…',
     startNearestTo:'Nearest stop with a bus to {d}: {s} ({m} m away)',
     startNoneReach:'No stop within {m} m has a direct bus to {d}. Try the MTR, or a different destination.',
     stopCrossOver:'→ cross over', stopWholePlace:'all {n} bays',
@@ -1860,7 +1868,7 @@ const TEXT = {
     wxHere:'香港',
     useMyLocation:'用我的位置', hereIs:'你在 {s}', stopNoDirect:'冇直達',
     stopNoneDueNow:'現時沒有班次。以下路線由此站開往 {d}：',
-    spotHotel:'酒店賓館', spotNone:'不顯示', spotPhone:'電話', spotHotelLoading:'正在取得酒店名單…',
+    spotHotel:'酒店賓館', spotNone:'不顯示', spotPhone:'電話', fareUnknown:'未有公佈', spotHotelLoading:'正在取得酒店名單…',
     startNearestTo:'最近有直達 {d} 的車站：{s}（{m} 米）',
     startNoneReach:'你附近 {m} 米內，沒有車站有巴士直達 {d}。可考慮乘港鐵或轉搭其他交通工具。',
     stopCrossOver:'→ 過對面', stopWholePlace:'全部 {n} 個站位',
@@ -5062,18 +5070,18 @@ function buildCompareStrip(picks) {
     tile.dataset.number = pick.number;
     tile.style.borderColor = pick.colour;
 
+    // A CHOOSER, NOT A SUMMARY.
+    // These three sit side by side on a 375px phone, so each has about 110px.
+    // Everything that was here before — the title, the walk, a second line of
+    // route codes — wrapped into an unreadable column and pushed the numbers
+    // off the top. A tile now answers only "how long, which bus, how much",
+    // which is all anyone needs to CHOOSE. Everything else is in the card
+    // below, where there is room to read it.
     tile.innerHTML =
       '<div class="cnum" style="background:' + pick.colour + '">' + pick.number + '</div>' +
-      // The tile is a summary, so it carries the FIRST title only. Three
-      // superlatives chained together wrapped to three lines of 12px text —
-      // unreadable, and it pushed the rest of the tile off the top. The full
-      // list still appears on the detail card below.
-      '<div class="ctitle" style="color:' + pick.colour + '">' +
-        pick.title.split(' · ')[0] + '</div>' +
       '<div class="ctime">' + journey.total + '<span class="cunit">' + T('min') + '</span></div>' +
       '<div class="cbus">' + journey.legs.map(l => l.lineCode || l.route).join(' → ') + '</div>' +
       (fare !== null ? '<div class="cfare">' + fareText(fare) + '</div>' : '') +
-      '<div class="cwalk">🚶 ' + totalWalkMinutes(journey) + T('min') + '</div>' +
       '<div class="ceta" id="ceta-' + pick.number + '">…</div>';
 
     tile.addEventListener('click', () => selectOption(pick));
@@ -5096,14 +5104,23 @@ function makeCard(pick) {
   // The two numbers people actually decide on, made the biggest thing here.
   let inner =
     '<div class="jnum" style="background:' + pick.colour + '">' + pick.number + '</div>' +
-    '<div class="jtop" style="color:' + pick.colour + '">' + pick.title + '</div>' +
+    // ONE label, not four. 「最輕鬆 · 最快 · 最少步行 · 最平」 chained together
+    // reads as a boast rather than a reason, and on a phone it wrapped to
+    // three lines above the numbers the rider came for.
+    '<div class="jtop" style="color:' + pick.colour + '">' + esc(pick.title.split(' · ')[0]) + '</div>' +
     // Four figures, four equal cells, each with its label underneath so a
     // number and its unit can never be split across lines.
     '<div class="jheadline">' +
       '<div class="jcell"><span class="jbig">' + journey.total + '</span>' +
         '<span class="junit">' + T('totalTime') + '</span></div>' +
-      '<div class="jcell"><span class="jbig" style="color:#166534">' + journeyFareText(journey) +
-        '</span><span class="junit">' + T('totalFare') + '</span></div>' +
+      // An unknown fare is a sentence, not a giant dash. Some cross-harbour
+      // routes publish no fare table, and 「—」 the size of the total time
+      // reads as a price of nothing rather than as "we do not know".
+      (journeyFare(journey) === null
+        ? '<div class="jcell"><span class="jnofare">' + esc(T('fareUnknown')) + '</span>' +
+          '<span class="junit">' + T('totalFare') + '</span></div>'
+        : '<div class="jcell"><span class="jbig" style="color:#166534">' + journeyFareText(journey) +
+          '</span><span class="junit">' + T('totalFare') + '</span></div>') +
       '<div class="jcell"><span class="jbig" style="color:#92400e">' + totalWalkMinutes(journey) +
         '</span><span class="junit">' + T('totalWalk') + '</span></div>' +
       '<div class="jcell"><span class="jbig" style="color:#4b5563">' + journey.legs.length +
@@ -6162,6 +6179,7 @@ function openSavedDepartureRoute(dep) {
 // Leave whatever screen we were on and hand the panel to the route lookup,
 // with the number filled in so the search box matches what is on screen.
 function goToRouteMode(routeNo) {
+  document.getElementById('routebanner').classList.remove('tripmode');
   const panel = document.getElementById('panel');
   panel.classList.remove('favmode', 'setmode', 'mtrmode', 'stopmode');
   document.getElementById('favview').style.display = 'none';
@@ -6486,6 +6504,13 @@ function drawOneOption(chosenPick) {
     (bannerFare === '\u2014' ? '' : '  \u00b7  ' + bannerFare);
   const banner = document.getElementById('routebanner');
   banner.classList.remove('ctb');
+  // THE BANNER SAYS THE TRIP, THE CARD SAYS THE JOURNEY.
+  // It used to repeat the route, both terminals and the total underneath the
+  // card that already carried all four — six rows of duplicate pinned over
+  // the bottom of a 55dvh panel, which left the "one big box" showing its
+  // first two figures and nothing else. In journey mode it keeps only what
+  // the card CANNOT show: which trip this is, and the way to change it.
+  banner.classList.add('tripmode');
   banner.style.display = 'block';
   reserveRoomForBanner();
 }
