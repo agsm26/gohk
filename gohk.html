@@ -633,6 +633,8 @@
      the route numbers. Amber when a traffic notice is holding it back. */
   .arrivetag { display:block; margin-top:4px; font-size:0.94rem; font-weight:800; color:var(--green, #166534); }
   .arrivetag.held { color:var(--amber, #b45309); }
+  /* An estimate, not a live time: grey, so it never reads as a promise. */
+  .arrivetag.nofeed { color:var(--ink-3); font-weight:700; }
   .roadslow { display:block; margin-top:2px; font-size:0.9rem; font-weight:700; color:var(--amber, #b45309); }
   /* The "which way?" sheet for a looked-up bus: one big button per direction. */
   #dirsheet, #alertsheet { display:none; position:fixed; inset:0; z-index:2000; background:rgba(15,23,42,.55);
@@ -1345,7 +1347,8 @@ const TEXT = {
     useMyLocation:'Use my location', hereIs:'You are at {s}', stopNoDirect:'no direct bus',
     stopCrossOver:'→ cross over', stopWholePlace:'all {n} bays',
     stopArriveBy:'{r} in {w} — there by {t}', stopArriveDue:'{r} due now — there by {t}',
-    stopRanking:'Finding the soonest way there…', stopRoadSlow:'{s} moving at {k} km/h', alertSourceRoad:'Transport Department road detectors',
+    stopRanking:'Finding the soonest way there…', stopRoadSlow:'{s} moving at {k} km/h',
+    stopNoFeedEta:'{r} · about {n} stops — no live times for this company', alertSourceRoad:'Transport Department road detectors',
     stopHeldTitle:'Traffic notice on route {r}', stopHeldGo:'Use this stop anyway', stopHeldBack:'Choose another stop',
     rsNearestStop:'Nearest stop', rsNearestFound:'Nearest on this route: {s} ({m} m)',
     rsWalkNeedStop:'Tap 📍 first to find your stop', rsWalkTo:'Walking directions to {s}',
@@ -1544,7 +1547,8 @@ const TEXT = {
     useMyLocation:'用我的位置', hereIs:'你在 {s}', stopNoDirect:'冇直達',
     stopCrossOver:'→ 過對面', stopWholePlace:'全部 {n} 個站位',
     stopArriveBy:'{r} {w}後開 — {t} 到', stopArriveDue:'{r} 即將開 — {t} 到',
-    stopRanking:'搵緊最快到嘅路線…', stopRoadSlow:'{s} 現時只有 {k} 公里/小時', alertSourceRoad:'運輸署道路探測器',
+    stopRanking:'搵緊最快到嘅路線…', stopRoadSlow:'{s} 現時只有 {k} 公里/小時',
+    stopNoFeedEta:'{r} · 約 {n} 個站 — 此公司沒有實時班次', alertSourceRoad:'運輸署道路探測器',
     stopHeldTitle:'{r} 有交通消息', stopHeldGo:'照用呢個站', stopHeldBack:'揀第二個站',
     rsNearestStop:'最近車站', rsNearestFound:'此路線最近的站：{s}（{m} 米）',
     rsWalkNeedStop:'請先按 📍 找出最近車站', rsWalkTo:'步行前往 {s}',
@@ -7587,14 +7591,31 @@ function stopGroupNow() {
 // trafficPenalty below for why it is not wired in.
 const ARRIVE_CACHE_MS = 45000;
 const ARRIVE_MAX_BAYS = 30;          // an upper bound on one screen's worth
+// Only the cards near the top can win, so only they are worth asking about.
+const ARRIVE_MAX_GROUPS = 6;
+// A Citybus pole costs one request PER ROUTE. Left at twelve on purpose: the
+// opened stop screen asks unfiltered because it must list every bus from the
+// pole, and trimming that would quietly hide routes. The saving comes from the
+// destination filter instead, which the ranking passes and the stop screen
+// does not.
 const arriveRows = new Map();        // stopId -> { at, rows }
 const arriveInFlight = new Set();
 let arriveStamp = '';                // the question these answers were for
 
+// Three different answers, and they must not be confused:
+//   undefined — we have not asked about this pole yet
+//   null      — we asked, and this operator has no live feed at all
+//   []        — we asked, the feed answered, nothing is due
 function arriveCached(stopId) {
   const hit = arriveRows.get(stopId);
-  return (hit && Date.now() - hit.at < ARRIVE_CACHE_MS) ? hit.rows : null;
+  return (hit && Date.now() - hit.at < ARRIVE_CACHE_MS) ? hit.rows : undefined;
 }
+// Ordering only, and never shown. A pole with no live feed still has to sit
+// somewhere sensible in the list: ranking it on ride time alone would float
+// it above buses that are genuinely about to leave, and ranking it at
+// Infinity — which is what the app did — buried 4,768 green-minibus and NLB
+// poles below every alternative for ever, however good they were.
+const NO_FEED_WAIT_MIN = 10;
 
 // ============================================================
 // HOW FAST THE ROAD IS MOVING RIGHT NOW
@@ -7770,10 +7791,11 @@ function trafficPenalty(routeNo) { return routeNotices(routeNo).length ? TRAFFIC
 function arriveBest(ids, destIds, walkMin) {
   if (!destIds || !destIds.size) return undefined;
   const now = Date.now();
-  let asked = false, best = null;
+  let asked = false, noFeed = false, best = null;
   for (const id of ids) {
     const rows = arriveCached(id);
-    if (!rows) continue;
+    if (rows === undefined) continue;             // not asked yet
+    if (rows === null) { noFeed = true; continue; }   // asked; this operator has no feed
     asked = true;
     for (const row of rows) {
       if (!row.eta) continue;
@@ -7799,31 +7821,63 @@ function arriveBest(ids, destIds, walkMin) {
         best = { total, wait, walk, held, road, ride, route: row.route, stopsAway: reach.stopsAway, stopId: id };
     }
   }
+  if (best) return best;
+  // Nothing live, but a pole whose company publishes no times is not the same
+  // as a pole where no bus is coming. Score it off the timetable so it can
+  // still win, and mark it so the number is never read as a live one.
+  if (noFeed) {
+    const reach = reachingRoutes(ids, destIds);
+    if (reach.length) {
+      const near = reach.reduce((a, b) => a.reach.stopsAway <= b.reach.stopsAway ? a : b);
+      const ride = near.reach.stopsAway * MINUTES_PER_STOP;
+      return { noFeed: true, total: (walkMin || 0) + NO_FEED_WAIT_MIN + ride, ride,
+               walk: walkMin || 0, held: 0, road: null,
+               route: near.r.route, stopsAway: near.reach.stopsAway, stopId: ids[0] };
+    }
+  }
   return asked ? best : undefined;
 }
 
 // Ask every bay on offer, then redraw. The picker paints immediately with
 // what it already knows and re-orders when the times land, so the screen is
 // never blocked on the network.
-async function ensureArrivals(ids, stamp) {
+// `bays` is [{ id, routes }] — the pole, and the routes from it that reach the
+// place. Anything already answered for, or already in flight, is not asked
+// again; a pole whose company has no feed answers null once and stays answered.
+async function ensureArrivals(bays, stamp) {
   const roadBefore = roadSpeedsAt;
   // The buses and the road are both needed before the list can be ordered,
   // and neither should wait on the other.
   const road = Promise.all([loadTdDetectors(), loadRoadSpeeds()]);
-  const want = [...new Set(ids)].filter(id => !arriveCached(id) && !arriveInFlight.has(id)).slice(0, ARRIVE_MAX_BAYS);
+  const seen = new Set(), want = [];
+  for (const bay of bays) {
+    const id = bay && bay.id;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    if (arriveCached(id) !== undefined || arriveInFlight.has(id)) continue;
+    want.push(bay);
+    if (want.length >= ARRIVE_MAX_BAYS) break;
+  }
   if (!want.length) { await road; return roadSpeedsAt !== roadBefore && stamp === arriveStamp; }
-  want.forEach(id => arriveInFlight.add(id));
+  want.forEach(bay => arriveInFlight.add(bay.id));
   await road;
-  await Promise.all(want.map(async id => {
+  await Promise.all(want.map(async bay => {
     try {
-      const stop = findStopById(id);
-      const rows = stop ? await fetchPoleRows(stop) : null;
-      arriveRows.set(id, { at: Date.now(), rows: rows || [] });
+      const stop = findStopById(bay.id);
+      // null travels through unchanged: it is the answer "this company
+      // publishes no live times", not the absence of an answer.
+      const rows = stop ? await fetchPoleRows(stop, bay.routes) : null;
+      arriveRows.set(bay.id, { at: Date.now(), rows });
     } catch (error) {
-      arriveRows.set(id, { at: Date.now(), rows: [] });   // asked, nothing to say
-    } finally { arriveInFlight.delete(id); }
+      arriveRows.set(bay.id, { at: Date.now(), rows: [] });   // asked, nothing to say
+    } finally { arriveInFlight.delete(bay.id); }
   }));
   return stamp === arriveStamp;      // still the same question?
+}
+// The poles of a group, each with the routes that get the rider there.
+function baysToAsk(stops, destIds) {
+  return stops.map(st => ({ id: st.stop,
+    routes: new Set(reachingRoutes(st.stop, destIds).map(x => x.r.route)) }));
 }
 
 // What the ranking decided, said in one line: the bus, when it goes, and
@@ -7845,6 +7899,11 @@ function askAttrs(best) {
 
 function arriveTagHtml(best) {
   if (!best) return '';
+  // No live feed: say so, and give the stop count rather than a clock time.
+  // An estimated arrival printed as "12:47" is a promise the data cannot keep.
+  if (best.noFeed)
+    return '<small class="arrivetag nofeed">⏱ ' +
+      esc(T('stopNoFeedEta').replace('{r}', best.route).replace('{n}', best.stopsAway)) + '</small>';
   const at = new Date(Date.now() + best.total * 60000);
   const hhmm = at.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   // "in 0 minutes" is not something anyone says: a bus at the stop now gets
@@ -8003,7 +8062,12 @@ function stopOpenDest(name) {
 }
 
 // Live rows for one pole: an array, or null when its company has no feed.
-async function fetchPoleRows(stop) {
+// `wantRoutes` narrows the Citybus half. Citybus answers PER ROUTE, so a pole
+// with a dozen routes costs a dozen requests — and the ranking only ever cares
+// about the routes that actually reach where the rider said they are going.
+// Asking about the rest was most of the cost of a search: a 淺水灣 ranking
+// pass issued 112 requests, nearly all of them about buses going elsewhere.
+async function fetchPoleRows(stop, wantRoutes) {
   const co = stopCompany(stop.stop);
   let rows = null;
   if (co === 'KMB') {
@@ -8013,7 +8077,9 @@ async function fetchPoleRows(stop) {
     rows = (await response.json()).data || [];
   } else if (co === 'CTB') {
     // Citybus answers per route, so ask for each route the index says stops here.
-    const routes = [...new Set(routesAtStop(stop.stop).filter(r => r.co === 'CTB').map(r => r.route))].slice(0, 12);
+    let routes = [...new Set(routesAtStop(stop.stop).filter(r => r.co === 'CTB').map(r => r.route))];
+    if (wantRoutes && wantRoutes.size) routes = routes.filter(r => wantRoutes.has(r));
+    routes = routes.slice(0, 12);
     const lists = await Promise.all(routes.map(async route => {
       try {
         const response = await fetch(CTB_BASE + '/eta/CTB/' + stop.stop + '/' + encodeURIComponent(route),
@@ -8206,7 +8272,7 @@ function stopPickerParts() {
       near = near.slice().sort((a, b) => rank(a) - rank(b) || (a.metres || 0) - (b.metres || 0));
       const stamp = 'near|' + st.destQuery;
       arriveStamp = stamp;
-      ensureArrivals(near.flatMap(n => n.group.map(g => g.stop)), stamp)
+      ensureArrivals(near.slice(0, ARRIVE_MAX_GROUPS).flatMap(n => baysToAsk(n.group, destIds)), stamp)
         .then(fresh => { if (fresh && arriveStamp === stamp) stopScheduleRefresh(); });
     }
     if (near.length)
@@ -8596,7 +8662,9 @@ function stopRenderSearch(query) {
     // The second pass finds every bay cached, asks for nothing, and stops.
     const stamp = 'search|' + stopState.destQuery + '|' + query;
     arriveStamp = stamp;
-    const bays = list.flatMap(g => (g.hits.length ? g.hits : g.stops)).map(x => x.stop);
+    // Only the cards that could plausibly win are worth the network.
+    const bays = list.slice(0, ARRIVE_MAX_GROUPS)
+      .flatMap(g => baysToAsk(g.hits.length ? g.hits : g.stops, destIds));
     ensureArrivals(bays, stamp).then(fresh => { if (fresh && arriveStamp === stamp) stopRenderSearch(query); });
     return;
   }
