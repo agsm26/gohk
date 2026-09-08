@@ -922,6 +922,11 @@
   .eta-route { display:inline-block; min-width:60px; font-weight:800; color:var(--red); font-size:1.4118rem; }
   .eta-dest { color:#222; font-size:1rem; }
   .eta-times { font-weight:800; font-size:1.5294rem; color:#111; display:block; margin-top:2px; }
+  /* A timetabled departure, not a tracked one. Marked in WORDS (約 / ~) as
+     well as colour: a rider who cannot separate grey from green must still be
+     able to tell a guess from a measurement. */
+  .eta-times .sched { color:var(--ink-3); font-weight:700; }
+  .schednote { display:block; font-size:0.94rem; font-weight:700; color:var(--ink-3); margin:6px 2px 0; }
   .eta-arrive { display:block; flex-basis:100%; font-size:0.94rem; font-weight:700; color:var(--green); margin-top:2px; }
   .eta-fare { display:inline-block; margin-left:8px; padding:1px 7px; border-radius:12px;
               background:var(--red-tint); color:var(--red); font-weight:800; font-size:1rem; vertical-align:2px; }
@@ -1276,6 +1281,7 @@ const TEXT = {
     loadingRoute:'Loading {r}…', couldNotLoadRoute:'Could not load route {r}.',
     loadingArrivals:'Loading arrivals…', couldNotLoadArrivals:'Could not load arrivals.',
     noBusesListed:'No buses listed here.', updatedAt:'Updated {t}',
+    etaAbout:'~', etaSchedNote:'~ from the timetable, not a tracked bus',
     refresh:'🔄 Refresh times', refreshing:'Refreshing…',
     textSize:'Text size', textNormal:'Normal', textLarge:'Large', textXLarge:'Extra large',
     mtrTitle:'MTR', mtrGeoTitle:'Find your nearest station?',
@@ -1476,6 +1482,7 @@ const TEXT = {
     loadingRoute:'正在載入 {r}…', couldNotLoadRoute:'無法載入路線 {r}。',
     loadingArrivals:'正在查詢班次…', couldNotLoadArrivals:'無法取得班次。',
     noBusesListed:'此站沒有班次資料。', updatedAt:'更新於 {t}',
+    etaAbout:'約', etaSchedNote:'「約」是班次表時間，未有實時追蹤',
     refresh:'🔄 更新班次', refreshing:'更新中…',
     textSize:'文字大小', textNormal:'標準', textLarge:'大', textXLarge:'特大',
     mtrTitle:'港鐵', mtrGeoTitle:'尋找最近的港鐵站？',
@@ -6373,6 +6380,7 @@ async function loadKmbArrivals(stop, marker) {
 function formatArrivals(entries, opts) {
   if (!entries || entries.length === 0) return '<div class="eta-note">' + T('noBusesListed') + '</div>';
   const now = Date.now(), byRoute = new Map();
+  let anySched = false;
 
   for (const entry of entries) {
     if (!entry.eta) continue;
@@ -6381,12 +6389,24 @@ function formatArrivals(entries, opts) {
     const label = entry.route + '|' + (entry.dest_en || '');
     // Keep one whole entry per route: it carries the direction, service type
     // and seq we need to price the ride from THIS stop.
+    // TRACKED, OR MERELY TIMETABLED?
+    // KMB marks a departure it is not actually tracking 原定班次 / "Scheduled
+    // Bus", and 29% of the times this app shows are that. They arrive with a
+    // clock time like any other, so the screen presented a guess and a
+    // measurement in identical green — the one thing an arrival board must
+    // never do. Marked per TIME, not per row: a route usually has some of
+    // each, which is the commonest case of the three.
+    const sched = /原定班次|Scheduled/i.test((entry.rmk_tc || '') + ' ' + (entry.rmk_en || ''));
     if (!byRoute.has(label)) byRoute.set(label, { minutes: [], sample: entry });
     const bucket = byRoute.get(label).minutes;
-    if (!bucket.includes(minutes)) bucket.push(minutes);   // two bays, one bus: one time
+    const seen = bucket.find(x => x.m === minutes);
+    // Two bays reporting one bus: one time. If either sighting is tracked,
+    // the bus is tracked — real data outranks the timetable.
+    if (seen) { if (!sched) seen.sched = false; }
+    else bucket.push({ m: minutes, sched });
   }
   if (byRoute.size === 0) return '<div class="eta-note">' + T('noBusDue') + '</div>';
-  for (const group of byRoute.values()) group.minutes.sort((a, b) => a - b);
+  for (const group of byRoute.values()) group.minutes.sort((a, b) => a.m - b.m);
 
   // Soonest first: by arrival at the place when one is set, otherwise by the
   // next bus. A bus due in 18 minutes that arrives last belongs last.
@@ -6442,20 +6462,28 @@ function formatArrivals(entries, opts) {
     let arriveTag = '';
     const stopsAway = opts && opts.arrive ? opts.arrive.get(routeKeyForRow(sample)) : undefined;
     if (stopsAway !== undefined) {
-      const at = new Date(now + (group.minutes[0] + stopsAway * MINUTES_PER_STOP) * 60000);
+      const at = new Date(now + (group.minutes[0].m + stopsAway * MINUTES_PER_STOP) * 60000);
       const hhmm = at.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
       arriveTag = '<span class="eta-arrive">🏁 ' + T('etaArrive').replace('{n}', stopsAway).replace('{t}', hhmm).replace('{d}', esc(opts.destName || '')) + '</span>';
     }
-    const sortKey = stopsAway !== undefined ? group.minutes[0] + stopsAway * MINUTES_PER_STOP : group.minutes[0];
+    const shown = group.minutes.slice(0, 3);
+    if (shown.some(x => x.sched)) anySched = true;
+    const sortKey = stopsAway !== undefined ? group.minutes[0].m + stopsAway * MINUTES_PER_STOP : group.minutes[0].m;
     items.push({ sortKey, html:
       '<div class="eta-row">' + star + '<span class="eta-route">' + route + '</span>' +
       '<span class="eta-dest">' + dest + '</span>' + fareTag + poleTag +
       '<span class="eta-times">' +
-      group.minutes.slice(0,3).map(m => m === 0 ? T('due') : m + T('min')).join(', ') +
+      shown.map(x => x.sched
+        ? '<span class="sched">' + esc(T('etaAbout')) + (x.m === 0 ? T('due') : x.m + T('min')) + '</span>'
+        : (x.m === 0 ? T('due') : x.m + T('min'))).join(', ') +
       '</span>' + arriveTag + '</div>' });
   }
   items.sort((a, b) => a.sortKey - b.sortKey);
-  return items.map(x => x.html).join('');
+  // ONE legend for the screen, not one per row. Three-fifths of all rows carry
+  // a timetabled time, so repeating the sentence on each of them would bury
+  // the times it is meant to explain.
+  return items.map(x => x.html).join('') +
+    (anySched ? '<div class="schednote">' + esc(T('etaSchedNote')) + '</div>' : '');
 }
 
 
