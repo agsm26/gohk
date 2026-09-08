@@ -400,6 +400,14 @@
   .mtrsummary .line { font-size:1rem; font-weight:700; color:var(--ink-2); margin-top:4px; }
   .mtrsummary .arrive { font-size:1.18rem; font-weight:800; color:var(--green); margin-top:8px; }
   .mtrhead { display:flex; align-items:center; gap:10px; margin-top:14px; }
+  /* The screen's own title, above the stop it is about. */
+  .stoptitle { margin:2px 0 8px; }
+  /* A filter, and it has to look like one: the magnifier sits INSIDE the row
+     so the box is never mistaken for the page's search. */
+  .filterrow { align-items:center; margin-top:12px; }
+  .filterrow .filtericon { font-size:1.1rem; opacity:.75; flex:none; }
+  .filterrow input { flex:1; min-width:0; }
+  .filterrow .refreshbtn { flex:none; }
   .mtrhead .mtrsub { flex:1; margin:0; }
   .mtrupdated { font-size:0.94rem; color:var(--ink-3); font-weight:700; margin:4px 0 8px; }
   .mtralert { border:2px solid var(--amber); background:var(--amber-tint); color:var(--amber);
@@ -7146,6 +7154,23 @@ function placeKey(stop) {
   }
   return m.pk;
 }
+// EVERY LANDMARK IN THE NAME, not just the first one.
+// "太子站, 旺角警署" names two places, and the rider means both of them. The
+// stop actually CALLED 旺角警署 (MK504/505) stands 98 m from the 太子站, 旺角警署
+// pair — close enough to be the same corner to anyone walking — and 59X, 66X
+// and 67X call there on their way in from Tuen Mun. Keying the destination on
+// the leading segment alone matched neither those buses nor that pole, so the
+// app answered "60X only" for a junction served by four routes.
+function placeKeys(stop) {
+  const m = memoOf(stop);
+  if (m.pks === undefined) {
+    const raw = String(stop.name_tc || stop.name_en || '').replace(/[（(][^)）]*[)）]/g, '');
+    // A one-character fragment is not a landmark, it is punctuation noise.
+    m.pks = [...new Set(raw.split(/[,，]/).map(tidyName).filter(k => k.length >= 2))];
+    if (!m.pks.length && m.pk) m.pks = [m.pk];
+  }
+  return m.pks;
+}
 // The place name as a rider would say it — what placeKey matches, but kept
 // readable and in the script they are reading: 太子站, not 太子站旺角花墟.
 function placeLabel(stop) {
@@ -7159,10 +7184,10 @@ function placeFamilyNow() {
   if (placeFamily && placeFamilyStamp === stamp) return placeFamily;
   placeFamily = new Map(); placeFamilyStamp = stamp;
   for (const stop of plannableStops()) {
-    const k = placeKey(stop);
-    if (!k) continue;
-    if (!placeFamily.has(k)) placeFamily.set(k, []);
-    placeFamily.get(k).push(stop);
+    for (const k of placeKeys(stop)) {
+      if (!placeFamily.has(k)) placeFamily.set(k, []);
+      placeFamily.get(k).push(stop);
+    }
   }
   return placeFamily;
 }
@@ -7176,14 +7201,16 @@ function addPlaceFamily(named, ids) {
   if (!named.length || named.length > DEST_FAMILY_MAX) return ids;
   const families = placeFamilyNow();
   for (const stop of named) {
-    const kin = families.get(placeKey(stop));
-    if (!kin || kin.length < 2) continue;
     const lat = Number(stop.lat), lng = Number(stop.long);
     if (!isFinite(lat) || !isFinite(lng)) continue;
-    for (const other of kin)
-      if (!ids.has(other.stop) &&
-          metresBetween(lat, lng, Number(other.lat), Number(other.long)) <= DEST_FAMILY_M)
-        ids.add(other.stop);
+    for (const key of placeKeys(stop)) {
+      const kin = families.get(key);
+      if (!kin || kin.length < 2) continue;
+      for (const other of kin)
+        if (!ids.has(other.stop) &&
+            metresBetween(lat, lng, Number(other.lat), Number(other.long)) <= DEST_FAMILY_M)
+          ids.add(other.stop);
+    }
   }
   return ids;
 }
@@ -8005,6 +8032,13 @@ function renderStopView() {
   }
 
   // ---- 2. THE STOP ----
+  // THE TITLE GOES ABOVE THE STOP, NOT ABOVE THE BOX.
+  // It used to sit directly on top of the 只顯示往… field, which made it read
+  // as that field's label — so the field looked like "search the buses from
+  // this stop" when it is really a filter on where they are GOING. Same words,
+  // one place higher, and the screen reads: what this is, which stop, then
+  // the narrowing. Nothing now labels the box except the box's own wording.
+  html += '<div class="mtrsub stoptitle">' + T('stopRoutesHere') + '</div>';
   const stop = st.stop;
   const group = stopGroupNow();
   const groupIds = group.map(g => g.stop);
@@ -8024,10 +8058,13 @@ function renderStopView() {
           '<button class="refreshbtn" data-stop-act="change">' + T('mtrChange') + '</button></div>';
 
   // ---- 3. EVERY BUS FROM IT, narrowed to a direction if asked ----
-  html += '<div class="mtrhead"><div class="mtrsub">' + T('stopRoutesHere') + '</div>' +
+  // The filter and the refresh share one row: the box says what it does, the
+  // button sits beside it rather than under a heading that is no longer here.
+  html += '<div class="frow filterrow"><span class="filtericon" aria-hidden="true">🔎</span>' +
+          '<input id="stop-filter" type="text" placeholder="' + esc(T('stopFilterPh')) + '" autocomplete="off" value="' + esc(st.destFilter || '') + '"' +
+          ' aria-label="' + esc(T('stopFilterPh')) + '">' +
           '<button class="refreshbtn" data-stop-act="refresh"' + (st.loading ? ' disabled' : '') + '>' +
           T(st.loading ? 'refreshing' : 'refresh') + '</button></div>' +
-          '<div class="frow"><input id="stop-filter" type="text" placeholder="' + esc(T('stopFilterPh')) + '" autocomplete="off" value="' + esc(st.destFilter || '') + '"></div>' +
           '<div id="stop-filter-suggest"></div>' +
           '<div id="stop-rows">' + stopRowsHtml() + '</div>';
   view.innerHTML = html;
