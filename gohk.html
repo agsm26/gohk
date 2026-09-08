@@ -364,6 +364,11 @@
   .mtrsub { font-size:1rem; font-weight:800; color:var(--ink-3); margin:14px 0 8px; }
   /* A new section: a rule and air above it, so 起點 is not read as part of 目的地. */
   .mtrsub.sectionbreak { margin-top:24px; padding-top:14px; border-top:2px solid var(--line-soft); }
+  /* 起點 is a row now, not a heading, so the rule that separates it from
+     目的地 has to hang off the row. Less air than the heading had: the
+     border alone is enough to say "new question". */
+  .frow.sectionbreak { margin-top:14px; padding-top:12px;
+                       border-top:2px solid var(--line-soft); }
   .mtrgeo { border:2px solid var(--navy); border-radius:12px; padding:14px; margin-bottom:12px;
             background:var(--navy-tint); }
   .mtrsta { display:flex; align-items:center; gap:10px; border:2px solid var(--line-soft);
@@ -659,6 +664,50 @@
   .rsdrow b { color:var(--ink); }
   /* Saved places on the 車站 tab: pill buttons, one tap each. */
   .destchips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px; }
+
+  /* ==============================================================
+     SAVED PLACES AS A GRID, NOT A LIST.
+     Eight destinations as free-width pills wrapped to four ragged rows,
+     and eight saved stops took one full-width row EACH — between them
+     they filled the 巴士 tab twice over and pushed the nearby stops off
+     the bottom. An older rider who does not scroll never saw them.
+     Four to a row, three rows, twelve of each: the whole of both
+     collections on one screen, in a shape the eye can scan down.
+     ============================================================== */
+  .favgrid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr));
+             gap:6px; margin-bottom:6px; }
+  .favbub { display:flex; flex-direction:column; align-items:center;
+            justify-content:center; gap:2px; min-height:62px; padding:6px 3px;
+            border:2px solid var(--line); border-radius:14px; background:white;
+            color:var(--ink); font-weight:800; text-align:center; overflow:hidden; }
+  .favbub .fbname { font-size:0.94rem; line-height:1.22; overflow-wrap:anywhere;
+                    display:-webkit-box; -webkit-line-clamp:2;
+                    -webkit-box-orient:vertical; overflow:hidden; }
+  /* One line of context, and only ever one: at 70px of usable width a pole
+     code AND a direction AND a warning would each cut the others off. The
+     warning wins when there is one, because it is the half that can send
+     somebody to the wrong kerb; the pole code is on the stop screen a tap
+     away, where there is room to read it. */
+  .favbub .fbmeta { font-size:0.94rem; font-weight:700; color:var(--ink-3);
+                    line-height:1.15; max-width:100%; white-space:nowrap;
+                    overflow:hidden; text-overflow:ellipsis; }
+  .favbub.on { border-color:var(--amber); background:var(--amber-tint); color:var(--amber); }
+  .favbub.ok { border-color:var(--amber); background:var(--amber-tint); color:var(--amber); }
+  .favbub.dim { border-style:dashed; background:var(--surface-2); color:var(--ink-3); }
+  .favbub.dim .fbmeta { color:var(--red); }
+  .favbub.cross .fbmeta { color:var(--amber, #b45309); }
+  /* faceHtml() ships its own leading space and left margin, meant for a
+     name it follows on one line. Centred in a bubble it must not. */
+  .favbub .fbmeta .poledir { margin-left:0; font-size:inherit; color:inherit; }
+
+  /* THE LABEL SITS IN THE ROW, NOT ABOVE IT.
+     「我要去…」 and 「起點車站」 each had a line of their own above a line
+     holding the box — two rows to ask one question, twice on the same
+     screen. The label is now the first thing IN the row, so the four
+     controls read left to right as one sentence. */
+  .frow.labelled { align-items:center; }
+  .frow .rowlabel { flex:0 0 auto; font-size:1rem; font-weight:800;
+                    color:var(--ink-2); white-space:nowrap; }
   /* Suggested names under the 我要去 box while typing. */
   .suggest { display:flex; flex-direction:column; gap:4px; margin:-2px 0 8px; }
   .suggest button { min-height:44px; text-align:left; padding:0 14px; border:2px solid var(--line); border-radius:10px;
@@ -1638,20 +1687,24 @@ const TEXT = {
     stopTitle:'Bus stops', stopGeoTitle:'Find the bus stops nearest you?',
     stopGeoBody:'If you allow it, the app lists the stops around you with every bus leaving from each. Your location stays on this phone.',
     stopNearby:'Nearest stops', stopNoneNear:'No bus stop within 500 m. Type a stop name instead.',
-    stopSearchPh:'Type a starting stop…', stopStartHead:'Starting stop', stopSavedPicks:'Your saved starting stops',
+    stopSearchPh:'Type a starting stop…', stopSavedPicks:'Your saved starting stops',
     stopOptHead:'From {s} to {d}', stopAllFrom:'Every "{s}" stop together',
     stopSaveBtn:'☆ Save stop', stopSavedBtn:'★ Saved', stopRoutesHere:'Buses from this stop',
     stopNoLive:'No live times for this company — tap a route to see its stops.',
     stopTapRoute:'Tap a route to see all its stops. Tap ☆ to keep that bus in SAVED.',
     favStops:'MY STOPS', noStopsLong:'No stops saved. On the STOPS tab, open a stop and tap ☆ Save stop.',
     favStopOpen:'Show buses here', stopSavedMsg:'Saved {s}', stopRemovedMsg:'Removed {s}',
-    stopFull:'Saved starting stops are full (8) — remove one first.',
+    stopFull:'Saved starting stops are full (12) — remove one first.',
     stopDestSaved:'Places you go', stopDestStar:'Save this place', stopDestUnstar:'Saved — tap to remove',
     stopBays:'{n} bays',
-    stopDestFull:'Saved destinations are full (8) — remove one first.',
+    stopDestFull:'Saved destinations are full (12) — remove one first.',
     etaArrive:'arrive {t} · about {n} stops',
     stopDestSavedMsg:'Saved "{d}" to places you go.', stopDestRemovedMsg:'Removed "{d}".',
     stopDestPh:'Going to… (a place, or a bus number)',
+    // In the row the label already says which box this is, so the
+    // placeholder drops the question and keeps only the answer's shape.
+    stopDestLabel:'Going to', stopDestPhShort:'place or bus number',
+    stopStartLabel:'From', stopSearchPhShort:'stop name',
     stopDestNeedLoc:'Tap 📍 to find which stops near you have a direct bus.',
     stopFilterPh:'Only buses towards…', stopFilterNone:'No bus from this stop towards {d}.',
     stopFilterOn:'Showing buses towards {d}', stopsAwayShort:'{n} stops', stopMore:'+{n} more',
@@ -1733,7 +1786,7 @@ const TEXT = {
     favAlsoArrival:'Also save as a destination',
     favAlsoDeparture:'Also save as a starting point',
     favAlreadyOther:'Already saved on the other list',
-    favOtherFull:'The other list is full (8)',
+    favOtherFull:'The other list is full (12)',
     favBusRoute:'Show all stops on this route',
     routeNotFound:'Route {r} is not in the timetable right now.',
     useMyLocation:'Use my location', hereIs:'You are at {s}', stopNoDirect:'no direct bus',
@@ -1766,7 +1819,7 @@ const TEXT = {
     rsStarLabel:'Save this stop and this bus',
     rsStarSavedBoth:'Saved {s} as a starting stop, and bus {r}.',
     rsStarSavedBus:'Saved bus {r}. {s} was already a saved starting stop.',
-    rsStarStopFull:'Saved bus {r}. Your starting stops are full (8) — remove one first.',
+    rsStarStopFull:'Saved bus {r}. Your starting stops are full (12) — remove one first.',
     departureRemoved:'Removed {r} from favourites.',
     noDepsLong:'No buses saved. Tap a stop on the map, then tap \u2606 next to a route to keep it here with live times.',
     noneDue:'None due right now', etaOffline:'Times unavailable',
@@ -1892,20 +1945,22 @@ const TEXT = {
     stopTitle:'巴士站', stopGeoTitle:'尋找附近的巴士站？',
     stopGeoBody:'允許後，本app會列出你附近的巴士站，以及每個站開出的所有巴士。你的位置只留在這部手機。',
     stopNearby:'最近的巴士站', stopNoneNear:'500 米內沒有巴士站，請輸入車站名稱。',
-    stopSearchPh:'輸入起點車站名稱…', stopStartHead:'起點車站', stopSavedPicks:'你收藏的起點車站',
+    stopSearchPh:'輸入起點車站名稱…', stopSavedPicks:'你收藏的起點車站',
     stopOptHead:'由 {s} 去 {d}', stopAllFrom:'所有「{s}」車站一起看',
     stopSaveBtn:'☆ 收藏此站', stopSavedBtn:'★ 已收藏', stopRoutesHere:'此站開出的巴士',
     stopNoLive:'此公司沒有實時班次 — 按路線可查看所有車站。',
     stopTapRoute:'按路線可查看該線所有車站。按 ☆ 可把該班巴士加入「收藏」。',
     favStops:'常用車站', noStopsLong:'尚未收藏車站。在「車站」打開車站後，按「☆ 收藏此站」。',
     favStopOpen:'查看此站班次', stopSavedMsg:'已收藏 {s}', stopRemovedMsg:'已移除 {s}',
-    stopFull:'常用起點已滿（8 個），請先移除一個。',
+    stopFull:'常用起點已滿（12 個），請先移除一個。',
     stopDestSaved:'常去的目的地', stopDestStar:'收藏此目的地', stopDestUnstar:'已收藏，按此移除',
     stopBays:'{n} 個站位',
-    stopDestFull:'常用目的地已滿（8 個），請先移除一個。',
+    stopDestFull:'常用目的地已滿（12 個），請先移除一個。',
     etaArrive:'{t} 到達 · 約 {n} 個站',
     stopDestSavedMsg:'已收藏目的地「{d}」。', stopDestRemovedMsg:'已移除「{d}」。',
     stopDestPh:'我要去…（地點或巴士號碼）',
+    stopDestLabel:'我要去', stopDestPhShort:'地點或巴士號碼',
+    stopStartLabel:'起點', stopSearchPhShort:'車站名稱',
     stopDestNeedLoc:'按 📍 就可找出你附近哪個站有直達巴士。',
     stopFilterPh:'只顯示往…', stopFilterNone:'此站沒有往 {d} 的巴士。',
     stopFilterOn:'只顯示往 {d} 的巴士', stopsAwayShort:'{n} 個站', stopMore:'另有 {n} 條',
@@ -1984,7 +2039,7 @@ const TEXT = {
     favAlsoArrival:'同時加入常用目的地',
     favAlsoDeparture:'同時加入常用起點',
     favAlreadyOther:'另一邊已有此地點',
-    favOtherFull:'另一邊已滿（8 個）',
+    favOtherFull:'另一邊已滿（12 個）',
     favBusRoute:'顯示此路線所有車站',
     routeNotFound:'暫時找不到 {r} 的班次資料。',
     useMyLocation:'用我的位置', hereIs:'你在 {s}', stopNoDirect:'冇直達',
@@ -2017,7 +2072,7 @@ const TEXT = {
     rsStarLabel:'收藏此站及此路線',
     rsStarSavedBoth:'已收藏起點車站 {s}，同埋 {r}。',
     rsStarSavedBus:'已收藏 {r}。{s} 本來已在你的常用起點。',
-    rsStarStopFull:'已收藏 {r}。常用起點已滿（8 個），請先移除一個。',
+    rsStarStopFull:'已收藏 {r}。常用起點已滿（12 個），請先移除一個。',
     departureRemoved:'已移除 {r}。',
     noDepsLong:'尚未收藏巴士。在地圖上點選車站，再按路線旁的 \u2606，即可在此看到實時班次。',
     noneDue:'暫時沒有班次', etaOffline:'無法取得班次',
@@ -2959,7 +3014,7 @@ function drawPoint(point, colour, letter, text) {
 
 
 // ============================================================
-// FAVOURITES (up to 8 departures and 8 arrivals)
+// FAVOURITES (up to 12 departures and 12 arrivals)
 // ============================================================
 // Saved in the browser so they survive closing the tab. If storage is
 // blocked or full, the app still works — favourites just do not persist.
@@ -3024,7 +3079,10 @@ let departures = [];
 
 // SAVED STOPS: a pole, kept whole (id, both names, position) so the tab can
 // open it without looking anything up.
-const MAX_STOPS = 8;
+// TWELVE, not eight: four bubbles to a row and three rows fills exactly one
+// grid, and the grid is small enough that twelve of them cost less height
+// than eight full-width pills did.
+const MAX_STOPS = 12;
 let stopFavs = [];
 function loadStopFavs() {
   try { stopFavs = JSON.parse(localStorage.getItem('hkfast-stops') || '[]'); } catch (e) { stopFavs = []; }
@@ -3037,8 +3095,8 @@ function isSavedStop(stopId) { return stopFavs.some(f => f.stop === stopId); }
 
 // Places people go, for the 車站 tab's 我要去 box — names, not poles, because
 // "屯門轉車站" is the thing a rider knows; which pole they leave from depends
-// on where they are standing today. Max 8, newest first.
-const MAX_DESTS = 8;
+// on where they are standing today. Max 12 — one full 4x3 grid — newest first.
+const MAX_DESTS = 12;
 // A saved destination is either a bare name (how they were stored before
 // nicknames existed) or { name, nick }. The NAME is what every search and
 // every alert match uses and is never touched by a rename; the NICK is only
@@ -9174,26 +9232,28 @@ function stopPickerParts() {
   // own name — sit together on the left where the thumb already is, and the
   // ✕ that empties the box sits at the far right where a clear always is.
   // The star used to be marooned on the right, next to nothing it related to.
-  top += '<div class="mtrsub">' + T('stopDestPh').replace(/[（(].*$/, '') + '</div>' +
-         '<div class="frow">' + pin('here-dest') +
+  top += '<div class="frow labelled"><span class="rowlabel">' + T('stopDestLabel') + '</span>' +
+         pin('here-dest') +
          '<span id="stop-dest-star">' + star + '</span>' +
-         '<input id="stop-dest" type="text" placeholder="' + esc(T('stopDestPh')) + '" autocomplete="off" value="' + esc(st.destQuery || '') + '">' +
+         '<input id="stop-dest" type="text" placeholder="' + esc(T('stopDestPhShort')) + '"' +
+         ' aria-label="' + esc(T('stopDestPh')) + '" autocomplete="off" value="' + esc(st.destQuery || '') + '">' +
          clearBtn('clear-dest', !!(st.destQuery || '').trim()) + '</div>' +
          '<div id="stop-dest-results"></div>';
 
   if (stopDests.length) {
     // One tap sets the place; tapping the lit one again clears it.
-    rest += '<div class="mtrsub">' + T('stopDestSaved') + '</div><div class="destchips">' +
-      stopDests.map(d => { const n = destName(d), on = n === destTyped;
-        return '<button class="destchip' + (on ? ' on' : '') + '" data-stop-act="dest" data-name="' + esc(n) + '">' +
-               (on ? '★ ' : '') + esc(destLabel(d)) + '</button>'; }).join('') +
+    rest += '<div class="mtrsub">' + T('stopDestSaved') + '</div><div class="favgrid">' +
+      stopDests.slice(0, MAX_DESTS).map(d => { const n = destName(d), on = n === destTyped;
+        return '<button class="favbub' + (on ? ' on' : '') + '" data-stop-act="dest" data-name="' + esc(n) + '">' +
+               '<span class="fbname">' + (on ? '★ ' : '') + esc(destLabel(d)) + '</span></button>'; }).join('') +
       '</div>';
   }
   // The starting stop: type it, or tap one saved. The nearest poles come
   // last — they are the fallback when you have not said where you are.
-  rest += '<div class="mtrsub sectionbreak">' + T('stopStartHead') + '</div>' +
-          '<div class="frow">' + pin('here-start') +
-          '<input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPh')) + '" autocomplete="off">' +
+  rest += '<div class="frow labelled sectionbreak"><span class="rowlabel">' + T('stopStartLabel') + '</span>' +
+          pin('here-start') +
+          '<input id="stop-search" type="text" placeholder="' + esc(T('stopSearchPhShort')) + '"' +
+          ' aria-label="' + esc(T('stopSearchPh')) + '" autocomplete="off">' +
           clearBtn('clear-start', false) + '</div>' +
           '<div class="mtrpick" id="stop-search-results"></div>';
   // Saved poles as one-tap pills, same shape as the saved places above.
@@ -9212,7 +9272,7 @@ function stopPickerParts() {
   // station cards in the search above already do.
   const savedShown = stopFavs.slice(0, MAX_STOPS);
   if (savedShown.length) {
-    rest += '<div class="mtrsub">' + T('stopSavedPicks') + '</div><div class="destchips">' +
+    rest += '<div class="mtrsub">' + T('stopSavedPicks') + '</div><div class="favgrid">' +
       savedShown.map(f => {
         const found = reachingBays(f, filtering ? destIds : null);
         const ids = found.bays.map(g => g.stop);
@@ -9223,19 +9283,23 @@ function stopPickerParts() {
         // Same amber as the chosen destination above, so one glance down the
         // screen reads "here → there" in one colour.
         const mark = !filtering ? '' : (reaches ? ' ok' : ' dim');
-        // When the answer is across the road, the pill says so and names the
-        // bay it will open — the pole code on it is no longer the saved one,
-        // and a rider standing at TM101 has to be told to move.
-        const lead = found.bays[0];
-        const code = found.crossed ? poleCodeOf(lead) : poleCodeOf(f);
-        return '<button class="destchip' + mark + '" data-stop-act="fav" data-index="' +
+        // ONE LINE OF CONTEXT, AND THE MOST IMPORTANT ONE.
+        // The pill used to carry the pole code, the compass direction, and
+        // a warning when there was one. At a quarter of the screen's width
+        // all three ellipsise each other away, so they are ranked instead:
+        // "no direct bus" and "cross the road" can send somebody to the
+        // wrong kerb, so they win; otherwise the direction, which is what
+        // separates two stops of the same name. The pole code is on the
+        // stop's own screen, one tap away, at a size that can be read.
+        const meta = !reaches ? esc(T('stopNoDirect'))
+                   : found.crossed ? esc(T('stopCrossOver'))
+                   : (found.crossed ? groupDirHtml(ids) : poleDirHtml(f.stop));
+        return '<button class="favbub' + mark + (found.crossed ? ' cross' : '') +
+          '" data-stop-act="fav" data-index="' +
           stopFavs.indexOf(f) + '"' + (found.crossed ? ' data-stop-group="' + esc(ids.join(',')) + '"' : '') +
           (reaches ? '' : ' data-nofilter="1"') + '>' +
-          (filtering && reaches ? '✓ ' : '📍 ') + esc(favLabel(f)) +
-          (code ? ' <small>' + esc(code) + '</small>' : '') +
-          (found.crossed ? '' : poleDirHtml(f.stop)) +
-          (found.crossed ? groupDirHtml(ids) + '<small class="crossover">' + esc(T('stopCrossOver')) + '</small>' : '') +
-          (reaches ? '' : '<small class="noreach">' + esc(T('stopNoDirect')) + '</small>') +
+          '<span class="fbname">' + (filtering && reaches ? '✓ ' : '') + esc(favLabel(f)) + '</span>' +
+          (meta ? '<span class="fbmeta">' + meta + '</span>' : '') +
           '</button>';
       }).join('') + '</div>';
   }
