@@ -7055,7 +7055,20 @@ function facingOf(v) {
   if (Math.sqrt(v.sin * v.sin + v.cos * v.cos) / v.n < FACE_AGREE) return -1;
   const mean = (Math.atan2(v.sin, v.cos) * 180 / Math.PI + 360) % 360;
   const octant = Math.round(mean / 45) % 8;
-  return v.octants.includes(octant) ? octant : -1;
+  if (v.octants.includes(octant)) return octant;
+  // STRADDLING READINGS ARE NOT DISAGREEMENT.
+  // 旺角警署 (MK505) reads SW five times and SE three times — every route
+  // leaving it heads south — and the mean of those is 194°, due south. But
+  // no single route reads exactly S, and refusing any answer not literally
+  // sampled threw the whole thing away and left the pole with no direction
+  // at all. The routes agree; it is the octant boundary that does not. Snap
+  // to the sampled direction nearest the mean instead of giving up.
+  let best = -1, bestGap = Infinity;
+  for (const o of v.octants) {
+    const gap = Math.abs(((o * 45 - mean + 540) % 360) - 180);
+    if (180 - gap < bestGap) { bestGap = 180 - gap; best = o; }
+  }
+  return best;
 }
 
 // Memoised on the STOP DATA, not just the route index. The two arrive from
@@ -7297,6 +7310,112 @@ function routesServingAny(ids) {
   }
   return out;
 }
+// ============================================================
+// POLES THAT ARE REALLY ONE STOP
+// ============================================================
+// Two poles are the same boarding point when they are close enough to walk
+// between without thinking AND their buses leave the same way. The NAME is
+// not part of the test, and must not be: 旺角警署 (MK504/505) and
+// 太子站,旺角花墟 (MK500-502) are one kerb under two different names, while
+// MK187 and MK502 share both a name and the 60X across opposite carriageways
+// of Nathan Road. Distance plus direction gets both right; distance plus name
+// gets both wrong.
+//
+// This uses its own heading test rather than poleFacing. poleFacing answers
+// "which way does this pole point" for the arrow on screen and is held to a
+// strict standard; 旺角警署 misses it by a thousandth. "Are these two poles on
+// the same side of the road" is a coarser question and deserves its own,
+// coarser answer — but never a permissive one: a pole whose buses genuinely
+// leave both ways has NO heading, and is never merged with anything.
+const MERGE_M = 120;         // a walk you would not think about
+const MERGE_AGREE = 0.65;    // how much a pole's own buses must agree before it has a heading at all
+const MERGE_DEG = 45;        // headings this close are the same side of the road
+
+function poleHeading(stopId) {
+  const v = poleVectors(stopId);
+  if (!v.n) return null;
+  if (Math.sqrt(v.sin * v.sin + v.cos * v.cos) / v.n < MERGE_AGREE) return null;
+  return (Math.atan2(v.sin, v.cos) * 180 / Math.PI + 360) % 360;
+}
+const MERGE_SPAN_M = 200;    // however it grows, one stop stays one stop
+function metresApart(a, b) {
+  return metresBetween(Number(a.lat), Number(a.long), Number(b.lat), Number(b.long));
+}
+// Could these two be the same kerb? Direction only — distance is handled by
+// the clustering, because "next to each other" is about the group, not the pair.
+function sameDirection(a, b) {
+  if (!a || !b) return false;
+  if (a.stop === b.stop) return true;
+  if (a.isStation || b.isStation) return false;
+  // Hard evidence beats measured geometry: one route running opposite ways
+  // at the two poles settles it, whatever the bearings say.
+  if (boundsClash(boundsByRoute(a.stop), boundsByRoute(b.stop))) return false;
+  const ha = poleHeading(a.stop), hb = poleHeading(b.stop);
+  if (ha === null || hb === null) return false;      // unknown is not "the same"
+  const d = Math.abs(ha - hb) % 360;
+  return (d > 180 ? 360 - d : d) <= MERGE_DEG;
+}
+function sameBoardingPoint(a, b) {
+  return sameDirection(a, b) && metresApart(a, b) <= MERGE_M;
+}
+// THREE RULES, AND THE FIRST ONE IS THE SAFE ONE.
+//  1. Direction must hold against EVERY existing member. This is the promise
+//     the whole app rests on and it is never relaxed, so a group can never
+//     walk itself across the road one pole at a time.
+//  2. Adjacency need only hold against ONE member — 旺角警署 (MK505) is 98 m
+//     from MK502 but further from the far end of the same kerb, and it is
+//     plainly the same stop.
+//  3. The finished group may not span more than MERGE_SPAN_M, so rule 2
+//     cannot drift a "stop" down the length of a street.
+// The way a GROUP faces: the circular mean of its poles. Compared against the
+// mean rather than against every member one by one, because a kerb's bays
+// fan out a little — 屯門公路轉車站's eastbound bank runs from 90° to 147° —
+// and insisting every pair agree left the end bays stranded as their own
+// "stops". The mean still sits ~180° from the far carriageway, so the thing
+// this protects against is protected either way.
+function clusterHeading(g) {
+  let sin = 0, cos = 0, n = 0;
+  for (const m of g) {
+    const h = poleHeading(m.stop);
+    if (h === null) continue;
+    const rad = h * Math.PI / 180;
+    sin += Math.sin(rad); cos += Math.cos(rad); n++;
+  }
+  return n ? (Math.atan2(sin, cos) * 180 / Math.PI + 360) % 360 : null;
+}
+function degreesApart(a, b) {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
+function clusterPoles(list) {
+  const out = [];
+  for (const stop of list) {
+    const h = poleHeading(stop.stop);
+    let placed = false;
+    for (const g of out) {
+      // Hard evidence first, pairwise and non-negotiable: one route running
+      // opposite ways at two poles means they are not one stop.
+      if (g.some(m => boundsClash(boundsByRoute(m.stop), boundsByRoute(stop.stop)))) continue;
+      const gh = clusterHeading(g);
+      if (h === null || gh === null || degreesApart(h, gh) > MERGE_DEG) continue;
+      if (!g.some(m => metresApart(m, stop) <= MERGE_M)) continue;
+      if (g.some(m => metresApart(m, stop) > MERGE_SPAN_M)) continue;
+      g.push(stop); placed = true; break;
+    }
+    if (!placed) out.push([stop]);
+  }
+  return out;
+}
+// What to call a group whose poles disagree about their own name: the name
+// most of them use, preferring one the rider actually typed.
+function clusterName(stops, needle) {
+  const counts = new Map();
+  for (const st of stops) { const n = stopName(st); counts.set(n, (counts.get(n) || 0) + 1); }
+  return [...counts.entries()]
+    .sort((a, b) => (needle && tidyName(b[0]).includes(needle) ? 1 : 0) - (needle && tidyName(a[0]).includes(needle) ? 1 : 0)
+                    || b[1] - a[1] || a[0].length - b[0].length)[0][0];
+}
+
 // Poles that ride together: the same name, within 100 m, and no route that
 // runs one way at one pole and the other way at the other. That is the six
 // bays of 屯門市中心總站 (one option, not six) — and NOT the twins across the
@@ -7316,17 +7435,16 @@ function boundsClash(mine, theirs) {
 }
 function poleGroup(stop) {
   if (!stop || stop.isStation || !stopIndex) return [stop];
-  const name = stationKey(stop);
-  if (!name) return [stop];
-  const bounds = boundsByRoute(stop.stop);
   const members = [stop];
-  for (const n of stopsNear(Number(stop.lat), Number(stop.long), POLE_GROUP_M)) {
+  for (const n of stopsNear(Number(stop.lat), Number(stop.long), MERGE_SPAN_M)) {
     const other = n.stop;
     if (other.isStation || members.some(m => m.stop === other.stop)) continue;
-    if (stationKey(other) !== name) continue;
-    if (boundsClash(bounds, boundsByRoute(other.stop))) continue;
+    if (members.some(m => boundsClash(boundsByRoute(m.stop), boundsByRoute(other.stop)))) continue;
+    const h = poleHeading(other.stop), gh = clusterHeading(members);
+    if (h === null || gh === null || degreesApart(h, gh) > MERGE_DEG) continue;
+    if (!members.some(m => metresApart(m, other) <= MERGE_M)) continue;
+    if (members.some(m => metresApart(m, other) > MERGE_SPAN_M)) continue;
     members.push(other);
-    boundsByRoute(other.stop, bounds);
   }
   return members;
 }
@@ -8336,15 +8454,20 @@ function stopRenderSearch(query) {
     // what a card contains: g.hits, the bays with a bus that actually gets
     // there. The bay count, the direction arrow, the route lines and the
     // group opened by a tap are all built from those, never from g.stops.
+    // One card per BOARDING POINT — poles within 120 m going the same way,
+    // whatever they are called. Not one card per name: 旺角警署 and
+    // 太子站,旺角花墟 are the same kerb, and the same name spans both sides of
+    // Nathan Road.
     const groups = new Map();
-    for (const stop of named) {
-      const k = stationKey(stop);
-      if (!groups.has(k)) groups.set(k, { stops: [], hits: [], best: Infinity, rank: 1 });
-      const g = groups.get(k);
-      g.stops.push(stop);
-      g.rank = Math.min(g.rank, prefixRank(stop));
-      const reach = reachingRoutes(stop.stop, destIds);
-      if (reach.length) { g.hits.push(stop); g.best = Math.min(g.best, ...reach.map(x => x.reach.stopsAway)); }
+    for (const cluster of clusterPoles(named)) {
+      const g = { stops: cluster.slice(), hits: [], best: Infinity, rank: 1,
+                  label: clusterName(cluster, needle) };
+      g.rank = Math.min(...cluster.map(prefixRank));
+      for (const stop of cluster) {
+        const reach = reachingRoutes(stop.stop, destIds);
+        if (reach.length) { g.hits.push(stop); g.best = Math.min(g.best, ...reach.map(x => x.reach.stopsAway)); }
+      }
+      groups.set(cluster[0].stop, g);
     }
     // SOONEST ARRIVAL FIRST, once the live times are in.
     // Until they are, everything scores Infinity and the old order — fewest
@@ -8376,7 +8499,7 @@ function stopRenderSearch(query) {
       const chip = bays.length > 1 ? T('stopBays').replace('{n}', bays.length) : poleCodeOf(lead);
       return '<button' + (g.hits.length ? '' : ' class="dim" data-nofilter="1"') +
         askAttrs(g.eta) +
-        ' data-stop-id="' + esc(lead.stop) + '" data-stop-group="' + esc(ids.join(',')) + '"><span class="pickmain">🚏 ' + esc(stopName(lead)) +
+        ' data-stop-id="' + esc(lead.stop) + '" data-stop-group="' + esc(ids.join(',')) + '"><span class="pickmain">🚏 ' + esc(g.label || stopName(lead)) +
         (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
         groupDirHtml(ids) +
         arriveTagHtml(g.eta) +
@@ -8416,12 +8539,9 @@ function stopRenderSearch(query) {
   // and which way that pole faces. Merging without that would have quietly
   // offered a rider the 6C from the far side of Prince Edward Road.
   const stations = new Map();
-  for (const stop of named) {
-    const k = stationKey(stop);
-    if (!stations.has(k)) stations.set(k, { stops: [], rank: 1 });
-    const g = stations.get(k);
-    g.stops.push(stop);
-    g.rank = Math.min(g.rank, prefixRank(stop));
+  for (const cluster of clusterPoles(named)) {
+    stations.set(cluster[0].stop, { stops: cluster.slice(), rank: Math.min(...cluster.map(prefixRank)),
+                                    label: clusterName(cluster, needle) });
   }
   const hits = [...stations.values()]
     .sort((a, b) => a.rank - b.rank || b.stops.length - a.stops.length ||
@@ -8438,7 +8558,7 @@ function stopRenderSearch(query) {
         const ids = h.stops.map(x => x.stop);
         const chip = h.stops.length > 1 ? T('stopBays').replace('{n}', h.stops.length) : poleCodeOf(lead);
         return '<button data-stop-id="' + esc(lead.stop) + '" data-stop-group="' + esc(ids.join(',')) + '">' +
-        '<span class="pickmain">🚏 ' + esc(stopName(lead)) +
+        '<span class="pickmain">🚏 ' + esc(h.label || stopName(lead)) +
         (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
         groupDirHtml(ids) +
         poleRoutesLine(ids, 4, filtering ? destIds : null) + '</span></button>'; }).join('')
