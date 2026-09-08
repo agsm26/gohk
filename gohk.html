@@ -1207,6 +1207,19 @@
   .sd-line { font-size:1rem; margin-top:10px; line-height:1.4; }
   .sd-walk { font-size:1.2941rem; font-weight:800; margin-top:10px; }
   .sd-note { font-size:0.94rem; color:var(--amber); margin-top:10px; line-height:1.4; }
+  /* Which way out. Starts as the compass direction, which is always true, and
+     is replaced by a real exit letter if the gazetteer names one. */
+  .sd-exit { margin-top:8px; padding:8px 10px; border-radius:10px;
+             background:var(--surface-2); color:var(--ink-2);
+             font-size:1.06rem; font-weight:800; line-height:1.35; }
+  .sd-exit.found { background:var(--red-tint); color:var(--red); }
+  /* The hand-off to the phone's own map app. Blue and full width: it is the
+     one thing on this card that DOES something. */
+  .sd-go { display:block; margin-top:10px; padding:12px 10px; min-height:50px;
+           box-sizing:border-box; border-radius:10px; background:var(--navy);
+           color:#fff; font-size:1.06rem; font-weight:800; text-align:center;
+           text-decoration:none; }
+  .sd-go:active { background:#16306e; }
 
   .bigarrow { font-size:3.0588rem; line-height:52px; font-weight:900;
               text-shadow:0 0 6px white, 0 0 12px white, 0 2px 4px rgba(0,0,0,.4);
@@ -1809,6 +1822,14 @@ const TEXT = {
     svcDepartures:'{n} departures a day', svcNight:'Night service only',
     svcClosedToday:'Does not run today', svcClosedPh:'No service today (public holiday)',
     svcMore:'All service hours', svcLess:'Hide service hours', dayPhOnly:'Public holidays',
+    // Handing the walk to the phone's own map app. It knows the footbridges,
+    // the subways and — at a railway station — the exits, none of which this
+    // app has data for.
+    sdWalkHere:'\u27a4 Walk me here with Maps',
+    sdWalkDest:'\u27a4 Walk to {d} with Maps',
+    sdExitAsking:'Checking which exit\u2026',
+    sdExitIs:'Leave by \u2192 {e}',
+    sdExitDir:'Leave the station and walk {d}',
     faceN:'N', faceNE:'NE', faceE:'E', faceSE:'SE',
     faceS:'S', faceSW:'SW', faceW:'W', faceNW:'NW',
     noFavStart:'No starting stops saved yet. On the STOPS tab, open a stop and tap ★.',
@@ -1887,6 +1908,14 @@ const TEXT = {
     bbiNote:'ℹ This is a bus interchange. The second fare may be free or discounted — check the notice at the stop.',
     showBoarding:'Where to get on', showAlighting:'Where to get off',
     boardHereDetail:'GET ON BUS {route} HERE', alightHereDetail:'GET OFF BUS {route} HERE',
+    // A train is not a bus and a station is not a kerb, so neither the
+    // wording nor the "which side of the road" warning carries over.
+    boardHereRail:'TAKE THE {route} HERE', alightHereRail:'GET OFF AT THIS STATION',
+    checkPlatform:'Follow the signs inside the station to this exit.',
+    checkGates:'Once inside, follow the signs to the platform.',
+    // Spelt out, because "walk W" is a compass badge, not a sentence.
+    wayN:'north', wayNE:'north-east', wayE:'east', waySE:'south-east',
+    wayS:'south', waySW:'south-west', wayW:'west', wayNW:'north-west',
     towards:'Going towards', thenWalkTo:'Then walk to',
     checkSide:'Check you are on the correct side of the road.',
     pointOnMap:'Point on map', myLocationLabel:'My location',
@@ -2062,6 +2091,11 @@ const TEXT = {
     svcDepartures:'每日 {n} 班', svcNight:'只在深宵行走',
     svcClosedToday:'今日不設服務', svcClosedPh:'公眾假期今日停駛',
     svcMore:'所有服務時間', svcLess:'收起服務時間', dayPhOnly:'公眾假期',
+    sdWalkHere:'\u27a4 用地圖帶我行去',
+    sdWalkDest:'\u27a4 用地圖帶我行去{d}',
+    sdExitAsking:'正在查出口…',
+    sdExitIs:'由 \u2192 {e} 出站',
+    sdExitDir:'出站後{d}行',
     faceN:'往北', faceNE:'往東北', faceE:'往東', faceSE:'往東南',
     faceS:'往南', faceSW:'往西南', faceW:'往西', faceNW:'往西北',
     noFavStart:'尚未收藏起點。在「車站」揀好車站後，按旁邊的 ★。',
@@ -2140,6 +2174,11 @@ const TEXT = {
     bbiNote:'ℹ 此處為轉車站，第二程車費可能免費或有折扣 — 請留意站上告示。',
     showBoarding:'上車位置', showAlighting:'下車位置',
     boardHereDetail:'在此乘搭 {route} 號巴士', alightHereDetail:'在此下車（{route} 號）',
+    boardHereRail:'在此乘搭{route}', alightHereRail:'在此站落車',
+    checkPlatform:'請跟車站內的指示牌前往該出口。',
+    checkGates:'入閘後請跟指示牌前往月台。',
+    wayN:'往北', wayNE:'往東北', wayE:'往東', waySE:'往東南',
+    wayS:'往南', waySW:'往西南', wayW:'往西', wayNW:'往西北',
     towards:'開往', thenWalkTo:'然後步行前往',
     checkSide:'請確認你站在正確的一邊馬路。',
     pointOnMap:'地圖上的位置', myLocationLabel:'我的位置',
@@ -6856,18 +6895,61 @@ function zoomToStopDetail(stop, fromPoint, leg, isBoarding) {
   const panel = document.getElementById('stopdetail');
   panel.className = isBoarding ? 'boarding' : 'alighting';
   panel.style.display = 'block';
+
+  // ---- HAND THE WALK TO THE PHONE'S OWN MAP ----
+  // This app can draw a straight line and count the metres. It does not know
+  // the footbridges, the subways, the one-way pavements or — at a railway
+  // station — which exit comes out on the right side. The map app on the
+  // phone knows all of it, so the walk is handed over rather than guessed at.
+  //
+  // A real <a href>, not a scripted open: the open has to happen on the tap
+  // itself or the phone treats it as a pop-up and blocks it.
+  const goHref = isBoarding
+    // To the stop: no origin, so the map starts from wherever they are now.
+    ? walkUrl(Number(stop.lat), Number(stop.long))
+    // Off the bus: they are reading this BEFORE they get there, so the walk
+    // is drawn from the stop they will step off at, not from where they sit.
+    : walkUrl(endPoint.lat, endPoint.lng, Number(stop.lat), Number(stop.long));
+  const goText = isBoarding
+    ? T('sdWalkHere')
+    : T('sdWalkDest').replace('{d}', esc(plainStopName(endPoint.label || '')));
+
+  // ---- WHICH EXIT (railway stations only) ----
+  // A station is not a bus stop: coming out of the wrong end of 尖東 is a ten
+  // minute walk back. The direction is worked out here and is always true;
+  // the exit LETTER is asked of the government gazetteer at the moment the
+  // card opens, and is shown only if it comes back — this app has no exit
+  // data of its own and will not invent one.
+  const isRail = leg && leg.co === 'mtr';
+  let exitLine = '';
+  if (!isBoarding && isRail) {
+    const face = Math.round(bearingBetween(Number(stop.lat), Number(stop.long),
+                                           endPoint.lat, endPoint.lng) / 45) % 8;
+    exitLine = '<div class="sd-exit" id="sd-exit">' +
+               T('sdExitDir').replace('{d}', esc(T(WAY_KEYS[face]))) + '</div>';
+  }
+
   panel.innerHTML =
     '<button id="sd-close">&#10005;</button>' +
     '<div class="sd-head">' +
-      (isBoarding ? T('boardHereDetail').replace('{route}', leg.route)
-                  : T('alightHereDetail').replace('{route}', leg.route)) + '</div>' +
+      (isRail
+        ? (isBoarding ? T('boardHereRail').replace('{route}', esc(leg.route)) : T('alightHereRail'))
+        : (isBoarding ? T('boardHereDetail').replace('{route}', esc(leg.route))
+                      : T('alightHereDetail').replace('{route}', esc(leg.route)))) + '</div>' +
     '<div class="sd-stop">' + stopName(stop) + '</div>' +
     '<div class="sd-sub">' + (lang === 'zh' ? stop.name_en : (stop.name_tc || '')) + '</div>' +
     '<div class="sd-line">' +
       (isBoarding ? T('towards') + ' <b>' + stopName(leg.off) + '</b>'
-                  : T('thenWalkTo') + ' <b>' + endPoint.label + '</b>') + '</div>' +
+                  : T('thenWalkTo') + ' <b>' + esc(endPoint.label) + '</b>') + '</div>' +
     '<div class="sd-walk">&#128694; ' + walk.minutes + T('min') + ' &middot; ' + walk.metres + ' m</div>' +
-    '<div class="sd-note">' + T('checkSide') + '</div>';
+    exitLine +
+    '<a class="sd-go" href="' + esc(goHref) + '" target="_blank" rel="noopener">' + goText + '</a>' +
+    // "Check you are on the correct side of the road" is a bus stop's problem.
+    // Inside a station the question is which sign to follow, so it says that.
+    '<div class="sd-note">' +
+      T(!isRail ? 'checkSide' : isBoarding ? 'checkGates' : 'checkPlatform') + '</div>';
+
+  if (!isBoarding && isRail) fillStationExit(stop, endPoint);
 
   document.getElementById('sd-close').addEventListener('click', () => {
     panel.style.display = 'none';
@@ -6880,6 +6962,75 @@ function zoomToStopDetail(stop, fromPoint, leg, isBoarding) {
     ...mapPadding(),
     maxZoom: 18
   });
+}
+
+// WHICH EXIT, ASKED OF THE GOVERNMENT GAZETTEER — NEVER GUESSED.
+// This app has no exit data. What it has is the same locationSearch endpoint
+// the map tab's place box already uses, whose answers are the Lands
+// Department's own gazetteer, and that gazetteer names station exits.
+//
+// Three things have to be true before a letter is put on the screen, because
+// sending an older rider out of the wrong end of 尖東 is a ten-minute walk
+// back with luggage:
+//   1. the name really does read as an exit ("Exit B2", 「出口 B2」);
+//   2. it sits within 400 m of the station we are actually leaving, so an
+//      exit belonging to some other station can never be borrowed;
+//   3. of the ones that qualify, the nearest to the destination wins.
+// Anything less and the line is left as the compass direction, which is
+// computed here and is always true.
+const stationExitCache = new Map();
+const EXIT_NEAR_STATION_M = 400;
+
+function exitLetterOf(name) {
+  const text = String(name || '');
+  const en = text.match(/\bExits?\s*([A-Z]\d{0,2}[A-Z]?)\b/i);
+  if (en) return en[1].toUpperCase();
+  const zh = text.match(/([A-Z]\d{0,2}[A-Z]?)\s*號?出口/i) || text.match(/出口\s*([A-Z]\d{0,2}[A-Z]?)/i);
+  return zh ? zh[1].toUpperCase() : null;
+}
+
+async function fillStationExit(stop, dest) {
+  const line = document.getElementById('sd-exit');
+  if (!line || !dest) return;
+  const key = stop.stop + '|' + dest.lat.toFixed(4) + ',' + dest.lng.toFixed(4);
+  const paint = letter => {
+    // The card may have been closed, or reopened on another stop, while the
+    // gazetteer was thinking. Only ever write into the line we started with.
+    const now = document.getElementById('sd-exit');
+    if (!now || now !== line || !letter) return;
+    now.classList.add('found');
+    now.textContent = T('sdExitIs').replace('{e}', letter);
+  };
+  if (stationExitCache.has(key)) { paint(stationExitCache.get(key)); return; }
+
+  const stationLat = Number(stop.lat), stationLng = Number(stop.long);
+  const asked = [stop.name_en, stop.name_tc].filter(Boolean);
+  let best = null, bestMetres = Infinity;
+  try {
+    for (const name of asked) {
+      const query = /[A-Za-z]/.test(name) ? name + ' Station Exit' : name + '站 出口';
+      const response = await fetch(GEOCODER + encodeURIComponent(query),
+                                  { signal: AbortSignal.timeout(9000) });
+      if (!response.ok) continue;
+      const rows = await response.json();
+      for (const row of (Array.isArray(rows) ? rows : [])) {
+        const letter = exitLetterOf(row.nameEN) || exitLetterOf(row.nameZH);
+        if (!letter) continue;
+        const lat = Number(row.y), lng = Number(row.x);
+        if (!isFinite(lat) || !isFinite(lng)) continue;
+        if (metresBetween(stationLat, stationLng, lat, lng) > EXIT_NEAR_STATION_M) continue;
+        const toDest = metresBetween(lat, lng, dest.lat, dest.lng);
+        if (toDest < bestMetres) { bestMetres = toDest; best = letter; }
+      }
+      if (best) break;          // the first language that answers is enough
+    }
+  } catch (error) {
+    // No connection, or the gazetteer is down. The direction line already on
+    // screen is the answer in that case; it needs no apology.
+    console.warn('Station exits unavailable:', error.message);
+  }
+  stationExitCache.set(key, best);
+  paint(best);
 }
 
 function shapeForLeg(leg) {
@@ -7376,12 +7527,28 @@ document.getElementById('route-here').addEventListener('click', markNearestOnRou
 // happen on the tap itself, and a fix that arrives a second later would be
 // blocked as a popup. So the arrow stays dim until 📍 has found the stop,
 // and then it is simply a link the rider taps.
-function walkUrl(lat, lng) {
-  const onApple = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function walkUrl(lat, lng, fromLat, fromLng) {
+  // Android and Windows are asked FIRST. The second test below is the usual
+  // trick for spotting an iPad, which reports itself as a desktop Mac — but
+  // it fires on anything claiming MacIntel with a touch screen, and that
+  // includes a phone being emulated on a Mac. Naming the two platforms that
+  // certainly are not Apple removes the whole class of misfire.
+  const agent = navigator.userAgent || '';
+  const onApple = /Android|Windows/i.test(agent) ? false
+                : (/iPad|iPhone|iPod|Macintosh/.test(agent) &&
+                   (/iPad|iPhone|iPod/.test(agent) || navigator.maxTouchPoints > 1));
+  // WHERE THE WALK STARTS.
+  // With no origin both apps start from wherever the phone is, which is right
+  // for "get me to the stop I am walking to now". The walk OFF the last bus
+  // is different: the rider is looking at it before they have got there, so
+  // the alighting stop is named as the starting point and the route drawn is
+  // the one they will actually take when they step off.
+  const hasFrom = isFinite(fromLat) && isFinite(fromLng);
   return onApple
-    ? 'https://maps.apple.com/?daddr=' + lat + ',' + lng + '&dirflg=w'
-    : 'https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng + '&travelmode=walking';
+    ? 'https://maps.apple.com/?daddr=' + lat + ',' + lng +
+      (hasFrom ? '&saddr=' + fromLat + ',' + fromLng : '') + '&dirflg=w'
+    : 'https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng +
+      (hasFrom ? '&origin=' + fromLat + ',' + fromLng : '') + '&travelmode=walking';
 }
 function paintWalkLink() {
   const link = document.getElementById('route-walk');
@@ -7933,6 +8100,9 @@ function poleFacing(stopId) {
 }
 
 const FACE_KEYS = ['faceN', 'faceNE', 'faceE', 'faceSE', 'faceS', 'faceSW', 'faceW', 'faceNW'];
+// The same eight directions spelt out, for the places they are read as a
+// sentence rather than as a badge beside a stop name.
+const WAY_KEYS  = ['wayN', 'wayNE', 'wayE', 'waySE', 'wayS', 'waySW', 'wayW', 'wayNW'];
 function faceHtml(index) {
   return index < 0 ? '' : ' <span class="poledir">' + esc(T(FACE_KEYS[index])) + '</span>';
 }
