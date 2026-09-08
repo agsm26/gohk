@@ -10632,11 +10632,56 @@ if (typeof MutationObserver !== 'undefined') {
   }).observe(document.body, { childList: true, subtree: true, characterData: true });
   scConvertTree(document.body);
 }
+// ============================================================
+// THE STOP SCREEN KEEPS ITSELF HONEST
+// ============================================================
+// Standing at the kerb watching "3 分鐘" is the thing this app is FOR, and
+// that number never moved: the weather and the traffic notices refreshed on
+// timers, the arrivals did not. The countdown was arithmetic done once, at
+// render, and then left to rot — only the 更新於 stamp quietly betrayed it.
+//
+// Two different jobs, and only one of them costs anything:
+//   * the repaint is free. The minutes are (eta − now), so redrawing the rows
+//     ages them correctly using times we already hold, no network at all.
+//   * the refetch is the expensive half, and stopLoadRows already refuses to
+//     run when what it holds is under 30 s old. Ticking faster than that
+//     sharpens the countdown without buying more data.
+//
+// Guards, in order of how much they matter: nothing happens when the screen
+// is not on show (a pocketed phone must cost nothing), nothing happens while
+// a decision sheet is open, and the refetch stands down while the rider is
+// typing in the 往… box so the list cannot move under their finger. The
+// repaint is still safe then — it rewrites #stop-rows, never the input.
+const STOP_TICK_MS = 15000;
+// A phone left face-up on a table is not a rider. After this long with no
+// touch the screen goes quiet until it is touched again.
+const STOP_IDLE_MS = 15 * 60 * 1000;
+let stopLastTouch = Date.now();
+for (const evt of ['pointerdown', 'keydown', 'focus'])
+  window.addEventListener(evt, () => { stopLastTouch = Date.now(); }, true);
+
+function stopTick() {
+  if (activeMode !== 'stop' || !stopState.stop) return;
+  if (document.hidden) return;
+  if (Date.now() - stopLastTouch > STOP_IDLE_MS) return;
+  if (document.querySelector('#dirsheet.open, #alertsheet.open')) return;
+  const rowsBox = document.getElementById('stop-rows');
+  if (rowsBox) rowsBox.innerHTML = stopRowsHtml();
+  const typing = document.activeElement && document.activeElement.id === 'stop-filter';
+  if (!typing) stopLoadRows();
+}
+setInterval(stopTick, STOP_TICK_MS);
+
 // Traffic notices: on open, every five minutes, and whenever the app comes
 // back to the front — the moment a rider is about to set off.
 checkAlerts();
 setInterval(checkAlerts, ALERT_REFRESH_MS);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) checkAlerts(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  checkAlerts();
+  stopLastTouch = Date.now();   // coming back to the app is an interaction
+  stopTick();                   // and the times on screen are already stale
+});
 // Open on 車站. The trip planner is one tap away under 巴士.
 showMode('stop');
 </script>
