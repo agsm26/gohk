@@ -507,6 +507,18 @@
                         color:var(--ink-2); background:var(--surface-2);
                         border-radius:10px; padding:2px 8px; white-space:nowrap; }
   #stopview .eta-note { color:var(--ink-3); font-weight:700; padding:8px 0; }
+  /* WHAT RUNS FROM HERE, when nothing is due this minute. */
+  .norun { margin-top:4px; }
+  .norunrow { border:2px solid var(--line-soft); border-radius:12px; padding:10px 12px;
+              margin:8px 0; cursor:pointer; background:white; }
+  .norunrow:active { background:var(--navy-tint); }
+  .norunhead { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .norunhead .rt { font-size:1.2941rem; font-weight:800; color:var(--blue); }
+  .norundest { flex:1; min-width:0; font-size:1rem; font-weight:700; color:var(--ink); }
+  .norunwhen { font-size:0.94rem; font-weight:700; color:var(--ink-2); margin-top:4px; }
+  .norunwhen .warn { color:var(--red); }
+  .norunopen { font-size:0.94rem; font-weight:800; color:var(--blue); margin-top:6px; }
+
   .stoproute { display:flex; align-items:center; gap:10px; border:2px solid var(--line-soft);
                border-radius:12px; padding:12px; margin:8px 0; }
   .stoproute .rt { font-size:1.41rem; font-weight:800; color:var(--blue); }
@@ -1602,6 +1614,7 @@ const TEXT = {
     routeNotFound:'Route {r} is not in the timetable right now.',
     wxHere:'Hong Kong',
     useMyLocation:'Use my location', hereIs:'You are at {s}', stopNoDirect:'no direct bus',
+    stopNoneDueNow:'No bus due right now. These routes run from this stop towards {d}:',
     startNearestTo:'Nearest stop with a bus to {d}: {s} ({m} m away)',
     startNoneReach:'No stop within {m} m has a direct bus to {d}. Try the MTR, or a different destination.',
     stopCrossOver:'→ cross over', stopWholePlace:'all {n} bays',
@@ -1840,6 +1853,7 @@ const TEXT = {
     routeNotFound:'暫時找不到 {r} 的班次資料。',
     wxHere:'香港',
     useMyLocation:'用我的位置', hereIs:'你在 {s}', stopNoDirect:'冇直達',
+    stopNoneDueNow:'現時沒有班次。以下路線由此站開往 {d}：',
     startNearestTo:'最近有直達 {d} 的車站：{s}（{m} 米）',
     startNoneReach:'你附近 {m} 米內，沒有車站有巴士直達 {d}。可考慮乘港鐵或轉搭其他交通工具。',
     stopCrossOver:'→ 過對面', stopWholePlace:'全部 {n} 個站位',
@@ -7658,6 +7672,26 @@ function tidyWords(text) {
     .trim();
 }
 
+// The same name, but with the punctuation that separates one PHRASE from the
+// next kept as a bar. KMB writes a pole as "<landmark>, <street> (CODE)", and
+// which side of the comma a word sits on is the difference between a place
+// and something merely near it.
+function tidyPhrases(text) {
+  return String(text || '').toLowerCase()
+    .replace(/[,，()（）]/g, '|')
+    .replace(/[\-–—·.]/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*\|\s*/g, '|')
+    .trim();
+}
+
+// Words that can stand in front of a name without changing which place it is.
+// "East Gate OF THE University of Hong Kong" is still the University of Hong
+// Kong. "Hang Seng University of Hong Kong" is not.
+const NAME_LEAD_WORDS = new Set(['the', 'of', 'near', 'outside', 'opposite', 'at', 'by',
+                                 'adjacent', 'beside', 'towards', 'to', 'in', 'front',
+                                 'entrance', 'exit', 'and', 'a']);
+
 // Does this text contain Latin letters or digits? Only those have word
 // boundaries worth honouring; Chinese is written without spaces, so 太子
 // must go on matching inside 太子站 exactly as it always has.
@@ -7689,7 +7723,8 @@ const stopMemo = new WeakMap();
 function memoOf(stop) {
   let m = stopMemo.get(stop);
   if (!m) { m = { nk: tidyName(stop.name_tc), ne: tidyName(stop.name_en), sk: undefined,
-                  wc: tidyWords(stop.name_tc), we: tidyWords(stop.name_en) }; stopMemo.set(stop, m); }
+                  wc: tidyWords(stop.name_tc), we: tidyWords(stop.name_en),
+                  pc: tidyPhrases(stop.name_tc), pe: tidyPhrases(stop.name_en) }; stopMemo.set(stop, m); }
   return m;
 }
 function stationKey(stop) {
@@ -7814,7 +7849,40 @@ function nameIsNamed(stop, needle, rawQuery) {
     return nk.includes(needle) || ne.includes(needle);
   }
   const words = tidyWords(rawQuery);
-  return wordsContain(m.we, words) || wordsContain(m.wc, words);
+  return namesTheSamePlace(m.pe, words) || namesTheSamePlace(m.pc, words);
+}
+
+// Does this name mean the place the rider typed, rather than merely contain
+// the words?
+//
+// 「University of Hong Kong」 is inside 「THE HANG SENG UNIVERSITY OF HONG KONG」
+// as whole words, and that is a different institution in a different district
+// — the app sent a rider heading for Pok Fu Lam towards Sha Tin. The words
+// that decide it are the ones IMMEDIATELY BEFORE the match: "Hang Seng" is a
+// name of its own, while "East Gate OF THE ..." is just a way of pointing at
+// the same university.
+//
+// So the query must either START a phrase — KMB's commas are real boundaries,
+// which is why "Euston Court, Bonham Road" is still Bonham Road — or be led
+// only by a word that cannot change which place is meant.
+function namesTheSamePlace(phrases, words) {
+  if (!phrases || !words) return false;
+  for (const phrase of phrases.split('|')) {
+    if (!phrase) continue;
+    let from = 0;
+    for (;;) {
+      const at = phrase.indexOf(words, from);
+      if (at < 0) break;
+      const after = at + words.length >= phrase.length ? ' ' : phrase[at + words.length];
+      if (/[a-z0-9]/i.test(after)) { from = at + 1; continue; }   // mid-word
+      if (at === 0) return true;                                   // starts the phrase
+      const before = phrase.slice(0, at).trim().split(' ');
+      const lead = before[before.length - 1];
+      if (lead && !/[a-z0-9]/i.test(phrase[at - 1]) && NAME_LEAD_WORDS.has(lead)) return true;
+      from = at + 1;
+    }
+  }
+  return false;
 }
 
 function nameMatches(stop, needle, loose) {
@@ -9033,6 +9101,38 @@ function stopRowsHtml() {
   let html = '';
   if (st.loading && !st.rows) return '<div class="favempty">' + T('rsCheckingEta') + '</div>';
   if (st.alert) return '<div class="mtralert">⚠ ' + esc(st.alert) + '</div>';
+  // WHEN NOTHING IS DUE, SAY WHAT STILL RUNS.
+  // "No bus due at this stop right now" is a dead end: at half past eight a
+  // rider needs to know whether the bus has finished for the night, when the
+  // first one goes tomorrow, what it costs and where it calls. All of that is
+  // already on the phone — the timetable, the fare table and the stop list —
+  // so there is no excuse for a blank screen.
+  const routeFallbackHtml = (ids, dIds) => {
+    let routes = routesServingAny(ids);
+    if (dIds) routes = routes.filter(r => routeReaches(r.key, r.seq, dIds));
+    if (!routes.length) return '';
+    return '<div class="norun">' + routes.slice(0, 8).map(r => {
+      const info = serviceInfoFor({ routeNo: r.route, dir: r.bound, serviceType: r.type, co: r.co });
+      const today = info ? patternsForToday(info.freq) : { masks: [], state: 'noData' };
+      const sum = today.masks.length ? svcSummary(info.freq, today.masks) : null;
+      let when = '';
+      if (today.state === 'closed' || today.state === 'closedPh')
+        when = '<span class="warn">' + esc(T(today.state === 'closedPh' ? 'svcClosedPh' : 'svcClosedToday')) + '</span>';
+      else if (sum)
+        when = esc(T('svcToday') + ' ' + svcSpan(sum) + svcHeadway(sum));
+      const fare = stopFare(r.route, r.bound, r.type, r.seq, r.co);
+      return '<div class="norunrow" data-stop-act="openroute" data-route="' + esc(r.route) +
+             '" data-dir="' + esc(r.bound) + '" data-type="' + esc(r.type || '1') +
+             '" data-co="' + esc(r.co) + '">' +
+             '<div class="norunhead"><span class="rt">' + esc(r.route) + '</span>' +
+             (r.dest ? '<span class="norundest">' + esc(T('towards')) + ' ' + esc(r.dest) + '</span>' : '') +
+             (fare !== null ? '<span class="eta-fare">' + fareText(fare) + '</span>' : '') + '</div>' +
+             (when ? '<div class="norunwhen">🕘 ' + when + '</div>' : '') +
+             '<div class="norunopen">🚌 ' + esc(T('favBusRoute')) + ' ›</div>' +
+             '</div>';
+    }).join('') + '</div>';
+  };
+
   if (st.noLive) {
     let routes = routesServingAny(groupIds);
     if (destIds) routes = routes.filter(r => routeReaches(r.key, r.seq, destIds));
@@ -9053,14 +9153,26 @@ function stopRowsHtml() {
         if (reach) arrive.set(key, reach.stopsAway);
         return !!reach;
       });
-      if (!rows.length) return '<div class="favempty">' + T('stopFilterNone').replace('{d}', esc(st.destFilter)) + '</div>';
+      if (!rows.length) {
+        const fallback = routeFallbackHtml(groupIds, destIds);
+        return fallback
+          ? '<div class="rshint">' + T('stopNoneDueNow').replace('{d}', esc(st.destFilter)) + '</div>' + fallback
+          : '<div class="favempty">' + T('stopFilterNone').replace('{d}', esc(st.destFilter)) + '</div>';
+      }
       html += '<div class="rshint">' + T('stopFilterOn').replace('{d}', esc(st.destFilter)) + '</div>';
     } else {
       html += '<div class="rshint">' + T('stopTapRoute') + '</div>';
     }
     const multiPole = groupIds.length > 1;
-    html += formatArrivals(rows, (arrive || multiPole)
+    const arrivals = formatArrivals(rows, (arrive || multiPole)
       ? { arrive, destName: st.destFilter, multiPole } : null);
+    html += arrivals;
+    // The feed answered but nothing is coming. Same treatment: what runs from
+    // here, when, and for how much.
+    if (!/eta-row/.test(arrivals)) {
+      const fallback = routeFallbackHtml(groupIds, destIds);
+      if (fallback) html += fallback;
+    }
     if (stamp) html += '<div class="mtrupdated">' + T('updatedAt').replace('{t}', stamp) + '</div>';
   }
   return html;
@@ -9474,6 +9586,10 @@ document.getElementById('stopview').addEventListener('click', event => {
       renderStopView();
       break;
     }
+    case 'openroute':    // a route listed because nothing is due: show its stops
+      openSavedDepartureRoute({ route: el.dataset.route, dir: el.dataset.dir,
+                                serviceType: el.dataset.type, co: el.dataset.co });
+      break;
     case 'routepick': {  // a suggested BUS NUMBER: straight to "which way?"
       const hit = routeSuggestions[Number(el.dataset.index)];
       if (!hit) break;
