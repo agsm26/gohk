@@ -625,6 +625,7 @@
      the route numbers. Amber when a traffic notice is holding it back. */
   .arrivetag { display:block; margin-top:4px; font-size:0.94rem; font-weight:800; color:var(--green, #166534); }
   .arrivetag.held { color:var(--amber, #b45309); }
+  .roadslow { display:block; margin-top:2px; font-size:0.9rem; font-weight:700; color:var(--amber, #b45309); }
   /* The "which way?" sheet for a looked-up bus: one big button per direction. */
   #dirsheet, #alertsheet { display:none; position:fixed; inset:0; z-index:2000; background:rgba(15,23,42,.55);
               align-items:flex-end; justify-content:center; padding:10px; }
@@ -1336,7 +1337,7 @@ const TEXT = {
     useMyLocation:'Use my location', hereIs:'You are at {s}', stopNoDirect:'no direct bus',
     stopCrossOver:'→ cross over', stopWholePlace:'all {n} bays',
     stopArriveBy:'{r} in {w} — there by {t}', stopArriveDue:'{r} due now — there by {t}',
-    stopRanking:'Finding the soonest way there…',
+    stopRanking:'Finding the soonest way there…', stopRoadSlow:'{s} moving at {k} km/h', alertSourceRoad:'Transport Department road detectors',
     stopHeldTitle:'Traffic notice on route {r}', stopHeldGo:'Use this stop anyway', stopHeldBack:'Choose another stop',
     rsNearestStop:'Nearest stop', rsNearestFound:'Nearest on this route: {s} ({m} m)',
     rsWalkNeedStop:'Tap 📍 first to find your stop', rsWalkTo:'Walking directions to {s}',
@@ -1535,7 +1536,7 @@ const TEXT = {
     useMyLocation:'用我的位置', hereIs:'你在 {s}', stopNoDirect:'冇直達',
     stopCrossOver:'→ 過對面', stopWholePlace:'全部 {n} 個站位',
     stopArriveBy:'{r} {w}後開 — {t} 到', stopArriveDue:'{r} 即將開 — {t} 到',
-    stopRanking:'搵緊最快到嘅路線…',
+    stopRanking:'搵緊最快到嘅路線…', stopRoadSlow:'{s} 現時只有 {k} 公里/小時', alertSourceRoad:'運輸署道路探測器',
     stopHeldTitle:'{r} 有交通消息', stopHeldGo:'照用呢個站', stopHeldBack:'揀第二個站',
     rsNearestStop:'最近車站', rsNearestFound:'此路線最近的站：{s}（{m} 米）',
     rsWalkNeedStop:'請先按 📍 找出最近車站', rsWalkTo:'步行前往 {s}',
@@ -7347,6 +7348,149 @@ function arriveCached(stopId) {
   return (hit && Date.now() - hit.at < ARRIVE_CACHE_MS) ? hit.rows : null;
 }
 
+// ============================================================
+// HOW FAST THE ROAD IS MOVING RIGHT NOW
+// ============================================================
+// The Transport Department's 1st-generation Traffic Speed Map (speedmap.xml)
+// is retired — its address 404s and the dataset page says so. It was replaced
+// by "Traffic Data of Strategic / Major Roads", which is better for us: not a
+// colour per road but a SPEED per detector, 807 of them with coordinates,
+// refreshed every minute.
+//
+// Two halves, and they have to come from two places:
+//  * the live speeds, from resource.data.one.gov.hk — 34 KB gzipped, and it
+//    sends access-control-allow-origin:*, so the page can fetch it directly;
+//  * where each detector IS, from static.data.gov.hk — which sends NO CORS
+//    header at all, so a browser cannot read it. That half never changes, so
+//    it is bundled beside this file as td-detectors.json instead.
+const TD_SPEED_URL = 'https://resource.data.one.gov.hk/td/traffic-detectors/rawSpeedVol-all.xml';
+const ROAD_REFRESH_MS = 3 * 60 * 1000;
+const ROAD_NEAR_M = 300;          // a detector this close is measuring our road
+const ROAD_OCTANT_SLACK = 2;      // within 90° of the way the bus is heading
+// Free-flow on a strategic road. Below CLEAR it is dragging; at JAM or under
+// it is stopped. Measured against today's feed, whose speeds run p25 63,
+// p50 73, p95 96 km/h, so 45 really is slow here rather than merely urban.
+const ROAD_CLEAR_KMH = 45, ROAD_JAM_KMH = 20;
+// A wholly jammed path takes about twice as long as the timetable thinks.
+const ROAD_DRAG = 1.0;
+
+let tdDetectors = null, tdDetGrid = null;
+let roadSpeeds = null, roadSpeedsAt = 0, roadSpeedsWhen = '';
+
+async function loadTdDetectors() {
+  if (tdDetectors) return tdDetectors;
+  try {
+    const response = await fetch('./td-detectors.json', { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error('server said ' + response.status);
+    const doc = await response.json();
+    tdDetectors = (doc.detectors || []).map(d =>
+      ({ id: d[0], lat: d[1], lng: d[2], oct: d[3], road_tc: d[4], road_en: d[5] }));
+    // Same grid trick the stop list uses, so "which detector is on this road"
+    // is a couple of cell look-ups rather than a scan of 807.
+    tdDetGrid = new Map();
+    for (const d of tdDetectors) {
+      const k = Math.floor(d.lat / GRID_DEG) + ',' + Math.floor(d.lng / GRID_DEG);
+      if (!tdDetGrid.has(k)) tdDetGrid.set(k, []);
+      tdDetGrid.get(k).push(d);
+    }
+  } catch (error) { console.warn('TD detectors unavailable:', error); tdDetectors = []; tdDetGrid = new Map(); }
+  return tdDetectors;
+}
+
+// The newest 30-second period in the feed, averaged over the lanes that say
+// they are working. An out-of-service loop reads zero, and a zero would look
+// exactly like a jam, so `valid` is not optional.
+async function loadRoadSpeeds() {
+  if (roadSpeeds && Date.now() - roadSpeedsAt < ROAD_REFRESH_MS) return roadSpeeds;
+  try {
+    const response = await fetch(TD_SPEED_URL, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error('server said ' + response.status);
+    const doc = new DOMParser().parseFromString(await response.text(), 'text/xml');
+    const periods = [...doc.querySelectorAll('period')];
+    const last = periods[periods.length - 1];
+    const map = new Map();
+    if (last) {
+      for (const d of last.querySelectorAll('detector')) {
+        const id = (d.querySelector('detector_id') || {}).textContent;
+        let sum = 0, occ = 0, n = 0;
+        for (const lane of d.querySelectorAll('lane')) {
+          if (((lane.querySelector('valid') || {}).textContent || '') !== 'Y') continue;
+          const sp = Number((lane.querySelector('speed') || {}).textContent);
+          const oc = Number((lane.querySelector('occupancy') || {}).textContent);
+          if (!isFinite(sp)) continue;
+          sum += sp; occ += (isFinite(oc) ? oc : 0); n++;
+        }
+        if (id && n) map.set(id, { speed: sum / n, occ: occ / n });
+      }
+      roadSpeedsWhen = ((last.querySelector('period_to') || {}).textContent || '').slice(0, 5);
+    }
+    roadSpeeds = map; roadSpeedsAt = Date.now();
+  } catch (error) {
+    console.warn('TD road speeds unavailable:', error);
+    if (!roadSpeeds) roadSpeeds = new Map();
+    roadSpeedsAt = Date.now();                    // do not hammer a feed that is down
+  }
+  return roadSpeeds;
+}
+
+// 0 = moving freely, 1 = stopped. null when nothing is measuring this spot.
+function dragAt(lat, lng, heading) {
+  if (!tdDetGrid || !roadSpeeds || !roadSpeeds.size) return null;
+  const cy = Math.floor(lat / GRID_DEG), cx = Math.floor(lng / GRID_DEG);
+  let best = null, bestM = Infinity;
+  for (let y = cy - 1; y <= cy + 1; y++) for (let x = cx - 1; x <= cx + 1; x++) {
+    for (const d of (tdDetGrid.get(y + ',' + x) || [])) {
+      // A jam on the other carriageway is not our jam. Octants apart, the
+      // short way round: 0 is the same heading, 4 is head-on opposite.
+      if (heading >= 0) {
+        const diff = (d.oct - heading + 8) % 8;
+        if (Math.min(diff, 8 - diff) > ROAD_OCTANT_SLACK) continue;
+      }
+      const live = roadSpeeds.get(d.id);
+      if (!live) continue;
+      const m = metresBetween(lat, lng, d.lat, d.lng);
+      if (m <= ROAD_NEAR_M && m < bestM) { bestM = m; best = { d, live }; }
+    }
+  }
+  if (!best) return null;
+  const kmh = best.live.speed;
+  if (kmh >= ROAD_CLEAR_KMH) return { drag: 0, kmh, det: best.d };
+  if (kmh <= ROAD_JAM_KMH) return { drag: 1, kmh, det: best.d };
+  return { drag: (ROAD_CLEAR_KMH - kmh) / (ROAD_CLEAR_KMH - ROAD_JAM_KMH), kmh, det: best.d };
+}
+
+// How much the road is holding up THIS ride: the stops it actually passes,
+// each asked of the nearest detector facing the same way. Stops with nothing
+// measuring them are left out rather than counted as clear — a road we cannot
+// see is not a road we know is moving.
+const roadDragMemo = new Map();
+function roadDrag(routeKey, fromSeq, toSeq) {
+  if (!tdDetGrid || !roadSpeeds || !roadSpeeds.size) return null;
+  const key = routeKey + '|' + fromSeq + '|' + toSeq + '|' + roadSpeedsAt;
+  if (roadDragMemo.has(key)) return roadDragMemo.get(key);
+  const path = pathBetween(routeKey, fromSeq, toSeq);
+  let sum = 0, n = 0, worst = null;
+  for (let i = 0; i < path.length; i++) {
+    const a = path[i], b = path[i + 1] || path[i - 1];
+    const lat = Number(a.lat), lng = Number(a.long);
+    if (!isFinite(lat) || !isFinite(lng)) continue;
+    let heading = -1;
+    if (b && b !== a) {
+      const bearing = bearingBetween(lat, lng, Number(b.lat), Number(b.long));
+      heading = Math.round(bearing / 45) % 8;
+      if (b === path[i - 1]) heading = (heading + 4) % 8;         // looked backwards
+    }
+    const hit = dragAt(lat, lng, heading);
+    if (!hit) continue;
+    sum += hit.drag; n++;
+    if (!worst || hit.drag > worst.drag) worst = hit;
+  }
+  const out = n ? { drag: sum / n, seen: n, worst } : null;
+  if (roadDragMemo.size > 400) roadDragMemo.clear();
+  roadDragMemo.set(key, out);
+  return out;
+}
+
 // ROUTES THE TRANSPORT DEPARTMENT HAS A NOTICE OUT ON.
 // tdNotices is already loaded and parsed for the alert banner, so this is
 // the same evidence, reused at the moment of CHOOSING rather than after
@@ -7359,6 +7503,13 @@ function arriveCached(stopId) {
 // error page listing those very paths), and data.gov.hk has no archived
 // version of either. Incidents are the live road data actually on offer.
 const TRAFFIC_PENALTY_MIN = 8;
+// Above this the road is not merely "slow", it is stopped, and that is a
+// decision the rider should get to make rather than read about afterwards.
+// Half, not more: a leg is measured by whatever detectors happen to sit on
+// it — often only two or three — so demanding a large majority of them meant
+// the whole of Tuen Mun Road could be at 12 km/h and the app would say
+// nothing. Half of what we can see, at ~32 km/h or below, is a real jam.
+const ROAD_ASK_DRAG = 0.5;
 function routeNotices(routeNo) {
   const r = String(routeNo || '').toUpperCase();
   if (!r || !tdNotices.length) return [];
@@ -7390,9 +7541,14 @@ function arriveBest(ids, destIds, walkMin) {
       // the next bus. Anything you would miss is simply not a candidate.
       const walk = walkMin || 0;
       if (wait < walk) continue;
-      const total = wait + reach.stopsAway * MINUTES_PER_STOP + held;
+      // The ride, stretched by how the road is ACTUALLY moving over the part
+      // of the route this rider will sit through — not the whole line, and
+      // not the other carriageway.
+      const road = roadDrag(key, seq, seq + reach.stopsAway);
+      const ride = reach.stopsAway * MINUTES_PER_STOP * (1 + (road ? road.drag * ROAD_DRAG : 0));
+      const total = wait + ride + held;
       if (!best || total < best.total)
-        best = { total, wait, walk, held, route: row.route, stopsAway: reach.stopsAway, stopId: id };
+        best = { total, wait, walk, held, road, ride, route: row.route, stopsAway: reach.stopsAway, stopId: id };
     }
   }
   return asked ? best : undefined;
@@ -7402,9 +7558,14 @@ function arriveBest(ids, destIds, walkMin) {
 // what it already knows and re-orders when the times land, so the screen is
 // never blocked on the network.
 async function ensureArrivals(ids, stamp) {
+  const roadBefore = roadSpeedsAt;
+  // The buses and the road are both needed before the list can be ordered,
+  // and neither should wait on the other.
+  const road = Promise.all([loadTdDetectors(), loadRoadSpeeds()]);
   const want = [...new Set(ids)].filter(id => !arriveCached(id) && !arriveInFlight.has(id)).slice(0, ARRIVE_MAX_BAYS);
-  if (!want.length) return false;
+  if (!want.length) { await road; return roadSpeedsAt !== roadBefore && stamp === arriveStamp; }
   want.forEach(id => arriveInFlight.add(id));
+  await road;
   await Promise.all(want.map(async id => {
     try {
       const stop = findStopById(id);
@@ -7420,6 +7581,20 @@ async function ensureArrivals(ids, stamp) {
 // What the ranking decided, said in one line: the bus, when it goes, and
 // when it puts you there. ⚠ when the Transport Department has a notice out
 // on that route — the reason it may have been pushed down the list.
+// Which cards must ask before they open, and what they must say.
+function askAttrs(best) {
+  if (!best) return '';
+  const jam = best.road && best.road.drag >= ROAD_ASK_DRAG && best.road.worst;
+  if (!best.held && !jam) return '';
+  let out = ' data-held-route="' + esc(best.route) + '"';
+  if (jam) {
+    const w = best.road.worst;
+    out += ' data-slow-road="' + esc(lang === 'zh' ? w.det.road_tc : w.det.road_en) +
+           '" data-slow-kmh="' + Math.round(w.kmh) + '"';
+  }
+  return out;
+}
+
 function arriveTagHtml(best) {
   if (!best) return '';
   const at = new Date(Date.now() + best.total * 60000);
@@ -7429,8 +7604,17 @@ function arriveTagHtml(best) {
   const line = best.wait === 0
     ? T('stopArriveDue').replace('{r}', best.route).replace('{t}', hhmm)
     : T('stopArriveBy').replace('{r}', best.route).replace('{w}', best.wait + T('min')).replace('{t}', hhmm);
+  // The road, when it is the reason the number looks worse than the
+  // timetable would suggest. Named and measured, so it can be judged.
+  let road = '';
+  if (best.road && best.road.drag >= 0.3 && best.road.worst) {
+    const w = best.road.worst;
+    const where = (lang === 'zh' ? w.det.road_tc : w.det.road_en).split(/\s*-\s*/)[0];
+    road = '<small class="roadslow">🐌 ' +
+      esc(T('stopRoadSlow').replace('{s}', where).replace('{k}', Math.round(w.kmh))) + '</small>';
+  }
   return '<small class="arrivetag' + (best.held ? ' held' : '') + '">🏁 ' + esc(line) +
-    (best.held ? ' <b>⚠</b>' : '') + '</small>';
+    (best.held ? ' <b>⚠</b>' : '') + '</small>' + road;
 }
 
 // The destination typed on the picker, as stop ids — null when none typed.
@@ -7651,7 +7835,7 @@ function stopPickerParts() {
     const stop = group[0];
     const chip = group.length > 1 ? T('stopBays').replace('{n}', group.length) : poleCodeOf(stop);
     return '<button data-stop-id="' + esc(stop.stop) + '"' +
-      (best && best.held ? ' data-held-route="' + esc(best.route) + '"' : '') +
+      askAttrs(best) +
       '><span class="pickmain">📍 ' + esc(stopName(stop)) +
       (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
       groupDirHtml(group.map(g => g.stop)) +
@@ -8094,7 +8278,7 @@ function stopRenderSearch(query) {
       const ids = bays.map(x => x.stop);
       const chip = bays.length > 1 ? T('stopBays').replace('{n}', bays.length) : poleCodeOf(lead);
       return '<button' + (g.hits.length ? '' : ' class="dim" data-nofilter="1"') +
-        (g.eta && g.eta.held ? ' data-held-route="' + esc(g.eta.route) + '"' : '') +
+        askAttrs(g.eta) +
         ' data-stop-id="' + esc(lead.stop) + '" data-stop-group="' + esc(ids.join(',')) + '"><span class="pickmain">🚏 ' + esc(stopName(lead)) +
         (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
         groupDirHtml(ids) +
@@ -8179,7 +8363,8 @@ document.getElementById('stopview').addEventListener('click', event => {
         if (carry) { stopState.destFilter = carry; renderStopView(); }
       };
       const held = el.dataset.heldRoute;
-      if (held && !trafficAcked.has(String(held).toUpperCase())) askTrafficThen(held, open);
+      const slow = el.dataset.slowRoad ? { road: el.dataset.slowRoad, kmh: el.dataset.slowKmh } : null;
+      if (held && !trafficAcked.has(String(held).toUpperCase())) askTrafficThen(held, open, slow);
       else open();
     }
     return;
@@ -9062,12 +9247,15 @@ function showAlertSheet(list) {
 // route, because being asked again on every tap is nagging, not informing.
 const trafficAcked = new Set();
 let heldGo = null;
-function askTrafficThen(routeNo, go) {
+function askTrafficThen(routeNo, go, slow) {
   const notices = routeNotices(routeNo);
   const sheet = document.getElementById('alertsheet'), card = document.getElementById('alertcard');
-  if (!notices.length || !sheet || !card) { go(); return; }
+  if ((!notices.length && !slow) || !sheet || !card) { go(); return; }
   const zh = lang === 'zh';
-  const body = notices.slice(0, 3).map(n => {
+  const jam = slow ? '<div class="alertitem"><div class="alerttitle">🐌 ' +
+      esc(T('stopRoadSlow').replace('{s}', String(slow.road).split(/\s*-\s*/)[0]).replace('{k}', slow.kmh)) +
+      '</div><div class="alertmeta">' + esc(T('alertSourceRoad')) + '</div></div>' : '';
+  const body = jam + notices.slice(0, 3).map(n => {
     const title = [zh ? n.heading_tc : n.heading_en, zh ? n.location_tc : n.location_en,
                    zh ? n.direction_tc : n.direction_en].filter(Boolean).join(' · ');
     const text = zh ? (n.content_tc || n.detail_tc) : (n.content_en || n.detail_en);
