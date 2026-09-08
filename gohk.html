@@ -7095,7 +7095,13 @@ function groupDirHtml(ids) {
 function poleRoutesLine(stopId, max, destIds) {
   let items;
   if (destIds && destIds.size) {
-    items = reachingRoutes(stopId, destIds).map(x => '<b>' + esc(x.r.route) + '</b> ' +
+    // Shortest ride first. Unsorted, this led with whatever the index happened
+    // to hold — 屯門公路轉車站 showed "52P, 18 stops" above the 59X that the
+    // 🏁 line was actually recommending eight stops away, so the card argued
+    // with itself.
+    items = reachingRoutes(stopId, destIds)
+      .sort((a, b) => a.reach.stopsAway - b.reach.stopsAway)
+      .map(x => '<b>' + esc(x.r.route) + '</b> ' +
       T('stopsAwayShort').replace('{n}', x.reach.stopsAway) + (x.r.dest ? ' · ' + T('towards') + esc(x.r.dest) : ''));
   } else {
     const list = Array.isArray(stopId) ? routesServingAny(stopId) : routesServing(stopId);
@@ -7161,16 +7167,25 @@ function placeKey(stop) {
 // and 67X call there on their way in from Tuen Mun. Keying the destination on
 // the leading segment alone matched neither those buses nor that pole, so the
 // app answered "60X only" for a junction served by four routes.
-function placeKeys(stop) {
+function placeSegments(stop) {
   const m = memoOf(stop);
-  if (m.pks === undefined) {
+  if (m.psg === undefined) {
     const raw = String(stop.name_tc || stop.name_en || '').replace(/[（(][^)）]*[)）]/g, '');
-    // A one-character fragment is not a landmark, it is punctuation noise.
-    m.pks = [...new Set(raw.split(/[,，]/).map(tidyName).filter(k => k.length >= 2))];
-    if (!m.pks.length && m.pk) m.pks = [m.pk];
+    const out = [], seen = new Set();
+    for (const part of raw.split(/[,，]/)) {
+      const label = part.trim();
+      const key = tidyName(label);
+      // A one-character fragment is not a landmark, it is punctuation noise.
+      if (key.length < 2 || seen.has(key)) continue;
+      seen.add(key);
+      out.push({ key, label });
+    }
+    if (!out.length && m.pk) out.push({ key: m.pk, label: raw.trim() });
+    m.psg = out;
   }
-  return m.pks;
+  return m.psg;
 }
+function placeKeys(stop) { return placeSegments(stop).map(x => x.key); }
 // The place name as a rider would say it — what placeKey matches, but kept
 // readable and in the script they are reading: 太子站, not 太子站旺角花墟.
 function placeLabel(stop) {
@@ -7235,9 +7250,20 @@ function nameMatches(stop, needle, loose) {
 // Remembered per typed name: the picker, the search and the rows all ask
 // for the same name in one render, and again on every keystroke elsewhere.
 const matchMemo = new Map(); let matchMemoStamp = '';
-function stopIdsMatching(q) {
+// ONE ANSWER TO "WHAT DOES THIS TEXT NAME?"
+// 我要去, 起點車站 and the 往… filter all take a place name, and they have to
+// agree. They did not: 旺角警署 meant fifteen poles as a destination, four as
+// a starting point, and had no whole-place line in the suggestions at all —
+// the same words, three answers, in one app. Every box now asks this.
+//
+//   named — the poles whose own name matches the text
+//   all   — those, plus the rest of the place they belong to
+//
+// A rider who names a place means the place. Which of its bays they want is
+// the app's problem to work out, not a question to hand back to them.
+function stopsNamed(q) {
   const needle = needleOf(q);
-  if (!needle) return new Set();
+  if (!needle) return { needle: '', named: [], all: [], ids: new Set() };
   const stamp = dataStamp() + '|' + script;
   if (stamp !== matchMemoStamp) { matchMemo.clear(); matchMemoStamp = stamp; }
   const hit = matchMemo.get(needle);
@@ -7249,10 +7275,14 @@ function stopIdsMatching(q) {
   // ...and every other bay of the same place within walking distance, so
   // naming one pole of a station means the station.
   addPlaceFamily(named, ids);
+  const byId = stopMapNow();
+  const all = [...ids].map(id => byId.get(id) || null).filter(Boolean);
+  const answer = { needle, named, all, ids };
   if (matchMemo.size >= 60) matchMemo.delete(matchMemo.keys().next().value);
-  matchMemo.set(needle, ids);
-  return ids;
+  matchMemo.set(needle, answer);
+  return answer;
 }
+function stopIdsMatching(q) { return stopsNamed(q).ids; }
 // The routes from a pole that stop at any of these places further on.
 function reachingRoutes(stopId, destIds) {
   const list = Array.isArray(stopId) ? routesServingAny(stopId) : routesServing(stopId);
@@ -8155,29 +8185,59 @@ function destSuggestions(q, max) {
   // belong to one walkable place, that place goes on top as a single choice
   // covering every bay. The individual names stay underneath, because
   // somebody who does want one particular pole must still be able to say so.
+  // Grouped by EVERY landmark in the name, and labelled with the landmark
+  // that did the grouping — not with the first words of whichever pole came
+  // back first. Typing 旺角警署 must offer "旺角警署", not "太子站", even though
+  // two of the four poles it matches are called 太子站, 旺角警署.
   const places = new Map();
   for (const m of matched) {
-    const k = placeKey(m.stop);
-    if (!k) continue;
-    let p = places.get(k);
-    if (!p) places.set(k, p = { names: new Set(), stops: [], rank: 9 });
-    p.names.add(sc(stopName(m.stop)));
-    p.stops.push(m.stop);
-    p.rank = Math.min(p.rank, m.rank);
+    for (const seg of placeSegments(m.stop)) {
+      let p = places.get(seg.key);
+      if (!p) places.set(seg.key, p = { label: seg.label, names: new Set(), stops: [], rank: 9 });
+      p.names.add(sc(stopName(m.stop)));
+      p.stops.push(m.stop);
+      p.rank = Math.min(p.rank, m.rank);
+    }
   }
-  const heads = [];
-  for (const p of places.values()) {
-    if (p.names.size < 2) continue;                    // a single name already says it
+  let heads = [];
+  for (const [key, p] of places) {
+    // The head must be the place that was TYPED, never a narrower one.
+    // Two ways it goes wrong otherwise: typing 太子站 offered "旺角花墟" (the
+    // second half of a different pole's name), and typing 尖沙咀 led with
+    // "尖沙咀東" — a real place, but a different one, put above the thing
+    // actually asked for. So: the landmark IS the text, or the text names it
+    // among others (太子站, 旺角警署 → 太子站). Never text ⊂ landmark.
+    if (key !== needle && !needle.includes(key)) continue;
     const lead = p.stops[0], lat = Number(lead.lat), lng = Number(lead.long);
     if (!isFinite(lat) || !isFinite(lng)) continue;
     // One walkable place, not a name that repeats across Hong Kong.
     if (!p.stops.every(x => metresBetween(lat, lng, Number(x.lat), Number(x.long)) <= DEST_FAMILY_M)) continue;
-    const name = placeLabel(lead);
-    if (!name || named.some(x => x.name === name)) continue;
-    heads.push({ name, rank: p.rank, count: p.stops.length, whole: true, bays: p.stops.length });
+    const name = sc(p.label);
+    if (!name) continue;
+    // What tapping it will actually cover — the whole place, not just the
+    // poles whose text happened to match.
+    const ids = stopIdsMatching(name);
+    // Worth a line only if it says something the plain names do not: either
+    // it gathers several different names, or it reaches poles the typed text
+    // never touched. Typing 太子站, 旺角警署 in full matches two poles and is
+    // one name, yet the place is fifteen — that is worth offering.
+    if (p.names.size < 2 && ids.size <= p.stops.length) continue;
+    heads.push({ name, rank: p.rank, count: p.stops.length, whole: true, bays: ids.size || p.stops.length, ids });
   }
-  heads.sort((a, b) => a.rank - b.rank || b.bays - a.bays);
-  const list = heads.concat(named);
+  // The leading landmark first — 太子站, 旺角警署 means Prince Edward Station
+  // before it means the police station outside it.
+  heads.sort((a, b) => a.rank - b.rank ||
+                       (needle.startsWith(tidyName(a.name)) ? 0 : 1) - (needle.startsWith(tidyName(b.name)) ? 0 : 1) ||
+                       b.bays - a.bays);
+  // Two landmarks of one place resolve to the same poles; offering both is
+  // the same choice twice. Keep the first, drop anything it already covers.
+  heads = heads.filter((h, i) => !heads.some((other, j) =>
+    j < i && h.ids && other.ids && [...h.ids].every(id => other.ids.has(id))));
+  // A head and a plain line with the same words are not the same offer — the
+  // head is the whole place, the line is one pole's name. Keep the head and
+  // drop the line, rather than dropping the head as a duplicate: that is what
+  // left 旺角警署 with no whole-place option at all.
+  const list = heads.concat(named.filter(x => !heads.some(h => h.name === x.name)));
   if (suggestMemo.size >= 60) suggestMemo.delete(suggestMemo.keys().next().value);
   suggestMemo.set(memoKey, list);
   return list;
@@ -8251,9 +8311,9 @@ function stopRenderSearch(query) {
   if (needle.length < 1) return;
   const destIds = destIdsNow();
   const filtering = !!(destIds && destIds.size);
-  const stops = plannableStops();
-  let named = stops.filter(stop => nameMatches(stop, needle, false));
-  if (!named.length && needle.length >= 2) named = stops.filter(stop => nameMatches(stop, needle, true));
+  // The same question the destination box asks, so 太子站 means the same
+  // fifteen poles whichever end of the trip it is typed into.
+  const named = stopsNamed(query).all;
   // Names that START with the text first, shortest first: 屯門 puts 屯門市中心
   // ahead of 新屯門中心.
   const prefixRank = stop => { const [nk, ne] = memoKeys(stop); return (nk.startsWith(needle) || ne.startsWith(needle)) ? 0 : 1; };
