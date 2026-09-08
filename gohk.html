@@ -1187,6 +1187,110 @@
   #rb-close { position:absolute; top:10px; right:12px; background:rgba(255,255,255,.2);
               border:none; color:white; font-size:1.4118rem; width:52px; height:52px;
               border-radius:26px; cursor:pointer; }
+
+  /* ==============================================================
+     PLACES WORTH GOING — the tourist layer on the MAP tab.
+     Every control here is hidden outside the map: a floating chip row
+     over a list of arrival times would be clutter over the one screen
+     a rider is actually reading.
+     ============================================================== */
+  #maptools, #maplocate { display:none; }
+  body.mapopen #maptools { display:block; }
+  body.mapopen #maplocate { display:flex; }
+  #maptools { position:fixed; top:calc(var(--toph) + 8px); left:10px; right:10px; z-index:1150; }
+  .mtsearch { display:flex; gap:4px; align-items:center; background:var(--surface);
+              border:2px solid var(--line); border-radius:var(--r-md); padding:2px 4px;
+              box-shadow:0 2px 10px rgba(0,0,0,.2); }
+  .mtsearch input { flex:1 1 auto; min-width:0; border:none; outline:none; background:transparent;
+                    font-size:1.06rem; padding:10px 6px; color:var(--ink); }
+  .mtsearch button { flex:0 0 auto; min-width:44px; min-height:44px; border:none; background:transparent;
+                     font-size:1.1rem; font-weight:800; color:var(--ink-3); border-radius:var(--r-sm); }
+  /* The chips SCROLL sideways and never wrap. Nine categories in Chinese at
+     特大 are far wider than a 375px phone, and a wrapped second row would
+     push the map itself out from under the rider's thumb. */
+  #spotchips { display:flex; gap:6px; overflow-x:auto; padding:8px 2px 2px; scrollbar-width:none; }
+  #spotchips::-webkit-scrollbar { display:none; }
+  .spotchip { flex:0 0 auto; min-height:44px; padding:4px 14px; border-radius:999px;
+              border:2px solid var(--line); background:var(--surface); color:var(--ink-2);
+              font-size:1rem; font-weight:800; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,.16); }
+  .spotchip.on { background:var(--navy); border-color:var(--navy); color:#fff; }
+  #spotresults { margin-top:6px; background:var(--surface); border:2px solid var(--line);
+                 border-radius:var(--r-md); box-shadow:0 4px 16px rgba(0,0,0,.25);
+                 max-height:46vh; overflow:auto; }
+  #spotresults:empty { display:none; }
+  .spothit { display:block; width:100%; text-align:left; border:none; background:transparent;
+             border-bottom:1px solid var(--line-soft); padding:10px 12px; min-height:56px; color:var(--ink); }
+  .spothit:last-child { border-bottom:none; }
+  .spothit:active { background:var(--navy-tint); }
+  .spothit b { display:block; font-size:1.06rem; line-height:1.3; }
+  .spothit small { display:block; font-size:0.9rem; font-weight:700; color:var(--ink-3); margin-top:2px; }
+  /* Big enough to hit with a thumb while holding a suitcase. */
+  /* Clear of the map attribution. The Lands Department licence requires the
+     copyright notice to stay ON the map face, so a button sitting on top of
+     it is a licence problem rather than a cosmetic one. The notice wraps to
+     two or three lines depending on width AND grows with the text size
+     setting (36px at 標準, 47px at 特大), so the clearance is MEASURED into
+     --attrh rather than guessed — see fitLocateButton(). */
+  #maplocate { position:fixed; right:14px;
+               bottom:calc(var(--attrh, 48px) + 12px + env(safe-area-inset-bottom, 0px));
+               z-index:1150; width:62px; height:62px; border-radius:50%; padding:0;
+               border:2px solid var(--line); background:var(--surface); color:var(--ink);
+               align-items:center; justify-content:center; font-size:1.7rem;
+               box-shadow:0 4px 16px rgba(0,0,0,.32); }
+  #maplocate.on { background:var(--navy); border-color:var(--navy); }
+  #maplocate.busy { opacity:.6; }
+
+  /* A place pin. The label rides under it from zoom 16 so a tourist can read
+     the map without tapping every dot. The box is wide to make room for the
+     label, so only the pin and the label themselves take taps. */
+  .spotpin-wrap { background:none; border:none; }
+  .spotpinbox { display:flex; flex-direction:column; align-items:center; width:140px;
+                pointer-events:none; }
+  .spotpin { pointer-events:auto; display:flex; align-items:center; justify-content:center;
+             width:30px; height:30px; border-radius:50%; background:#fff;
+             border:3px solid var(--pin, #334155); font-size:15px; line-height:1;
+             box-shadow:0 1px 5px rgba(0,0,0,.4); }
+  .spotlabel { pointer-events:auto; max-width:138px; margin-top:2px; font-size:11px; font-weight:800;
+               color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+               text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; }
+  .herepin { display:flex; align-items:center; justify-content:center; width:26px; height:26px;
+             border-radius:50%; background:var(--navy); border:3px solid #fff;
+             box-shadow:0 0 0 2px var(--navy), 0 2px 8px rgba(0,0,0,.4); }
+
+  /* The place sheet. Same shape as the "which way?" sheet, because a rider
+     who has met one has met them all. */
+  #spotsheet { display:none; position:fixed; inset:0; z-index:2000; background:rgba(15,23,42,.55);
+               align-items:flex-end; justify-content:center; padding:10px; }
+  #spotsheet.open { display:flex; }
+  .spothead { display:flex; gap:10px; align-items:flex-start; }
+  .spothead .sh-icon { flex:0 0 auto; font-size:1.9rem; line-height:1.2; }
+  .spothead .sh-name { flex:1 1 auto; min-width:0; }
+  .spothead b { display:block; font-size:1.3rem; line-height:1.28; color:var(--ink); }
+  .spothead small { display:block; font-size:0.94rem; font-weight:700; color:var(--ink-3); margin-top:3px; }
+  .spotkind { display:inline-block; margin-top:6px; padding:2px 10px; border-radius:999px;
+              background:var(--surface-2); color:var(--ink-2); font-size:0.88rem; font-weight:800; }
+  .spotmeta { font-size:0.98rem; line-height:1.5; color:var(--ink-2); margin-top:8px; }
+  .spotmeta .k { font-weight:800; color:var(--ink-3); }
+  .spotdesc { font-size:0.98rem; line-height:1.55; color:var(--ink-2); margin-top:8px;
+              max-height:22vh; overflow:auto; }
+  .spotgohead { font-size:1.1rem; font-weight:800; color:var(--ink); margin:14px 0 0;
+                padding-top:12px; border-top:2px solid var(--line-soft); }
+  .spotway { display:block; width:100%; text-align:left; border:2px solid var(--line);
+             border-radius:var(--r-md); background:var(--surface); padding:10px 12px;
+             margin-top:8px; min-height:56px; color:var(--ink); }
+  .spotway:active { background:var(--navy-tint); }
+  .spotway b { display:block; font-size:1.12rem; line-height:1.3; }
+  .spotway small { display:block; font-size:0.92rem; font-weight:700; color:var(--ink-3); margin-top:2px; }
+  .spotway.rail { border-left:8px solid var(--blue); }
+  .spotway.bus { border-left:8px solid var(--red); }
+  .wayeta { display:block; margin-top:5px; font-size:1.02rem; font-weight:800; color:var(--green); }
+  .wayeta .r { color:var(--blue); }
+  .spotgo { display:block; width:100%; min-height:58px; margin-top:12px; border:none;
+            border-radius:var(--r-md); background:var(--navy); color:#fff;
+            font-size:1.14rem; font-weight:800; }
+  .spotshut { display:block; width:100%; min-height:48px; margin-top:8px; border:none;
+              background:transparent; font-size:1.02rem; font-weight:800; color:var(--ink-3); }
+  .spotwait { font-size:0.98rem; font-weight:700; color:var(--ink-3); margin-top:10px; }
 </style>
 </head>
 <body>
@@ -1297,6 +1401,22 @@
 <div id="dirsheet" role="dialog" aria-modal="true"><div class="dircard" id="dircard"></div></div>
 <!-- Traffic notice that touches something the rider saved or is looking at. Filled by showAlertSheet(). -->
 <div id="alertsheet" role="dialog" aria-modal="true"><div class="dircard" id="alertcard"></div></div>
+<!-- Places worth going, and the way there by bus or train. Only on the MAP
+     tab; body.mapopen is what turns the whole group on. -->
+<div id="spotsheet" role="dialog" aria-modal="true"><div class="dircard" id="spotcard"></div></div>
+
+<div id="maptools">
+  <div class="mtsearch">
+    <input id="spot-search" type="search" autocomplete="off" enterkeyhint="search">
+    <button id="spot-clear" type="button" aria-label="Clear">✕</button>
+  </div>
+  <div id="spotchips"></div>
+  <div id="spotresults"></div>
+</div>
+
+<!-- Where am I, and what leaves from near here. -->
+<button id="maplocate" type="button">📍</button>
+
 
 <div id="routebanner">
   <button id="rb-close" title="Close">✕</button>
@@ -1411,6 +1531,32 @@ const TEXT = {
     rideTo:'Ride to', stops:'stops', stations:'stations', changeBus:'↓ CHANGE BUS',
     changeTrain:'↓ CHANGE TRAIN', trainsFrequent:'Trains every few minutes', here:'here',
     tabBus:'BUS', tabStop:'BUS', tabMtr:'MTR', tabFav:'SAVED', tabMap:'MAP', tabSet:'SETUP',
+    spotSearch:'Search places to visit',
+    spotAll:'All', spotSight:'Sights', spotMuseum:'Museums', spotMonument:'Monuments',
+    spotHeritage:'Heritage', spotTemple:'Temples', spotPark:'Parks', spotBeach:'Beaches',
+    spotView:'Viewpoints', spotNature:'Country parks',
+    spotZoomIn:'Zoom in to see more places',
+    spotNoHits:'No place of that name.',
+    spotLoading:'Loading places to visit\u2026',
+    spotAddress:'Address', spotHours:'Open', spotSite:'Website', spotTrail:'Part of',
+    spotGetting:'Getting there by public transport',
+    spotFinding:'Finding the nearest stops\u2026',
+    spotNoTransport:'No bus stop or station within a short walk. This place needs a taxi or a long walk.',
+    spotWalkFrom:'{m} min walk \u00b7 {d} m',
+    spotBusesHere:'🚌 Show me buses going here',
+    spotOpenStop:'Buses from this stop',
+    spotOpenRail:'Trains at this station',
+    spotClose:'Close',
+    spotFromYou:'{d} from you',
+    spotNoLive:'Live times not published for this stop',
+    spotNoDue:'No bus due in the next hour',
+    spotFarNote:'Nothing close by. The nearest stop is a long walk:',
+    hereTitle:'You are here',
+    hereAccuracy:'Accurate to about {m} m',
+    hereNearby:'Nearest public transport',
+    hereSpots:'Places to visit near you',
+    hereFailed:'Could not find you. Check that location is on for this app.',
+    hereLocating:'Finding you\u2026',
     settings:'Settings', settingLanguage:'Language',
     settingsNote:'Your choice is remembered on this phone.',
     goShort:'\u27a4 Go',
@@ -1615,6 +1761,32 @@ const TEXT = {
     rideTo:'乘搭至', stops:'個站', stations:'個站', changeBus:'↓ 轉乘巴士',
     changeTrain:'↓ 轉綫', trainsFrequent:'港鐵班次頻密，數分鐘一班', here:'於此處',
     tabBus:'巴士', tabStop:'巴士', tabMtr:'港鐵', tabFav:'收藏', tabMap:'地圖', tabSet:'設定',
+    spotSearch:'搜尋景點',
+    spotAll:'全部', spotSight:'景點', spotMuseum:'博物館', spotMonument:'法定古蹟',
+    spotHeritage:'文物徑', spotTemple:'廟宇', spotPark:'公園', spotBeach:'泳灘',
+    spotView:'觀景點', spotNature:'郊野公園',
+    spotZoomIn:'放大地圖可看到更多景點',
+    spotNoHits:'找不到這個景點。',
+    spotLoading:'正在載入景點…',
+    spotAddress:'地址', spotHours:'開放時間', spotSite:'網頁', spotTrail:'所屬',
+    spotGetting:'如何乘公共交通前往',
+    spotFinding:'正在找附近的車站…',
+    spotNoTransport:'步行距離內沒有巴士站或港鐵站，需要乘的士或走一段路。',
+    spotWalkFrom:'步行 {m} 分鐘 \u00b7 {d} 米',
+    spotBusesHere:'🚌 查看往這裡的巴士',
+    spotOpenStop:'看這個站的巴士',
+    spotOpenRail:'看這個站的列車',
+    spotClose:'關閉',
+    spotFromYou:'距離你 {d}',
+    spotNoLive:'這個站沒有實時班次資料',
+    spotNoDue:'未來一小時沒有班次',
+    spotFarNote:'附近沒有車站，最近的車站要走一段路：',
+    hereTitle:'你在這裡',
+    hereAccuracy:'誤差約 {m} 米',
+    hereNearby:'最近的公共交通',
+    hereSpots:'你附近的景點',
+    hereFailed:'找不到你的位置，請檢查手機有沒有允許本應用程式使用定位。',
+    hereLocating:'正在找你的位置…',
     settings:'設定', settingLanguage:'語言',
     settingsNote:'你的選擇會記在這部手機。',
     goShort:'\u27a4 前往',
@@ -4984,6 +5156,8 @@ function showMode(mode) {
   // Tapping a section in the bar is leaving the route lookup, whether or not
   // the ✕ was used.
   panel.classList.remove('routemode');
+  // The map's own controls belong to the map and to nothing else.
+  document.body.classList.remove('mapopen');
 
   // ---- FAVOURITES ----
   // Reachable from anywhere, including before a search has been run, so it
@@ -5048,11 +5222,13 @@ function showMode(mode) {
     mtrView.style.display = 'none';
     stopView.style.display = 'none';
     panel.classList.add('mapmode');
+    document.body.classList.add('mapopen');
     // Leaflet sized itself against a panel that was covering it; it has to be
     // told the shape changed or it draws the tiles for the old rectangle.
     setTimeout(() => {
       map.invalidateSize();
       drawStops();
+      openMapLayer();
       // Open on the rider, not on the whole territory — but only the FIRST
       // time. Someone who panned to Sha Tin and came back to check a bus is
       // owed Sha Tin again, not a map that keeps snapping home.
@@ -6497,7 +6673,10 @@ map.on('moveend', drawStops);
 
 window.addEventListener('resize', () => {
   clearTimeout(window._resizeTimer);
-  window._resizeTimer = setTimeout(() => { map.invalidateSize(); drawStops(); }, 200);
+  window._resizeTimer = setTimeout(() => {
+    map.invalidateSize(); drawStops();
+    if (typeof fitLocateButton === 'function') fitLocateButton();
+  }, 200);
 });
 
 
@@ -8221,7 +8400,12 @@ function withHere(then) {
   status.textContent = T('findingYou');
   navigator.geolocation.getCurrentPosition(
     position => {
-      herePoint = { lat: position.coords.latitude, lng: position.coords.longitude };
+      // accuracy comes along for the ride: the map draws it as a circle so a
+      // rider indoors is told the phone is unsure rather than shown a
+      // confident dot on the wrong side of the building. Everything else
+      // reads lat/lng and is untouched by the extra field.
+      herePoint = { lat: position.coords.latitude, lng: position.coords.longitude,
+                    accuracy: position.coords.accuracy };
       stopState.locating = false;
       paint();
       then(herePoint);
@@ -11014,6 +11198,611 @@ document.addEventListener('visibilitychange', () => {
   stopLastTouch = Date.now();   // coming back to the app is an interaction
   stopTick();                   // and the times on screen are already stale
 });
+
+// ============================================================
+// PLACES WORTH GOING — the tourist layer on the MAP tab
+// ============================================================
+// A visitor's question is not "when is the next 60X" but "how do I get to the
+// Peak", and until now the app had no idea such a place existed. This layer
+// answers it with the government's own lists — 655 places from nine open
+// datasets — and then hands the question straight back to the machinery that
+// already knows about buses.
+//
+// WHY THE DATA IS BUNDLED rather than fetched live: none of these endpoints
+// sends an access-control-allow-origin header, so a browser cannot read them
+// at all. It is also the right answer for a visitor, who is very likely on
+// expensive roaming data or none: 39 KB gzipped, stored by the service worker
+// on first open, and the map then works with no signal.
+//
+// SOURCES (all data.gov.hk / CSDI, all free to use):
+//   Culture, Sports and Tourism Bureau  major attractions
+//   Leisure and Cultural Services Dept  museums, parks and zoos, beaches
+//   Antiquities and Monuments Office    declared monuments, heritage trails
+//   Agriculture, Fisheries and Cons.    country and marine parks, viewing
+//                                       points, visitor centres, Wetland Park
+//   Planning Department                 strategic viewing points
+//   Home and Youth Affairs Bureau       Chinese Temples Committee temples
+const SPOTS_URL = 'attractions.json';
+let spots = null;              // null = not loaded, [] = tried and empty
+let spotsLoading = null;
+let spotFilter = '';           // '' = every category the zoom allows
+let spotQuery = '';
+let spotIndexing = false;
+let hereMarker = null, hereRing = null;
+
+async function loadSpots() {
+  if (spots) return spots;
+  if (spotsLoading) return spotsLoading;
+  spotsLoading = (async () => {
+    try {
+      const response = await fetch(SPOTS_URL, { signal: AbortSignal.timeout(20000) });
+      if (!response.ok) throw new Error('server said ' + response.status);
+      const json = await response.json();
+      spots = (json.items || []).map((s, i) => Object.assign({ i }, s));
+    } catch (error) {
+      console.warn('Places unavailable:', error);
+      spots = [];              // asked and answered: do not ask again this session
+    }
+    spotsLoading = null;
+    return spots;
+  })();
+  return spotsLoading;
+}
+
+// Nine categories, each with its own pin. The order is the order of the chips
+// and, deliberately, the order of interest to someone here for a week.
+const SPOT_CATS = [
+  { c:'sight',    icon:'⭐', colour:'#b45309', key:'spotSight' },
+  { c:'museum',   icon:'🏛', colour:'#7c3aed', key:'spotMuseum' },
+  { c:'monument', icon:'🏯', colour:'#9a3412', key:'spotMonument' },
+  { c:'temple',   icon:'⛩', colour:'#b91c1c', key:'spotTemple' },
+  { c:'heritage', icon:'🚩', colour:'#be123c', key:'spotHeritage' },
+  { c:'park',     icon:'🌳', colour:'#15803d', key:'spotPark' },
+  { c:'beach',    icon:'🏖', colour:'#0369a1', key:'spotBeach' },
+  { c:'view',     icon:'🔭', colour:'#0f766e', key:'spotView' },
+  { c:'nature',   icon:'⛰', colour:'#4d7c0f', key:'spotNature' },
+];
+const SPOT_CAT = new Map(SPOT_CATS.map(c => [c.c, c]));
+
+// FROM WHICH ZOOM EACH KIND APPEARS.
+// All 655 at once is a screen of confetti, and the interesting ones lose. So
+// the headline sights are there from the whole-territory view and the 118
+// heritage-trail plaques only once the rider is standing in the street they
+// are on. Choosing a category from the chips overrides all of this — asking
+// for temples means temples, wherever you happen to be looking.
+const SPOT_TIER = { sight:11, museum:13, nature:13, beach:13,
+                    monument:14, park:14, temple:14, view:14, heritage:15 };
+const SPOT_MAX_PINS = 240;     // beyond this the map is unreadable anyway
+const SPOT_LABEL_ZOOM = 16;
+const SPOT_TRANSPORT_M = 800;  // the same walk the planner asks of anyone else
+const SPOT_RAIL_M = 1200;      // a station is worth a longer walk than a pole
+// WHEN THERE IS NOTHING WITHIN A NORMAL WALK.
+// 110 of the 655 places have no stop within 800 m, and they are real places
+// people go: the Tai Tam reservoir dams, the hilltop viewing points, Cape
+// D'Aguilar. "No bus stop within a short walk" is a dead end at all of them,
+// while "the nearest stop is 1.4 km away" is the answer the visitor came for.
+// So we look again, further out, and say plainly that it is far.
+const SPOT_FAR_M = 2500;
+const SPOT_NEAR_ME_M = 1500;
+
+function spotName(s)    { return (lang === 'zh' ? (s.t || s.e) : (s.e || s.t)) || ''; }
+function spotSub(s)     { return (lang === 'zh' ? (s.e || '') : (s.t || '')) || ''; }
+function spotAddress(s) { return (lang === 'zh' ? (s.at || s.ae) : (s.ae || s.at)) || ''; }
+function spotHours(s)   { return (lang === 'zh' ? (s.ht || s.he) : (s.he || s.ht)) || ''; }
+function spotSite(s)    { return (lang === 'zh' ? (s.wt || s.we) : (s.we || s.wt)) || ''; }
+function spotTrail(s)   { return (lang === 'zh' ? (s.gt || s.ge) : (s.ge || s.gt)) || ''; }
+function spotKind(s)    { const c = SPOT_CAT.get(s.c); return c ? T(c.key) : ''; }
+function spotIconOf(s)  { return (SPOT_CAT.get(s.c) || { icon:'📍' }).icon; }
+
+function metresShort(m) {
+  return m >= 1000 ? (m / 1000).toFixed(1) + ' km' : Math.round(m) + ' m';
+}
+
+// ---------------------------------------------------------------- the pins
+const spotLayer = L.layerGroup().addTo(map);
+
+function spotIcon(s, withLabel) {
+  const cat = SPOT_CAT.get(s.c) || { icon:'📍', colour:'#334155' };
+  const label = withLabel ? '<span class="spotlabel">' + esc(spotName(s)) + '</span>' : '';
+  return L.divIcon({
+    className: 'spotpin-wrap',
+    html: '<div class="spotpinbox"><span class="spotpin" style="--pin:' + cat.colour + '">' +
+          cat.icon + '</span>' + label + '</div>',
+    iconSize: [140, withLabel ? 52 : 30],
+    iconAnchor: [70, 15],
+  });
+}
+
+function drawSpots() {
+  spotLayer.clearLayers();
+  if (activeMode !== 'map' || journeyMode) return;
+  if (!spots || !spots.length) return;
+
+  const zoom = map.getZoom(), area = map.getBounds(), centre = map.getCenter();
+  const wanted = [];
+  for (const s of spots) {
+    if (spotFilter && s.c !== spotFilter) continue;
+    if (!spotFilter && zoom < (SPOT_TIER[s.c] || 14)) continue;
+    if (!area.contains([s.y, s.x])) continue;
+    wanted.push(s);
+  }
+  // Over the cap, the places nearest the middle of the screen are the ones
+  // the rider is actually looking at.
+  if (wanted.length > SPOT_MAX_PINS) {
+    wanted.sort((a, b) => metresBetween(centre.lat, centre.lng, a.y, a.x) -
+                          metresBetween(centre.lat, centre.lng, b.y, b.x));
+    wanted.length = SPOT_MAX_PINS;
+  }
+  const withLabel = zoom >= SPOT_LABEL_ZOOM;
+  for (const s of wanted) {
+    L.marker([s.y, s.x], { icon: spotIcon(s, withLabel), title: spotName(s), riseOnHover: true })
+      .addTo(spotLayer)
+      .on('click', () => openSpotSheet(s));
+  }
+}
+
+// ------------------------------------------------------------ the chip row
+function renderSpotChips() {
+  const box = document.getElementById('spotchips');
+  if (!box) return;
+  let html = '<button class="spotchip' + (spotFilter ? '' : ' on') +
+             '" data-cat="">' + T('spotAll') + '</button>';
+  for (const cat of SPOT_CATS) {
+    html += '<button class="spotchip' + (spotFilter === cat.c ? ' on' : '') +
+            '" data-cat="' + cat.c + '">' + cat.icon + ' ' + T(cat.key) + '</button>';
+  }
+  box.innerHTML = html;
+  const search = document.getElementById('spot-search');
+  if (search) search.placeholder = T('spotSearch');
+}
+
+// ---------------------------------------------------------- search by name
+// Deliberately plain: a visitor types "peak" or "廟" and wants a list, not a
+// ranking. Matches EITHER language, because the name on the sign and the name
+// in the guidebook are very often not the same one.
+function spotHits(query) {
+  const needle = String(query || '').trim().toLowerCase();
+  if (!needle || !spots) return [];
+  const hits = [];
+  for (const s of spots) {
+    const hay = ((s.e || '') + ' ' + (s.t || '')).toLowerCase();
+    if (hay.indexOf(needle) >= 0) hits.push(s);
+    if (hits.length >= 60) break;
+  }
+  // A name that STARTS with what was typed comes first: "peak" leads with
+  // The Peak, not with Peak Tram Lower Terminus.
+  hits.sort((a, b) => (spotName(a).toLowerCase().indexOf(needle) === 0 ? 0 : 1) -
+                      (spotName(b).toLowerCase().indexOf(needle) === 0 ? 0 : 1));
+  return hits.slice(0, 12);
+}
+
+function renderSpotResults() {
+  const box = document.getElementById('spotresults');
+  if (!box) return;
+  if (!spotQuery.trim()) { box.innerHTML = ''; return; }
+  if (!spots) {
+    box.innerHTML = '<div class="spotwait" style="padding:10px 12px">' + T('spotLoading') + '</div>';
+    return;
+  }
+  const hits = spotHits(spotQuery);
+  if (!hits.length) {
+    box.innerHTML = '<div class="spotwait" style="padding:10px 12px">' + T('spotNoHits') + '</div>';
+    return;
+  }
+  box.innerHTML = hits.map(s =>
+    '<button class="spothit" data-spot="' + s.i + '">' +
+      '<b>' + spotIconOf(s) + ' ' + esc(spotName(s)) + '</b>' +
+      '<small>' + esc([spotKind(s), spotSub(s)].filter(Boolean).join(' · ')) + '</small>' +
+    '</button>').join('');
+}
+
+function spotById(i) { return (spots || []).find(s => s.i === Number(i)) || null; }
+
+// Fly to a place and open it. Zoom 17, so that when the sheet is closed the
+// stops around it are already on screen and the walk is obvious.
+function goToSpot(s) {
+  if (!s) return;
+  map.setView([s.y, s.x], Math.max(map.getZoom(), 17));
+  openSpotSheet(s);
+}
+
+// --------------------------------------------------------- the place sheet
+let spotSheetFor = null;
+
+function openSpotSheet(s) {
+  if (!s) return;
+  spotSheetFor = s;
+  const card = document.getElementById('spotcard');
+  if (!card) return;
+  card.innerHTML = spotCardHtml(s);
+  document.getElementById('spotsheet').classList.add('open');
+  loadSpotTransport(s);
+}
+
+function closeSpotSheet() {
+  spotSheetFor = null;
+  const sheet = document.getElementById('spotsheet');
+  if (sheet) sheet.classList.remove('open');
+}
+
+function spotCardHtml(s) {
+  const sub = spotSub(s), address = spotAddress(s), hours = spotHours(s);
+  const site = spotSite(s), trail = spotTrail(s);
+  const desc = lang === 'zh' ? (s.dt || '') : (s.d || s.dt || '');
+
+  let meta = '';
+  if (trail)   meta += '<div><span class="k">' + T('spotTrail') + ':</span> ' + esc(trail) + '</div>';
+  if (address) meta += '<div><span class="k">' + T('spotAddress') + ':</span> ' + esc(address) + '</div>';
+  if (hours)   meta += '<div><span class="k">' + T('spotHours') + ':</span> ' + esc(hours) + '</div>';
+  // How far it is from the rider, once the rider has said where that is.
+  if (herePoint) {
+    const away = metresBetween(herePoint.lat, herePoint.lng, s.y, s.x);
+    meta += '<div><span class="k">' + T('spotFromYou').replace('{d}', metresShort(away)) + '</span></div>';
+  }
+  if (site) meta += '<div><a href="' + esc(site) + '" target="_blank" rel="noopener">' +
+                    T('spotSite') + ' ↗</a></div>';
+
+  return '<div class="spothead">' +
+           '<span class="sh-icon">' + spotIconOf(s) + '</span>' +
+           '<span class="sh-name"><b>' + esc(spotName(s)) + '</b>' +
+             (sub ? '<small>' + esc(sub) + '</small>' : '') +
+             '<span class="spotkind">' + esc(spotKind(s)) + '</span>' +
+           '</span>' +
+         '</div>' +
+         (meta ? '<div class="spotmeta">' + meta + '</div>' : '') +
+         (desc ? '<div class="spotdesc">' + esc(desc) + '</div>' : '') +
+         '<div class="spotgohead">' + T('spotGetting') + '</div>' +
+         '<div id="spotgo"><div class="spotwait">' + T('spotFinding') + '</div></div>' +
+         '<button class="spotshut" data-act="spot-close">' + T('spotClose') + '</button>';
+}
+
+// ---------------------------------------------- how you actually get there
+// The whole point of the layer. Everything below is the app's EXISTING
+// knowledge of stops, clusters and live times, pointed at a place instead of
+// at a pole. Nothing here re-implements any of it.
+
+// EVERYTHING THE ANSWER DEPENDS ON, BEFORE THE ANSWER IS GIVEN.
+// The bus tab builds only the KMB index, because that is all it needs to
+// answer "which bus is coming". A place is different: The Peak, Stanley,
+// Repulse Bay and Aberdeen are Citybus territory, and with only the KMB list
+// loaded the app told a visitor standing at the Peak Tram terminus that there
+// was no bus stop within a short walk — nearly a kilometre of Mid-Levels
+// stops being the closest thing it could see.
+//
+// Citybus stops arrive in hk-bus-lite.json, which until now only the trip
+// planner ever asked for. loadFareData fills ctbStops and hkbusRoutes;
+// addOperatorsToIndexes is idempotent and folds those routes into an index
+// that may already have been built KMB-only. The stop grid and the id map
+// both rebuild themselves off dataStamp, which counts ctbStops.
+async function ensureSpotNetwork() {
+  await Promise.all([
+    loadFareData().catch(error => console.warn('Citybus stops unavailable:', error)),
+    loadMtr().catch(error => console.warn('Rail unavailable:', error)),
+  ]);
+  await buildIndexes().catch(error => console.warn('Index unavailable:', error));
+  if (stopIndex) addOperatorsToIndexes();
+}
+
+// The nearest bus stops as STOPS rather than as poles. poleGroup is the same
+// clustering the bus tab uses, so a five-bay interchange is offered once, by
+// the name on the sign, instead of five times over.
+function stopGroupsNear(lat, lng, howMany, radius) {
+  const near = stopsNear(lat, lng, radius || SPOT_TRANSPORT_M).filter(n => !n.stop.isStation);
+  const groups = [], claimed = new Set();
+  for (const n of near) {
+    if (claimed.has(n.stop.stop)) continue;
+    const bays = poleGroup(n.stop);
+    for (const bay of bays) claimed.add(bay.stop);
+    groups.push({ stop: n.stop, bays, metres: n.metres });
+    if (groups.length >= (howMany || 3)) break;
+  }
+  return groups;
+}
+
+// One rail button.
+function railWayHtml(entry) {
+  const st = railStop(entry.code);
+  if (!st) return '';
+  const walk = walkingEstimate(entry.metres);
+  return '<button class="spotway rail" data-act="spot-rail" data-code="' + esc(entry.code) + '">' +
+           '<b>🚇 ' + esc(stopName(st)) + '</b><small>' +
+           T('spotWalkFrom').replace('{m}', walk.minutes).replace('{d}', walk.metres) +
+           ' · ' + T('spotOpenRail') + '</small></button>';
+}
+
+// One bus-stop button. `eta` is undefined while we are still asking, null when
+// the operator publishes nothing, otherwise the line of next departures.
+function busWayHtml(group, eta) {
+  const walk = walkingEstimate(group.metres);
+  // WHICH WAY THIS ONE GOES. Ocean Park has two poles of the same name 87 m
+  // apart, one facing west and one north; offered as two identical buttons
+  // they are a coin toss. The direction is what tells them apart, and the
+  // pole code is what is painted on the actual post at the kerb.
+  const facing = groupDirHtml(group.bays.map(bay => bay.stop));
+  const code = poleCodeOf(group.stop);
+  let live = '';
+  if (eta === undefined) live = '';
+  else if (eta === null) live = '<span class="wayeta" style="color:var(--ink-3)">' + T('spotNoLive') + '</span>';
+  else if (eta === '')   live = '<span class="wayeta" style="color:var(--ink-3)">' + T('spotNoDue') + '</span>';
+  else live = '<span class="wayeta">' + eta + '</span>';
+  return '<button class="spotway bus" data-act="spot-stop" data-id="' + esc(group.stop.stop) + '">' +
+           '<b>🚌 ' + esc(stopName(group.stop)) + '</b>' + facing +
+           '<small>' + T('spotWalkFrom').replace('{m}', walk.minutes).replace('{d}', walk.metres) +
+           (code ? ' · ' + esc(code) : '') +
+           ' · ' + T('spotOpenStop') + '</small>' + live +
+         '</button>';
+}
+
+// Ask each stop for its live times, then repaint. Never blocks the buttons:
+// the walk is worth knowing before the buses are.
+async function fillWayEtas(groups, repaint) {
+  const etaByStop = new Map();
+  await Promise.all(groups.map(async group => {
+    try {
+      const rows = await fetchPoleRows(group.stop);
+      // null from fetchPoleRows means "this operator publishes no live times".
+      // Rows that carry no usable eta mean "nothing is due". Saying the first
+      // when we mean the second tells a visitor the app is broken when in
+      // fact the answer is simply that no bus is coming.
+      etaByStop.set(group.stop.stop, rows === null ? null : (spotEtaLine(rows) || ''));
+    } catch (error) { etaByStop.set(group.stop.stop, null); }
+  }));
+  repaint(etaByStop);
+}
+
+async function loadSpotTransport(s) {
+  // The route index is what turns a pole id into "which buses, going where",
+  // and the Citybus list is what puts half of Hong Kong Island on the map at
+  // all. The map tab may never have needed either, so load them now — both
+  // are cached after the first time, and the sheet paints without waiting.
+  if (!spotIndexing && (!stopIndex || !ctbStops.length)) {
+    spotIndexing = true;
+    ensureSpotNetwork().then(() => {
+      spotIndexing = false;
+      if (spotSheetFor === s) loadSpotTransport(s);
+    });
+  }
+
+  const box = () => (spotSheetFor === s ? document.getElementById('spotgo') : null);
+  if (!box()) return;
+
+  // A station is worth a longer walk than a bus stop: it runs every few
+  // minutes and a visitor can read the line map without knowing any Chinese.
+  const rails = railStationsNear(s.y, s.x, SPOT_RAIL_M);
+  let groups = stopGroupsNear(s.y, s.x, 3);
+  let far = false;
+  if (!groups.length && !rails.length) {
+    groups = stopGroupsNear(s.y, s.x, 2, SPOT_FAR_M);
+    far = groups.length > 0;
+  }
+
+  if (!rails.length && !groups.length) {
+    const target = box();
+    if (target) target.innerHTML = '<div class="spotwait">' + T('spotNoTransport') + '</div>';
+    return;
+  }
+
+  const paint = etaByStop => {
+    const target = box();
+    if (!target) return;
+    let html = rails.slice(0, 2).map(railWayHtml).join('');
+    if (far) html += '<div class="spotwait">' + T('spotFarNote') + '</div>';
+    for (const group of groups) html += busWayHtml(group, etaByStop && etaByStop.get(group.stop.stop));
+    // The one button that turns a place into a journey: it hands the nearest
+    // stop's NAME to the bus tab as "where I want to go", which is exactly
+    // what a rider typing it in themselves would have produced.
+    if (groups.length) {
+      // The name in the language the rider is reading: handing "OCEAN PARK" to
+      // someone using the app in Chinese makes the destination box look like
+      // it was filled in by somebody else. stopsNamed matches either language.
+      html += '<button class="spotgo" data-act="spot-dest" data-name="' +
+              esc(stopName(groups[0].stop)) + '">' + T('spotBusesHere') + '</button>';
+    }
+    target.innerHTML = html;
+  };
+
+  paint(null);
+  await fillWayEtas(groups, paint);
+}
+
+// The next three buses off a stop, as ONE line. Not the full arrivals table:
+// this is a "yes, buses really do come here" reassurance, and the stop's own
+// screen — with every route, direction and remark — is one tap away.
+function spotEtaLine(rows) {
+  const now = Date.now(), soonest = new Map();
+  for (const row of rows || []) {
+    if (!row || !row.eta) continue;
+    const wait = Math.round((new Date(row.eta).getTime() - now) / 60000);
+    if (!isFinite(wait) || wait < 0 || wait > 90) continue;
+    const route = String(row.route || '').trim();
+    if (!route) continue;
+    if (!soonest.has(route) || soonest.get(route) > wait) soonest.set(route, wait);
+  }
+  if (!soonest.size) return null;
+  return [...soonest.entries()].sort((a, b) => a[1] - b[1]).slice(0, 3)
+    .map(pair => '<span class="r">' + esc(pair[0]) + '</span> ' +
+                 (pair[1] <= 0 ? T('due') : pair[1] + T('min')))
+    .join(' · ');
+}
+
+// ------------------------------------------------------------- where am I
+// "Where am I, and what leaves from near here" is the other half of a
+// visitor's problem, and it is one button.
+function mapLocate() {
+  const button = document.getElementById('maplocate');
+  if (button) button.classList.add('busy');
+  withHere(point => {
+    if (button) { button.classList.remove('busy'); button.classList.add('on'); }
+    showHere(point);
+  });
+  // withHere goes quiet on failure, so the spinner is cleared on a timer too
+  // rather than being left spinning at someone who is not being found.
+  setTimeout(() => { if (button) button.classList.remove('busy'); }, 12000);
+}
+
+function showHere(point) {
+  const accuracy = Number(point.accuracy) || 0;
+  if (hereMarker) { map.removeLayer(hereMarker); hereMarker = null; }
+  if (hereRing)   { map.removeLayer(hereRing);   hereRing = null; }
+  hereMarker = L.marker([point.lat, point.lng], {
+    icon: L.divIcon({ className:'spotpin-wrap', html:'<div class="herepin"></div>',
+                      iconSize:[26, 26], iconAnchor:[13, 13] }),
+    zIndexOffset: 1000, title: T('hereTitle'),
+  }).addTo(map);
+  // The circle is the phone's own accuracy figure, drawn honestly: a rider
+  // indoors is told the app is unsure rather than shown a confident dot.
+  if (accuracy > 0) {
+    hereRing = L.circle([point.lat, point.lng], { radius: accuracy, color:'#1e3a8a',
+      weight:1, fillColor:'#1e3a8a', fillOpacity:0.12 }).addTo(map);
+  }
+  map.setView([point.lat, point.lng], Math.max(map.getZoom(), 16));
+  mapCentredOnce = true;
+  drawSpots();
+  openHereSheet(point);
+}
+
+function openHereSheet(point) {
+  spotSheetFor = null;
+  const card = document.getElementById('spotcard');
+  if (!card) return;
+  const accuracy = Math.round(Number(point.accuracy) || 0);
+  card.innerHTML =
+    '<div class="spothead"><span class="sh-icon">📍</span>' +
+      '<span class="sh-name"><b>' + T('hereTitle') + '</b>' +
+      (accuracy ? '<small>' + T('hereAccuracy').replace('{m}', accuracy) + '</small>' : '') +
+      '</span></div>' +
+    '<div class="spotgohead">' + T('hereNearby') + '</div>' +
+    '<div id="herego"><div class="spotwait">' + T('spotFinding') + '</div></div>' +
+    '<button class="spotshut" data-act="spot-close">' + T('spotClose') + '</button>';
+  document.getElementById('spotsheet').classList.add('open');
+  loadHereTransport(point);
+}
+
+async function loadHereTransport(point) {
+  if (!spotIndexing && (!stopIndex || !ctbStops.length)) {
+    spotIndexing = true;
+    ensureSpotNetwork().then(() => {
+      spotIndexing = false;
+      if (document.getElementById('herego')) loadHereTransport(point);
+    });
+  }
+  const box = () => document.getElementById('herego');
+  if (!box()) return;
+
+  const rails = railStationsNear(point.lat, point.lng, SPOT_RAIL_M);
+  const groups = stopGroupsNear(point.lat, point.lng, 3);
+  const nearSpots = (spots || [])
+    .map(s => ({ s, metres: metresBetween(point.lat, point.lng, s.y, s.x) }))
+    .filter(x => x.metres <= SPOT_NEAR_ME_M)
+    .sort((a, b) => a.metres - b.metres)
+    .slice(0, 4);
+
+  const paint = etaByStop => {
+    const target = box();
+    if (!target) return;
+    let html = '';
+    if (!rails.length && !groups.length) html += '<div class="spotwait">' + T('spotNoTransport') + '</div>';
+    html += rails.slice(0, 2).map(railWayHtml).join('');
+    for (const group of groups) html += busWayHtml(group, etaByStop && etaByStop.get(group.stop.stop));
+    if (nearSpots.length) {
+      html += '<div class="spotgohead">' + T('hereSpots') + '</div>';
+      for (const x of nearSpots) {
+        const walk = walkingEstimate(x.metres);
+        html += '<button class="spotway" data-act="spot-open" data-spot="' + x.s.i + '">' +
+                  '<b>' + spotIconOf(x.s) + ' ' + esc(spotName(x.s)) + '</b><small>' +
+                  T('spotWalkFrom').replace('{m}', walk.minutes).replace('{d}', walk.metres) +
+                  ' · ' + esc(spotKind(x.s)) + '</small></button>';
+      }
+    }
+    target.innerHTML = html;
+  };
+
+  paint(null);
+  await fillWayEtas(groups, paint);
+}
+
+// ------------------------------------------------------------------ wiring
+// Called when the MAP tab opens: load once, draw, and keep drawing as the
+// rider pans. Everything is lazy — a rider who never opens the map never
+// downloads any of it.
+// Keep the locate button off the copyright notice whatever the notice does.
+// Called when the map opens, and again whenever the shape of the screen or
+// the size of the text could have changed.
+function fitLocateButton() {
+  const attribution = document.querySelector('.leaflet-control-attribution');
+  const height = attribution ? Math.ceil(attribution.getBoundingClientRect().height) : 0;
+  document.documentElement.style.setProperty('--attrh', (height || 48) + 'px');
+}
+
+function openMapLayer() {
+  renderSpotChips();
+  setTimeout(fitLocateButton, 0);
+  if (spots) { drawSpots(); return; }
+  loadSpots().then(() => { renderSpotChips(); drawSpots(); renderSpotResults(); });
+}
+
+map.on('moveend', drawSpots);
+
+document.addEventListener('click', event => {
+  const chip = event.target.closest('.spotchip');
+  if (chip) {
+    spotFilter = chip.dataset.cat || '';
+    renderSpotChips();
+    drawSpots();
+    return;
+  }
+  const hit = event.target.closest('.spothit');
+  if (hit) {
+    const chosen = spotById(hit.dataset.spot);
+    const input = document.getElementById('spot-search');
+    if (input) input.value = '';
+    spotQuery = '';
+    renderSpotResults();
+    goToSpot(chosen);
+    return;
+  }
+  const act = event.target.closest('[data-act]');
+  if (!act || !act.closest('#spotcard')) return;
+  const what = act.dataset.act;
+  if (what === 'spot-close') { closeSpotSheet(); return; }
+  if (what === 'spot-open')  { closeSpotSheet(); goToSpot(spotById(act.dataset.spot)); return; }
+  if (what === 'spot-rail')  { closeSpotSheet(); mtrSetStation(act.dataset.code); showMode('mtr'); return; }
+  if (what === 'spot-stop') {
+    const stop = findStopById(act.dataset.id);
+    closeSpotSheet();
+    if (stop) { stopSetStop(stop); showMode('stop'); }
+    return;
+  }
+  if (what === 'spot-dest') {
+    closeSpotSheet();
+    stopOpenDest(act.dataset.name);
+    showMode('stop');
+    return;
+  }
+});
+
+// Tapping the dimmed background closes the sheet, exactly like the other two.
+document.getElementById('spotsheet').addEventListener('click', event => {
+  if (event.target.id === 'spotsheet') closeSpotSheet();
+});
+
+document.getElementById('maplocate').addEventListener('click', mapLocate);
+
+(function wireSpotSearch() {
+  const input = document.getElementById('spot-search');
+  const clear = document.getElementById('spot-clear');
+  if (!input || !clear) return;
+  input.addEventListener('input', () => {
+    spotQuery = input.value;
+    if (spotQuery.trim() && !spots) loadSpots().then(renderSpotResults);
+    renderSpotResults();
+  });
+  clear.addEventListener('click', () => {
+    input.value = ''; spotQuery = ''; renderSpotResults(); input.blur();
+  });
+})();
+
+
 // Open on 車站. The trip planner is one tap away under 巴士.
 showMode('stop');
 </script>
