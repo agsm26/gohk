@@ -592,6 +592,10 @@
   .suggest button { min-height:44px; text-align:left; padding:0 14px; border:2px solid var(--line); border-radius:10px;
                     background:white; font-weight:700; font-size:1rem; color:var(--ink); cursor:pointer; }
   .suggest button:active { background:var(--navy-tint); }
+  /* The whole-station line sits above the individual bays and has to read as
+     the obvious answer, not as one more thing to weigh up. */
+  .suggest button.wholeplace { border-color:var(--navy); background:var(--navy-tint); }
+  .suggest button.wholeplace small { margin-left:8px; font-weight:700; color:var(--navy); opacity:.85; }
   .destchip { min-height:44px; padding:0 16px; border-radius:22px; border:2px solid var(--line);
               background:white; font-weight:700; font-size:1rem; color:var(--ink); }
   .destchip.on { border-color:var(--amber); background:var(--amber-tint); color:var(--amber); }
@@ -617,6 +621,10 @@
      amber not red: there IS a bus, it just leaves from over there. */
   .destchip .crossover { display:inline-block; margin-left:8px; font-size:0.88rem;
                          font-weight:800; color:var(--amber, #b45309); }
+  /* The whole point of the ranking, on its own line so it is not lost among
+     the route numbers. Amber when a traffic notice is holding it back. */
+  .arrivetag { display:block; margin-top:4px; font-size:0.94rem; font-weight:800; color:var(--green, #166534); }
+  .arrivetag.held { color:var(--amber, #b45309); }
   /* The "which way?" sheet for a looked-up bus: one big button per direction. */
   #dirsheet, #alertsheet { display:none; position:fixed; inset:0; z-index:2000; background:rgba(15,23,42,.55);
               align-items:flex-end; justify-content:center; padding:10px; }
@@ -1326,7 +1334,10 @@ const TEXT = {
     routeNotFound:'Route {r} is not in the timetable right now.',
     wxHere:'Hong Kong',
     useMyLocation:'Use my location', hereIs:'You are at {s}', stopNoDirect:'no direct bus',
-    stopCrossOver:'→ cross over',
+    stopCrossOver:'→ cross over', stopWholePlace:'all {n} bays',
+    stopArriveBy:'{r} in {w} — there by {t}', stopArriveDue:'{r} due now — there by {t}',
+    stopRanking:'Finding the soonest way there…',
+    stopHeldTitle:'Traffic notice on route {r}', stopHeldGo:'Use this stop anyway', stopHeldBack:'Choose another stop',
     rsNearestStop:'Nearest stop', rsNearestFound:'Nearest on this route: {s} ({m} m)',
     rsWalkNeedStop:'Tap 📍 first to find your stop', rsWalkTo:'Walking directions to {s}',
     rsPickRouteFirst:'Pick a bus route first.',
@@ -1522,7 +1533,10 @@ const TEXT = {
     routeNotFound:'暫時找不到 {r} 的班次資料。',
     wxHere:'香港',
     useMyLocation:'用我的位置', hereIs:'你在 {s}', stopNoDirect:'冇直達',
-    stopCrossOver:'→ 過對面',
+    stopCrossOver:'→ 過對面', stopWholePlace:'全部 {n} 個站位',
+    stopArriveBy:'{r} {w}後開 — {t} 到', stopArriveDue:'{r} 即將開 — {t} 到',
+    stopRanking:'搵緊最快到嘅路線…',
+    stopHeldTitle:'{r} 有交通消息', stopHeldGo:'照用呢個站', stopHeldBack:'揀第二個站',
     rsNearestStop:'最近車站', rsNearestFound:'此路線最近的站：{s}（{m} 米）',
     rsWalkNeedStop:'請先按 📍 找出最近車站', rsWalkTo:'步行前往 {s}',
     rsPickRouteFirst:'請先選擇巴士路線。',
@@ -7131,6 +7145,12 @@ function placeKey(stop) {
   }
   return m.pk;
 }
+// The place name as a rider would say it — what placeKey matches, but kept
+// readable and in the script they are reading: 太子站, not 太子站旺角花墟.
+function placeLabel(stop) {
+  const raw = String(stop.name_tc || stop.name_en || '').replace(/[（(][^)）]*[)）]/g, '');
+  return sc(raw.split(/[,，]/)[0].trim());
+}
 // place key -> its poles. Rebuilt only when the stop lists change.
 let placeFamily = null, placeFamilyStamp = '';
 function placeFamilyNow() {
@@ -7299,6 +7319,120 @@ function stopGroupNow() {
   if (!st.group || (st.group.length === 1 && stopIndex)) st.group = poleGroup(st.stop);
   return st.group;
 }
+// ============================================================
+// HOW SOON THIS POLE ACTUALLY GETS YOU THERE
+// ============================================================
+// Ranking start stops by "fewest stops away" or "nearest to me" answers a
+// question nobody asked. A pole 300 m away whose bus has just gone is worse
+// than one 600 m away with a bus due in two minutes, and the rider only
+// finds that out after walking to the wrong one. So the picker ranks on
+// ARRIVAL: walk there + wait for the next bus + ride to the place.
+//
+// The wait is the part that decides it and the part that is genuinely live,
+// so it comes from KMB's own ETA feed, one call per bay, asked in parallel.
+// Answers are cached briefly because the picker redraws on every keystroke
+// and must not hit the network again for each letter.
+//
+// The ride is still MINUTES_PER_STOP × stops — the planner's rough figure.
+// The Transport Department's speed-map feed would sharpen it; see
+// trafficPenalty below for why it is not wired in.
+const ARRIVE_CACHE_MS = 45000;
+const ARRIVE_MAX_BAYS = 30;          // an upper bound on one screen's worth
+const arriveRows = new Map();        // stopId -> { at, rows }
+const arriveInFlight = new Set();
+let arriveStamp = '';                // the question these answers were for
+
+function arriveCached(stopId) {
+  const hit = arriveRows.get(stopId);
+  return (hit && Date.now() - hit.at < ARRIVE_CACHE_MS) ? hit.rows : null;
+}
+
+// ROUTES THE TRANSPORT DEPARTMENT HAS A NOTICE OUT ON.
+// tdNotices is already loaded and parsed for the alert banner, so this is
+// the same evidence, reused at the moment of CHOOSING rather than after
+// arriving. A route with an incident against it is pushed down the ranking
+// and marked, so a delay is something the rider decides about rather than
+// discovers at the kerb.
+//
+// NOT a road-speed model: TD's speedmap.xml and journeytime.xml both answer
+// 404 at the documented address (their server returns its own un-parsed PHP
+// error page listing those very paths), and data.gov.hk has no archived
+// version of either. Incidents are the live road data actually on offer.
+const TRAFFIC_PENALTY_MIN = 8;
+function routeNotices(routeNo) {
+  const r = String(routeNo || '').toUpperCase();
+  if (!r || !tdNotices.length) return [];
+  return tdNotices.filter(n => n.routes && n.routes.has(r));
+}
+function trafficPenalty(routeNo) { return routeNotices(routeNo).length ? TRAFFIC_PENALTY_MIN : 0; }
+
+// The best ride off these bays to the place: undefined when we have not
+// asked yet, null when we asked and nothing is due, otherwise the winner.
+function arriveBest(ids, destIds, walkMin) {
+  if (!destIds || !destIds.size) return undefined;
+  const now = Date.now();
+  let asked = false, best = null;
+  for (const id of ids) {
+    const rows = arriveCached(id);
+    if (!rows) continue;
+    asked = true;
+    for (const row of rows) {
+      if (!row.eta) continue;
+      const wait = Math.round((new Date(row.eta).getTime() - now) / 60000);
+      if (wait < 0) continue;
+      const key = routeKeyForRow(row);
+      const seq = Number(row.seq) ||
+                  (routesServing(row.stop || id).find(r => r.key === key) || {}).seq || 0;
+      const reach = routeReaches(key, seq, destIds);
+      if (!reach) continue;
+      const held = trafficPenalty(row.route);
+      // The walk is part of the wait: a bus you cannot reach in time is not
+      // the next bus. Anything you would miss is simply not a candidate.
+      const walk = walkMin || 0;
+      if (wait < walk) continue;
+      const total = wait + reach.stopsAway * MINUTES_PER_STOP + held;
+      if (!best || total < best.total)
+        best = { total, wait, walk, held, route: row.route, stopsAway: reach.stopsAway, stopId: id };
+    }
+  }
+  return asked ? best : undefined;
+}
+
+// Ask every bay on offer, then redraw. The picker paints immediately with
+// what it already knows and re-orders when the times land, so the screen is
+// never blocked on the network.
+async function ensureArrivals(ids, stamp) {
+  const want = [...new Set(ids)].filter(id => !arriveCached(id) && !arriveInFlight.has(id)).slice(0, ARRIVE_MAX_BAYS);
+  if (!want.length) return false;
+  want.forEach(id => arriveInFlight.add(id));
+  await Promise.all(want.map(async id => {
+    try {
+      const stop = findStopById(id);
+      const rows = stop ? await fetchPoleRows(stop) : null;
+      arriveRows.set(id, { at: Date.now(), rows: rows || [] });
+    } catch (error) {
+      arriveRows.set(id, { at: Date.now(), rows: [] });   // asked, nothing to say
+    } finally { arriveInFlight.delete(id); }
+  }));
+  return stamp === arriveStamp;      // still the same question?
+}
+
+// What the ranking decided, said in one line: the bus, when it goes, and
+// when it puts you there. ⚠ when the Transport Department has a notice out
+// on that route — the reason it may have been pushed down the list.
+function arriveTagHtml(best) {
+  if (!best) return '';
+  const at = new Date(Date.now() + best.total * 60000);
+  const hhmm = at.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  // "in 0 minutes" is not something anyone says: a bus at the stop now gets
+  // its own wording rather than the countdown template with a zero in it.
+  const line = best.wait === 0
+    ? T('stopArriveDue').replace('{r}', best.route).replace('{t}', hhmm)
+    : T('stopArriveBy').replace('{r}', best.route).replace('{w}', best.wait + T('min')).replace('{t}', hhmm);
+  return '<small class="arrivetag' + (best.held ? ' held' : '') + '">🏁 ' + esc(line) +
+    (best.held ? ' <b>⚠</b>' : '') + '</small>';
+}
+
 // The destination typed on the picker, as stop ids — null when none typed.
 function destIdsNow() {
   const q = String(stopState.destQuery || '').trim();
@@ -7513,12 +7647,15 @@ function stopPickerParts() {
   const destIds = destIdsNow();
   const filtering = !!(destIds && destIds.size);
   const keep = stop => !filtering || reachingRoutes(stop.stop, destIds).length > 0;
-  const poleButton = (group, metres) => {
+  const poleButton = (group, metres, best) => {
     const stop = group[0];
     const chip = group.length > 1 ? T('stopBays').replace('{n}', group.length) : poleCodeOf(stop);
-    return '<button data-stop-id="' + esc(stop.stop) + '"><span class="pickmain">📍 ' + esc(stopName(stop)) +
+    return '<button data-stop-id="' + esc(stop.stop) + '"' +
+      (best && best.held ? ' data-held-route="' + esc(best.route) + '"' : '') +
+      '><span class="pickmain">📍 ' + esc(stopName(stop)) +
       (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
       groupDirHtml(group.map(g => g.stop)) +
+      arriveTagHtml(best) +
       poleRoutesLine(group.map(g => g.stop), 4, filtering ? destIds : null) + '</span>' +
       (metres != null ? '<span class="mtrdist">' + Math.round(metres) + ' m</span>' : '') + '</button>';
   };
@@ -7623,9 +7760,25 @@ function stopPickerParts() {
   if (filtering) rest += '<div class="rshint">' + T('stopShowingTo').replace('{d}', esc(st.destQuery)) + '</div>';
   if (herePoint) {
     const nearAll = stopsNear(herePoint.lat, herePoint.lng, filtering ? 600 : STOP_NEAR_M).filter(n => !n.stop.isStation);
-    const near = groupPoles(nearAll, keep, filtering ? 6 : 4);
+    let near = groupPoles(nearAll, keep, filtering ? 6 : 4);
+    // Nearest-first is the right answer only when nowhere has been named.
+    // With a destination set, the question is which of these puts you there
+    // soonest — and the walk counts twice over, because it is both time
+    // spent and buses missed while you spend it.
+    if (filtering) {
+      for (const n of near) {
+        n.walk = walkingEstimate(n.metres || 0).minutes;
+        n.eta = arriveBest(n.group.map(g => g.stop), destIds, n.walk);
+      }
+      const rank = n => (n.eta && n.eta.total !== undefined) ? n.eta.total : Infinity;
+      near = near.slice().sort((a, b) => rank(a) - rank(b) || (a.metres || 0) - (b.metres || 0));
+      const stamp = 'near|' + st.destQuery;
+      arriveStamp = stamp;
+      ensureArrivals(near.flatMap(n => n.group.map(g => g.stop)), stamp)
+        .then(fresh => { if (fresh && arriveStamp === stamp) stopScheduleRefresh(); });
+    }
     if (near.length)
-      rest += '<div class="mtrsub sectionbreak">' + T('stopNearby') + '</div><div class="mtrpick">' + near.map(n => poleButton(n.group, n.metres)).join('') + '</div>';
+      rest += '<div class="mtrsub sectionbreak">' + T('stopNearby') + '</div><div class="mtrpick">' + near.map(n => poleButton(n.group, n.metres, n.eta)).join('') + '</div>';
     else
       rest += '<div class="favempty">' + (filtering ? T('stopNearNoneTo').replace('{d}', esc(st.destQuery)) : T('stopNoneNear')) + '</div>';
   }
@@ -7754,7 +7907,7 @@ function destSuggestions(q, max) {
   const memoKey = lang + '|' + script + '|' + dataStamp() + '|' + needle;
   const hit = suggestMemo.get(memoKey);
   if (hit) return hit;
-  const seen = new Map();
+  const seen = new Map(), matched = [];
   for (const stop of plannableStops()) {
     const [nk, ne] = memoKeys(stop);
     let rank;
@@ -7764,14 +7917,46 @@ function destSuggestions(q, max) {
     else continue;
     const name = sc(stopName(stop));      // shown and typed back in the script the rider chose
     if (!name) continue;
+    matched.push({ stop, rank });
     const have = seen.get(name);
     if (!have) seen.set(name, { name, rank, count: 1 });
     else { have.count++; if (rank < have.rank) have.rank = rank; }
   }
-  const list = [...seen.values()]
+  const named = [...seen.values()]
     // Busier names first: 金鐘站 has many poles, 金錢 one or two.
     .sort((a, b) => a.rank - b.rank || b.count - a.count || a.name.length - b.name.length)
     .slice(0, max || 8);
+  // THE WHOLE STATION, OFFERED FIRST.
+  // Typing 太子站 returned three near-identical lines — 太子站,旺角花墟,
+  // 太子站, 旺角花墟 and 太子站, 旺角警署, the first two differing only by the
+  // space after the comma. They are one station to a rider, and choosing
+  // between them is a puzzle with no meaning. So when the matched names
+  // belong to one walkable place, that place goes on top as a single choice
+  // covering every bay. The individual names stay underneath, because
+  // somebody who does want one particular pole must still be able to say so.
+  const places = new Map();
+  for (const m of matched) {
+    const k = placeKey(m.stop);
+    if (!k) continue;
+    let p = places.get(k);
+    if (!p) places.set(k, p = { names: new Set(), stops: [], rank: 9 });
+    p.names.add(sc(stopName(m.stop)));
+    p.stops.push(m.stop);
+    p.rank = Math.min(p.rank, m.rank);
+  }
+  const heads = [];
+  for (const p of places.values()) {
+    if (p.names.size < 2) continue;                    // a single name already says it
+    const lead = p.stops[0], lat = Number(lead.lat), lng = Number(lead.long);
+    if (!isFinite(lat) || !isFinite(lng)) continue;
+    // One walkable place, not a name that repeats across Hong Kong.
+    if (!p.stops.every(x => metresBetween(lat, lng, Number(x.lat), Number(x.long)) <= DEST_FAMILY_M)) continue;
+    const name = placeLabel(lead);
+    if (!name || named.some(x => x.name === name)) continue;
+    heads.push({ name, rank: p.rank, count: p.stops.length, whole: true, bays: p.stops.length });
+  }
+  heads.sort((a, b) => a.rank - b.rank || b.bays - a.bays);
+  const list = heads.concat(named);
   if (suggestMemo.size >= 60) suggestMemo.delete(suggestMemo.keys().next().value);
   suggestMemo.set(memoKey, list);
   return list;
@@ -7827,7 +8012,10 @@ function stopRenderDest(query) {
     const list = destSuggestions(q, 8);
     const done = list.length === 1 && tidyName(list[0].name) === tidyName(q);
     if (list.length && !done)
-      html += '<div class="suggest">' + list.map(x => '<button data-stop-act="destpick" data-name="' + esc(x.name) + '">' + esc(x.name) + '</button>').join('') + '</div>';
+      html += '<div class="suggest">' + list.map(x => '<button' + (x.whole ? ' class="wholeplace"' : '') +
+        ' data-stop-act="destpick" data-name="' + esc(x.name) + '">' + esc(x.name) +
+        (x.whole ? '<small>' + esc(T('stopWholePlace').replace('{n}', x.bays)) + '</small>' : '') +
+        '</button>').join('') + '</div>';
   }
   if (!stopIndex) html += '<div class="rshint">' + T('stopIndexing') + '</div>';
   else if (!herePoint) html += '<div class="favempty">' + T('stopDestNeedLoc') + '</div>';
@@ -7877,9 +8065,14 @@ function stopRenderSearch(query) {
       const reach = reachingRoutes(stop.stop, destIds);
       if (reach.length) { g.hits.push(stop); g.best = Math.min(g.best, ...reach.map(x => x.reach.stopsAway)); }
     }
-    // Busier names (more poles) before quieter ones: 太子站 before 太祥街.
+    // SOONEST ARRIVAL FIRST, once the live times are in.
+    // Until they are, everything scores Infinity and the old order — fewest
+    // stops away — stands, so the list is never empty while the network works.
+    for (const g of groups.values()) g.eta = arriveBest(g.hits.map(x => x.stop), destIds);
+    const arriveRank = g => (g.eta && g.eta.total !== undefined) ? g.eta.total : Infinity;
     const ranked = [...groups.values()]
-      .sort((a, b) => ((b.hits.length > 0) - (a.hits.length > 0)) || a.rank - b.rank || a.best - b.best ||
+      .sort((a, b) => ((b.hits.length > 0) - (a.hits.length > 0)) || arriveRank(a) - arriveRank(b) ||
+                      a.rank - b.rank || a.best - b.best ||
                       b.stops.length - a.stops.length || stopName(a.stops[0]).length - stopName(b.stops[0]).length);
     // Once ONE station can get you there, the ones that cannot are not
     // options and are not shown. They are only listed when nothing at all
@@ -7900,9 +8093,12 @@ function stopRenderSearch(query) {
         : bays[0];
       const ids = bays.map(x => x.stop);
       const chip = bays.length > 1 ? T('stopBays').replace('{n}', bays.length) : poleCodeOf(lead);
-      return '<button' + (g.hits.length ? '' : ' class="dim" data-nofilter="1"') + ' data-stop-id="' + esc(lead.stop) + '" data-stop-group="' + esc(ids.join(',')) + '"><span class="pickmain">🚏 ' + esc(stopName(lead)) +
+      return '<button' + (g.hits.length ? '' : ' class="dim" data-nofilter="1"') +
+        (g.eta && g.eta.held ? ' data-held-route="' + esc(g.eta.route) + '"' : '') +
+        ' data-stop-id="' + esc(lead.stop) + '" data-stop-group="' + esc(ids.join(',')) + '"><span class="pickmain">🚏 ' + esc(stopName(lead)) +
         (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
         groupDirHtml(ids) +
+        arriveTagHtml(g.eta) +
         (g.hits.length ? poleRoutesLine(ids, 6, destIds) : '<small class="poleroutes">' + T('stopNoReach').replace('{d}', place) + '</small>') +
         '</span></button>';
     };
@@ -7919,6 +8115,12 @@ function stopRenderSearch(query) {
     }
     html += list.map(card).join('');
     box.innerHTML = html || '<div class="favempty">' + T('noMatch') + '</div>';
+    // Now go and find out what is actually coming, and re-order when it lands.
+    // The second pass finds every bay cached, asks for nothing, and stops.
+    const stamp = 'search|' + stopState.destQuery + '|' + query;
+    arriveStamp = stamp;
+    const bays = list.flatMap(g => (g.hits.length ? g.hits : g.stops)).map(x => x.stop);
+    ensureArrivals(bays, stamp).then(fresh => { if (fresh && arriveStamp === stamp) stopRenderSearch(query); });
     return;
   }
   // ONE CARD PER STATION NAME, whatever the bays are called.
@@ -7971,9 +8173,14 @@ document.getElementById('stopview').addEventListener('click', event => {
     const stop = findStopById(el.dataset.stopId);
     if (stop) {
       const groupStops = el.dataset.stopGroup ? el.dataset.stopGroup.split(',').map(findStopById).filter(Boolean) : null;
-      stopSetStop(stop, groupStops);
-      const carry = el.dataset.nofilter ? '' : (el.dataset.filter || stopState.destQuery);
-      if (carry) { stopState.destFilter = carry; renderStopView(); }
+      const open = () => {
+        stopSetStop(stop, groupStops);
+        const carry = el.dataset.nofilter ? '' : (el.dataset.filter || stopState.destQuery);
+        if (carry) { stopState.destFilter = carry; renderStopView(); }
+      };
+      const held = el.dataset.heldRoute;
+      if (held && !trafficAcked.has(String(held).toUpperCase())) askTrafficThen(held, open);
+      else open();
     }
     return;
   }
@@ -8847,12 +9054,41 @@ function showAlertSheet(list) {
                    '<button class="dircancel" data-alert-ok="1">' + T('alertOk') + '</button>';
   sheet.classList.add('open');
 }
+// THE DECISION, NOT THE NOTIFICATION.
+// A traffic notice on the route the rider is about to take is only useful
+// before they commit to it, and only if it leaves them a choice. So the
+// stop does not open behind their back: the notice is shown with two ways
+// out — take it anyway, or pick a different stop. Acknowledged once per
+// route, because being asked again on every tap is nagging, not informing.
+const trafficAcked = new Set();
+let heldGo = null;
+function askTrafficThen(routeNo, go) {
+  const notices = routeNotices(routeNo);
+  const sheet = document.getElementById('alertsheet'), card = document.getElementById('alertcard');
+  if (!notices.length || !sheet || !card) { go(); return; }
+  const zh = lang === 'zh';
+  const body = notices.slice(0, 3).map(n => {
+    const title = [zh ? n.heading_tc : n.heading_en, zh ? n.location_tc : n.location_en,
+                   zh ? n.direction_tc : n.direction_en].filter(Boolean).join(' · ');
+    const text = zh ? (n.content_tc || n.detail_tc) : (n.content_en || n.detail_en);
+    return '<div class="alertitem"><div class="alerttitle">' + esc(title) + '</div>' +
+           '<div class="alerttext">' + esc(text) + '</div></div>';
+  }).join('');
+  card.innerHTML = '<div class="dirhead"><b>⚠</b><span>' + esc(T('stopHeldTitle').replace('{r}', routeNo)) + '</span></div>' +
+    body +
+    '<button class="dirbtn" data-held-go="1"><b>' + esc(T('stopHeldGo')) + '</b></button>' +
+    '<button class="dircancel" data-held-back="1">' + esc(T('stopHeldBack')) + '</button>';
+  heldGo = () => { trafficAcked.add(String(routeNo).toUpperCase()); go(); };
+  sheet.classList.add('open');
+}
 function closeAlertSheet() {
   const sheet = document.getElementById('alertsheet');
   if (sheet) sheet.classList.remove('open');
 }
 document.getElementById('alertsheet').addEventListener('click', event => {
-  if (event.target.id === 'alertsheet' || event.target.closest('[data-alert-ok]')) closeAlertSheet();
+  if (event.target.closest('[data-held-go]')) { closeAlertSheet(); const go = heldGo; heldGo = null; if (go) go(); return; }
+  if (event.target.closest('[data-held-back]')) { closeAlertSheet(); heldGo = null; return; }
+  if (event.target.id === 'alertsheet' || event.target.closest('[data-alert-ok]')) { closeAlertSheet(); heldGo = null; }
 });
 
 // ============================================================
