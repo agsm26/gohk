@@ -7338,6 +7338,47 @@ function poleHeading(stopId) {
   return (Math.atan2(v.sin, v.cos) * 180 / Math.PI + 360) % 360;
 }
 const MERGE_SPAN_M = 200;    // however it grows, one stop stays one stop
+
+// A TERMINUS IS NOT A ROADSIDE.
+// Inside a bus terminus the bays fan out in every direction — 沙田市中心總站's
+// seventeen bays cover 174° of heading inside 78 m — and the rider simply
+// walks between them. "Which side of the road" is a question about a road,
+// and a terminus has no sides. Applying the direction test there split 139 of
+// Hong Kong's 169 interchanges into five, six and seven separate "stops".
+//
+// What marks a terminus is in the DATA, not in the name: routes start there.
+// 沙田市中心總站 has a quarter of its routes at seq 1 and 美孚巴士總站 half,
+// while 屯門公路轉車站 — two carriageways of a motorway 672 m apart — has 0.08
+// and 太子站 has none. The name cannot do this job: 屯門公路轉車站 and
+// 九龍城轉車站 are both called 轉車站 and neither one of them is one place.
+//
+// Inside a terminus the bounds check is dropped too, and deliberately: a route
+// arrives at one bay and leaves from another, which is ordinary at a terminus
+// and is why 沙田市中心總站 has ten "clashing" pairs while plainly being one
+// place. Each arrival row still names the bay its bus leaves from.
+const TERMINUS_START_SHARE = 0.2;
+const TERMINUS_M = 250;
+function startShare(stopId) {
+  const rs = routesServing(stopId);
+  if (!rs.length) return 0;
+  return rs.filter(r => r.seq === 1).length / rs.length;
+}
+// Terminus-ness belongs to the GROUP, not to a pair. Asked pair by pair, two
+// bays that both happen to carry only through routes answer "no" to each
+// other and split the terminus around them — which is what still had
+// 沙田市中心總站 in six pieces. A through bay standing inside a terminus is
+// still inside the terminus.
+function terminusGroup(g, stop) {
+  if (!stop || stop.isStation) return false;
+  const k = stationKey(stop);
+  if (!k) return false;
+  for (const m of g) {
+    if (m.isStation || stationKey(m) !== k) return false;   // one named place
+    if (metresApart(m, stop) > TERMINUS_M) return false;    // and a small one
+  }
+  return startShare(stop.stop) >= TERMINUS_START_SHARE ||
+         g.some(m => startShare(m.stop) >= TERMINUS_START_SHARE);
+}
 function metresApart(a, b) {
   return metresBetween(Number(a.lat), Number(a.long), Number(b.lat), Number(b.long));
 }
@@ -7387,23 +7428,50 @@ function degreesApart(a, b) {
   const d = Math.abs(a - b) % 360;
   return d > 180 ? 360 - d : d;
 }
+// Two bays in one card may never point this far apart. A terminus is exempt —
+// its bays genuinely do — which is precisely why a terminus is then sealed.
+const MERGE_OPPOSED_DEG = 110;
 function clusterPoles(list) {
-  const out = [];
+  const out = [], isTerminus = [];
   for (const stop of list) {
     const h = poleHeading(stop.stop);
     let placed = false;
-    for (const g of out) {
+    for (let gi = 0; gi < out.length; gi++) {
+      const g = out[gi];
+      // One terminus, one stop — whichever way its bays happen to point.
+      if (terminusGroup(g, stop)) { g.push(stop); isTerminus[gi] = true; placed = true; break; }
+      // A TERMINUS IS SEALED TO OUTSIDERS.
+      // Its bays are allowed to face every way, which makes its average
+      // heading meaningless — and 長沙灣巴士總站 (bays at 85° and 281°) used
+      // that average to swallow 荔枝角站, a different place 77 m away, leaving
+      // two bays 166° apart inside one card. A named facility takes its own
+      // bays and nobody else's.
+      if (isTerminus[gi]) continue;
       // Hard evidence first, pairwise and non-negotiable: one route running
       // opposite ways at two poles means they are not one stop.
       if (g.some(m => boundsClash(boundsByRoute(m.stop), boundsByRoute(stop.stop)))) continue;
       const gh = clusterHeading(g);
       if (h === null || gh === null || degreesApart(h, gh) > MERGE_DEG) continue;
+      // ...and never opposed to any single member, however the average falls.
+      if (g.some(m => { const hm = poleHeading(m.stop);
+                        return hm !== null && degreesApart(h, hm) > MERGE_OPPOSED_DEG; })) continue;
       if (!g.some(m => metresApart(m, stop) <= MERGE_M)) continue;
       if (g.some(m => metresApart(m, stop) > MERGE_SPAN_M)) continue;
       g.push(stop); placed = true; break;
     }
-    if (!placed) out.push([stop]);
+    if (!placed) { out.push([stop]); isTerminus.push(false); }
   }
+  // ORDER MUST NOT DECIDE A TERMINUS.
+  // Groups are filled in whatever order the poles arrive, so a bay met before
+  // any of its terminus's route-starting bays forms its own group and is never
+  // offered the chance to rejoin — which left 大埔中心總站 as 11 bays plus
+  // three lone "stops" inside the same 63 m. One consolidation pass fixes it.
+  for (let i = 0; i < out.length; i++)
+    for (let j = out.length - 1; j > i; j--)
+      if (out[j].every(stop => terminusGroup(out[i], stop))) {
+        out[i] = out[i].concat(out[j]);
+        out.splice(j, 1);
+      }
   return out;
 }
 // What to call a group whose poles disagree about their own name: the name
@@ -7436,12 +7504,17 @@ function boundsClash(mine, theirs) {
 function poleGroup(stop) {
   if (!stop || stop.isStation || !stopIndex) return [stop];
   const members = [stop];
-  for (const n of stopsNear(Number(stop.lat), Number(stop.long), MERGE_SPAN_M)) {
+  let terminus = false;
+  for (const n of stopsNear(Number(stop.lat), Number(stop.long), Math.max(MERGE_SPAN_M, TERMINUS_M))) {
     const other = n.stop;
     if (other.isStation || members.some(m => m.stop === other.stop)) continue;
+    if (terminusGroup(members, other)) { members.push(other); terminus = true; continue; }
+    if (terminus) continue;                       // a named facility takes only its own bays
     if (members.some(m => boundsClash(boundsByRoute(m.stop), boundsByRoute(other.stop)))) continue;
     const h = poleHeading(other.stop), gh = clusterHeading(members);
     if (h === null || gh === null || degreesApart(h, gh) > MERGE_DEG) continue;
+    if (members.some(m => { const hm = poleHeading(m.stop);
+                           return hm !== null && degreesApart(h, hm) > MERGE_OPPOSED_DEG; })) continue;
     if (!members.some(m => metresApart(m, other) <= MERGE_M)) continue;
     if (members.some(m => metresApart(m, other) > MERGE_SPAN_M)) continue;
     members.push(other);
