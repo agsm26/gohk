@@ -2143,6 +2143,29 @@ function openCache() {
 
 function today() { return new Date().toISOString().slice(0, 10); }
 
+// HOW LONG A STORED ANSWER MAY BE USED.
+// Everything in this store is REFERENCE data — route lists, stop positions,
+// fare tables, timetables, holidays. Arrival times are never cached, here or
+// in the service worker, so nothing a rider actually reads off the screen can
+// go stale because of this number.
+//
+// It used to be one day, which meant every phone re-downloaded about 710 KB
+// of KMB open data EVERY DAY, on mobile data, to learn almost nothing: KMB
+// changes a route occasionally, not daily. A week cuts that sevenfold. The
+// cost is that a route which really did change is at worst a week out of
+// date — and its arrival times are live regardless, so the rider is never
+// told a bus is coming that is not.
+const CACHE_DAYS = 7;
+
+// Whole days between a stored stamp and today. A stamp from the future means
+// the clock moved backwards; treat that as expired and fetch again, which is
+// the safe direction to be wrong in.
+function cacheAgeDays(day) {
+  const then = Date.parse(String(day || '') + 'T00:00:00Z');
+  if (!isFinite(then)) return Infinity;
+  return (Date.parse(today() + 'T00:00:00Z') - then) / 86400000;
+}
+
 async function cacheGet(key) {
   try {
     const db = await openCache();
@@ -2151,7 +2174,8 @@ async function cacheGet(key) {
       const request = db.transaction('files').objectStore('files').get(key);
       request.onsuccess = () => {
         const entry = request.result;
-        resolve(entry && entry.day === today() ? entry.value : null);
+        const age = entry ? cacheAgeDays(entry.day) : Infinity;
+        resolve(age >= 0 && age < CACHE_DAYS ? entry.value : null);
       };
       request.onerror = () => resolve(null);
     });
@@ -10725,6 +10749,34 @@ function renderRouteStops(context, stops) {
 
   const info = routeInfoBlock(context);
   if (info) box.appendChild(info);
+
+  // CITYBUS FARES AND HOURS ARRIVE LATE, ON PURPOSE.
+  // They live in hk-bus-lite.json, which at 487 KB over the wire is the
+  // single biggest thing this app can download — bigger than the app itself
+  // — and a KMB rider never needs a byte of it. So it is fetched only when a
+  // Citybus or NLB route is actually opened, and only the first time in a
+  // session. The stop list and its live times are already on screen by then;
+  // when the file lands, this one block redraws and nothing else moves.
+  const routeCo = String(context.co || '').toLowerCase();
+  if ((routeCo === 'ctb' || routeCo === 'nlb') && !fareIndex) {
+    loadFareData().then(() => {
+      // The rider may have closed the route or opened another one while a
+      // half-megabyte was coming down. Only redraw what is still on screen.
+      if (!routeStopsState || routeStopsState.context !== context) return;
+      const live = document.getElementById('routestops');
+      if (!live) return;
+      const fresh = routeInfoBlock(context);
+      if (!fresh) return;
+      const current = live.querySelector('.rsinfo');
+      if (current) current.replaceWith(fresh);
+      else {
+        // There was no block at all before, because there was nothing to put
+        // in it. It goes where it would have gone: under the hint.
+        const hint = live.querySelector('.rshint');
+        if (hint) hint.insertAdjacentElement('afterend', fresh);
+      }
+    }).catch(error => console.warn('Citybus fares unavailable:', error));
+  }
 
   // The ride banner: filled in once both marks are set, hidden otherwise.
   const ride = document.createElement('div');
