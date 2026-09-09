@@ -1184,12 +1184,16 @@
             background:var(--surface-2); color:var(--ink-2);
             font-size:1.0588rem; font-weight:800; line-height:1.3; }
   .jsexit.found { background:var(--red-tint); color:var(--red); }
-  /* Hand this walk to the phone's own map. Sits under the step it belongs
-     to, at a full 48px, because it is a thing to press and not a caption. */
-  .jsgo { display:block; margin-top:8px; padding:11px 10px; min-height:48px;
-          box-sizing:border-box; border:2px solid var(--navy); border-radius:10px;
+  /* ONE control per walk, not two. The map link and the 🔍 that draws the
+     stop on our own map are halves of the same pill, so the pair that used to
+     sit in a second row at the bottom of the card is gone. */
+  .jsgorow { display:flex; align-items:stretch; margin-top:8px; }
+  .jsgo { flex:1 1 auto; min-width:0; padding:11px 10px; min-height:48px;
+          box-sizing:border-box; border:2px solid var(--navy);
+          border-radius:10px 0 0 10px;
           background:var(--surface); color:var(--navy); font-size:1.0588rem;
-          font-weight:800; text-align:center; text-decoration:none; }
+          font-weight:800; text-align:center; text-decoration:none;
+          display:flex; align-items:center; justify-content:center; }
   .jsgo:active { background:var(--navy-tint); }
   /* A change of bus is not a step of its own — it is what happens BETWEEN
      two of them — so it sits in the gutter rather than taking a number. */
@@ -1199,11 +1203,19 @@
   .jschange::before { content:'↓'; flex:0 0 34px; text-align:center;
                       font-size:1.4118rem; }
 
-  .jzoom { display:flex; gap:8px; margin-top:10px; }
-  .zoombtn { flex:1; min-height:48px; border:2px solid var(--blue); background:white;
-             color:var(--blue); border-radius:10px; font-size:1rem; font-weight:700;
-             cursor:pointer; padding:8px 6px; }
-  .zoombtn:hover { background:var(--navy-tint); }
+  /* The right-hand half of the pill. 54px is a real tap target and leaves the
+     map label the rest of the row; it carries no text because at 特大 the
+     destination label already needs every pixel it can get. */
+  .zoombtn { flex:0 0 54px; min-height:48px; box-sizing:border-box;
+             border:2px solid var(--navy); border-left:none;
+             border-radius:0 10px 10px 0; background:var(--surface);
+             color:var(--navy); font-size:1.0588rem; font-weight:800;
+             cursor:pointer; padding:8px 4px; }
+  .zoombtn.solo { flex:1 1 auto; border-left:2px solid var(--navy);
+                  border-radius:10px; }
+  /* jsgo's own right edge is the divider between the halves; without this the
+     two 2px borders meet and draw a 4px seam down the middle of one pill. */
+  .zoombtn:active { background:var(--navy-tint); }
 
 
 
@@ -5464,25 +5476,42 @@ function makeCard(pick) {
       (sub ? '<div class="jssub">' + sub + '</div>' : '') +
       (extra || '') + '</div></li>';
 
-  // THE TWO WALKS CARRY THEIR OWN ➤, ON THE STEP ITSELF.
+  // THE TWO WALKS CARRY THEIR OWN CONTROL, ON THE STEP ITSELF.
   // Both used to be reachable only through the 🔍 上車位置 / 🔍 下車位置
   // buttons at the very bottom of the card — past every step, off the
   // screen. The owner could not find them, which is the whole answer: on a
   // screen built for someone who does not scroll, the way to walk there has
-  // to be ON the line that says to walk there. The 🔍 buttons stay, because
-  // they also draw the stop on the map.
+  // to be ON the line that says to walk there.
+  //
+  // They are now ONE pill per walk rather than two rows of buttons saying the
+  // same thing twice: ➤ hands the walk to the phone's map, the 🔍 half draws
+  // the stop on ours (which side of the kerb, and, at a station, which exit).
+  // The bottom row is gone entirely.
   const firstOn = journey.legs[0].on;
-  const goLink = (href, text) =>
-    '<a class="jsgo" href="' + esc(href) + '" target="_blank" rel="noopener">' + text + '</a>';
+  const goRow = (href, text, which, label) =>
+    '<div class="jsgorow">' +
+      (href
+        ? '<a class="jsgo" href="' + esc(href) + '" target="_blank" rel="noopener">' +
+          text + '</a>'
+        : '') +
+      '<button type="button" class="zoombtn ' + which + (href ? '' : ' solo') +
+        '" title="' + esc(label) + '" aria-label="' + esc(label) + '">\u{1F50D}' +
+        (href ? '' : ' ' + esc(label)) + '</button>' +
+    '</div>';
 
   let steps = '';
+  // Already standing at the stop? There is no walk to hand over, so the pill is
+  // the 🔍 alone — full width, and wearing its 上車位置 label, since nothing
+  // beside it explains what it opens.
   steps += boardsAtChosen
     ? stepHtml('\u{1F6B6} ' + T('boardHereShort'),
-               '<b>' + esc(stopName(firstOn)) + '</b>')
+               '<b>' + esc(stopName(firstOn)) + '</b>',
+               goRow('', '', 'on', T('showBoarding')))
     : stepHtml('\u{1F6B6} ' + T('stepWalk').replace('{m}', journey.walkOn.minutes)
                  .replace('{d}', journey.walkOn.metres),
                T('stepTo') + ' <b>' + esc(stopName(firstOn)) + '</b>',
-               goLink(walkUrl(Number(firstOn.lat), Number(firstOn.long)), T('sdWalkHere')));
+               goRow(walkUrl(Number(firstOn.lat), Number(firstOn.long)),
+                     T('sdWalkHere'), 'on', T('showBoarding')));
 
   journey.legs.forEach((leg, index) => {
     const isTrain = leg.co === 'mtr';
@@ -5527,7 +5556,7 @@ function makeCard(pick) {
   // For a train this is the half of the answer the app was hiding: the
   // direction is computed here and is always true, and the exit LETTER is
   // asked of the gazetteer once the card is on screen. A bus stop has no
-  // exits, so it gets the ➤ and nothing else.
+  // exits, so it gets the ➤ and the 🔍 and nothing else.
   const lastOff = journey.legs[legCount - 1].off;
   const outId = 'jexit-' + pick.number;
   let outLine = '';
@@ -5541,19 +5570,16 @@ function makeCard(pick) {
                       .replace('{d}', journey.walkOff.metres),
                     T('stepArrive') + ' <b>' + esc(endPoint.label || '') + '</b>',
                     outLine +
-                    goLink(walkUrl(endPoint.lat, endPoint.lng,
-                                   Number(lastOff.lat), Number(lastOff.long)),
-                           T('sdWalkDest').replace('{d}', esc(plainStopName(endPoint.label || '')))));
+                    goRow(walkUrl(endPoint.lat, endPoint.lng,
+                                  Number(lastOff.lat), Number(lastOff.long)),
+                          T('sdWalkDest').replace('{d}', esc(plainStopName(endPoint.label || ''))),
+                          'off', T('showAlighting')));
 
   // The ✎ sits AFTER the steps, not in the blue block. It is navigation, not
   // information, and 58px at the top of the screen is a step and a half of
   // the journey the rider came to read. The ✕ up in the head still ends the
   // trip outright.
   inner += '<ol class="jsteps">' + steps + '</ol>' +
-           '<div class="jzoom">' +
-             '<button class="zoombtn on">\u{1F50D} ' + T('showBoarding') + '</button>' +
-             '<button class="zoombtn off">\u{1F50D} ' + T('showAlighting') + '</button>' +
-           '</div>' +
            '<button class="jhedit" type="button">' + T('changeTrip') + '</button>';
 
   card.innerHTML = inner;
