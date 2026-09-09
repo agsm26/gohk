@@ -327,25 +327,30 @@
   .bnav:disabled { opacity:.4; cursor:default; }
 
   /* ==========================================================
-     WEATHER BAR. One line under the nav bar: what it is doing where the
-     rider is, and at each end of the trip when those are known. Warnings
-     come first and in the Observatory's own words — a rainstorm signal is
-     the one thing here that changes whether you travel at all.
+     THE HEADER BAR. The top line of every screen: a warning from the
+     Observatory, whether the phone is offline, and the traffic news —
+     all on ONE line, in that order, warnings first because a rainstorm
+     signal is the one thing here that changes whether you travel at all.
+
+     ONE LINE, ALWAYS. It used to wrap to two or three the moment there was
+     traffic news or an affected route, which turned a strip into a block at
+     the top of every screen. The fixed chips keep their width and the news
+     takes whatever is left, scrolling right to left inside it — so the bar
+     is the same height whether it carries one word or forty.
      ========================================================== */
   #weatherbar {
     position:fixed; top:env(safe-area-inset-top, 0px); left:0; right:0; z-index:1390;
     background:#f8fafc; border-bottom:2px solid var(--line-soft);
-    padding:6px 12px; box-sizing:border-box;
-    display:flex; align-items:center; gap:10px;
-    overflow-x:auto; white-space:nowrap;
-    scrollbar-width:none; font-size:0.94rem; font-weight:700; color:var(--ink-2);
+    padding:5px 10px; box-sizing:border-box;
+    display:flex; align-items:center; gap:8px; flex-wrap:nowrap;
+    overflow:hidden; white-space:nowrap;
+    font-size:0.94rem; font-weight:700; color:var(--ink-2);
   }
-  #weatherbar::-webkit-scrollbar { display:none; }
   /* A pull that produces nothing visible reads as a pull that did not work. */
   #weatherbar.refreshing { animation:pullflash .9s ease-out; }
   @keyframes pullflash { from { background:var(--navy-tint); } to { background:transparent; } }
   /* A warning is not decoration: it gets the loud colour and the first place. */
-  .wxwarn { flex:0 0 auto; background:var(--red); color:white; border-radius:8px;
+  .wxwarn { flex:0 0 auto; order:1; background:var(--red); color:white; border-radius:8px;
             padding:3px 8px; font-weight:800; }
   .wxwarn.amber { background:var(--amber); }
   .wxwarn.notice { background:var(--navy); }
@@ -354,15 +359,20 @@
      question — what do I need to know before I set off? Grey, not red: being
      offline is a limit, not a danger, and the red is spoken for by rainstorm
      and typhoon signals that really do stop the buses. */
-  .wxoff { flex:0 0 auto; background:var(--ink-3); color:white; border-radius:8px;
+  .wxoff { flex:0 0 auto; order:2; background:var(--ink-3); color:white; border-radius:8px;
            padding:3px 8px; font-weight:800; }
 
   /* A NEW VERSION IS READY. A button, not a notice, because it does
      something when tapped — and 44px tall so it can be tapped by someone
      whose hands are not steady, in a bar built for 0.8235rem text. */
-  .wxupdate { flex:0 0 auto; min-height:44px; border:none; border-radius:8px;
+  /* It may shrink and it may be ellipsised, but it keeps its 44px: half a
+     sentence is still tappable, and on one line it must not be allowed to
+     take the whole bar and crush the news beside it to nothing. */
+  .wxupdate { flex:0 1 auto; order:3; min-width:0; max-width:50%;
+              min-height:44px; border:none; border-radius:8px;
               background:var(--green); color:white; font-weight:800;
-              font-size:0.94rem; padding:0 12px; cursor:pointer; }
+              font-size:0.94rem; padding:0 12px; cursor:pointer;
+              overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
   /* ==========================================================
      THE MTR TAB. Station → line → direction → next trains → (destination).
@@ -772,18 +782,33 @@
   .alerttitle { font-size:1.06rem; font-weight:800; color:var(--ink); margin-top:4px; }
   .alerttext { font-size:0.94rem; line-height:1.5; color:var(--ink-2); margin-top:6px; white-space:pre-line; max-height:40vh; overflow:auto; }
   .alertmeta { font-size:0.88rem; color:var(--ink-3); font-weight:700; margin-top:6px; }
-  /* The red line under the weather: there while a notice touching the
-     rider's things stays active, and a tap reopens the text. */
-  #weatherbar.hasalert { flex-wrap:wrap; white-space:normal; }
-  /* Nearby traffic as moving text, kept inside the bar. */
-  .wxticker { flex:1 0 100%; order:8; overflow:hidden; white-space:nowrap; margin-top:4px; cursor:pointer; }
+  /* THE TRAFFIC NEWS, ON THE SAME LINE AS EVERYTHING ELSE.
+     It takes what the chips leave (flex:1 1 0 with min-width:0, so it is the
+     one thing that gives way when a typhoon signal needs the room) and the
+     text scrolls through it: pushed a full container-width to the right to
+     begin with, then translated one text-width to the left, so it enters at
+     the right edge and leaves at the left. A tap opens the notices in full.
+     LAST in the order — the news is what you read while waiting, and the
+     warning is what you read first. */
+  /* A THIRD OF THE BAR, GUARANTEED. Without a floor the news was handed
+     whatever the chips left over — 9px behind a full-width update button —
+     which is a marquee nobody can read. */
+  .wxticker { flex:1 1 0; min-width:30%; order:8; overflow:hidden; white-space:nowrap;
+              cursor:pointer; }
   .wxtickertext { display:inline-block; padding-left:100%; animation:wxscroll 30s linear infinite;
                   color:var(--ink-2); font-weight:700; }
   @keyframes wxscroll { to { transform:translateX(-100%); } }
   @media (prefers-reduced-motion: reduce) { .wxtickertext { animation:none; padding-left:0; } .wxticker { overflow-x:auto; } }
   .eldtag { font-size:0.75em; margin-left:3px; color:var(--amber); font-weight:800; }
-  .wxalert { flex:1 0 100%; order:9; margin-top:4px; background:var(--red); color:white; border:none;
-             border-radius:8px; padding:6px 10px; font-weight:800; font-size:0.94rem; text-align:left; cursor:pointer; }
+  /* A notice touching the rider's OWN saved routes. It used to be a
+     full-width red bar on a line of its own; on one line it is a chip like
+     the rest. It shrinks before the news does, and the ⚠ is written FIRST so
+     that what survives the squeeze is a red button that still says "there is
+     something about your routes" and still opens the notice when tapped. */
+  .wxalert { flex:0 1 auto; min-width:2.2rem; max-width:38%; order:4; background:var(--red);
+             color:white; border:none; border-radius:8px; padding:3px 8px;
+             font-weight:800; font-size:0.94rem; text-align:left; cursor:pointer;
+             overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .dircard { background:white; border-radius:16px; width:100%; max-width:460px; padding:16px 16px 14px;
              max-height:85vh; overflow:auto; box-shadow:0 12px 40px rgba(0,0,0,.35); }
   .dirhead { display:flex; align-items:baseline; gap:10px; margin-bottom:4px; }
@@ -11040,7 +11065,12 @@ function nearbyNotices() {
   const ds = nearbyDistricts();
   if (!ds) return tdNotices.slice(0, 8);
   const keys = ds.map(tidyName);
-  return tdNotices.filter(n => { const d = tidyName(n.district_tc); return d && keys.some(k => d.includes(k) || k.includes(d)); }).slice(0, 8);
+  const near = tdNotices.filter(n => { const d = tidyName(n.district_tc); return d && keys.some(k => d.includes(k) || k.includes(d)); }).slice(0, 8);
+  // NOTHING NEARBY IS NOT NOTHING TO SAY. This is the header of every screen
+  // now, and a rider standing in a quiet district would otherwise watch it
+  // vanish. Each notice carries its own district in the text, so the wider
+  // feed reads as what it is rather than as something happening here.
+  return near.length ? near : tdNotices.slice(0, 8);
 }
 function tickerChip(list) {
   const wrap = document.createElement('div');
@@ -11061,7 +11091,10 @@ function alertChip() {
   const button = document.createElement('button');
   button.className = 'wxalert';
   const who = [...new Set(currentAlerts.flatMap(a => a.hits.map(h => h.label)))].slice(0, 2).join(lang === 'zh' ? '、' : ', ');
-  button.textContent = T('alertBanner').replace('{x}', who);
+  // Icon, then the routes themselves — no "affected:" preamble. On a shared
+  // line the preamble is the first thing to be cut off, which would leave a
+  // red chip saying nothing at all; the red chip already says "affected".
+  button.textContent = '⚠ ' + who;
   button.addEventListener('click', () => showAlertSheet(currentAlerts));
   return button;
 }
@@ -11229,14 +11262,17 @@ function renderWeatherBar() {
   if (!bar) return;
   bar.innerHTML = '';
 
+  // Order on the line: warning, then offline / update, then the routes the
+  // rider has saved, and the traffic news last taking whatever is left. CSS
+  // `order` puts each part in its place, so the order they are appended in
+  // only has to be readable.
   const parts = [];
   if (updateWaiting) parts.push(updateChip());
   if (!navigator.onLine) parts.push(offlineChip());
   if (weatherData) parts.push(...weatherParts());
+  if (currentAlerts.length) parts.push(alertChip());
   const near = tdNotices.length ? nearbyNotices() : [];
   if (near.length) parts.push(tickerChip(near));
-  if (currentAlerts.length) parts.push(alertChip());
-  bar.classList.toggle('hasalert', currentAlerts.length > 0 || near.length > 0);
 
   if (parts.length === 0) { hideWeatherBar(); return; }
   for (const part of parts) bar.appendChild(part);
