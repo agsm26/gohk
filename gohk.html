@@ -92,7 +92,11 @@
                color-scheme:light;   /* Samsung/Chrome auto-dark would invert every colour above */
                -webkit-text-size-adjust:100%;      /* iOS must not re-inflate it */
                -webkit-tap-highlight-color:rgba(0,0,0,.08); }
-  #map { height:100%; width:100%; }
+  /* The bar sits at the FOOT of the screen, so the map stops where the bar
+     starts. Leaflet's own furniture — the zoom control and, more to the
+     point, the copyright line the Lands Department licence requires to be
+     visible — lives inside this box and rides up with it. */
+  #map { height:calc(100% - var(--bottomh)); width:100%; }
   /* Off everywhere but 地圖 — see the panel rules further down. `visibility`
      and not `display`, so the map keeps its real width and height while it
      is out of sight and every fitBounds stays correct. */
@@ -100,7 +104,7 @@
   body.mapopen #map, body.mapopen #landsdlogo { visibility:visible; }
 
   /* The Lands Department logo. Their terms require it on the map face. */
-  #landsdlogo { position:absolute; bottom:6px; left:8px; z-index:1000;
+  #landsdlogo { position:absolute; bottom:calc(var(--bottomh) + 6px); left:8px; z-index:1000;
                 height:26px; background:white; padding:2px 4px; border-radius:4px; }
 
   /* EVERYTHING the user types or taps lives in ONE panel on the LEFT. */
@@ -257,26 +261,31 @@
   .cotag.gmb { background:#f3e8ff; color:#6b21a8; }
   .cotag.mtr { background:var(--red-tint); color:var(--red); }
 
-  /* TOP BAR — bus, train, favourites, settings.
-     It sits above the sheet rather than inside it, so it never scrolls away
-     and always sits in the same place. Four targets, each well over the 48px
-     minimum, with the count in the label so a section that would open empty
-     says so before it is tapped.
-     Every panel height below is measured against --navh, so the bar and the
-     sheet can never overlap however tall the bar ends up. */
-  /* 60px button + the bar's own 2px bottom border. Miss the border and every
-     panel below starts 2px too high, tucked under the bar.
-     --wxh is the weather bar, which is 0 until there is weather to show and
-     is measured from the real element rather than assumed — its height
-     changes with the number of warnings. --toph is what everything below
-     actually hangs from. */
+  /* BOTTOM BAR — map, bus, train, favourites, settings.
+     It sits at the foot of the screen, under the thumb, which is the half of
+     a phone a hand holding it can actually reach; the top of the screen is
+     where the reading starts and it belongs to the screen, not to chrome.
+     Five targets, each well over the 48px minimum, with the count as a badge
+     on the icon so a section that would open empty says so before it is
+     tapped.
+     TWO heights, and everything else is measured off them:
+     --bottomh is the bar (60px button + its 2px top border, plus whatever the
+     phone reserves for its home indicator).
+     --toph is what is taken off the TOP — the notch, plus --wxh, the weather
+     bar, which is 0 until there is weather to show and is measured from the
+     real element rather than assumed since its height changes with the number
+     of warnings.
+     Every panel below hangs from --toph and is capped at --bottomh, so the
+     bar and the sheet can never overlap however tall either ends up. */
   :root { --navh:62px;
           --wxh:0px;
-          --toph:calc(var(--navh) + var(--wxh)); }
+          --toph:calc(env(safe-area-inset-top, 0px) + var(--wxh));
+          --bottomh:calc(var(--navh) + env(safe-area-inset-bottom, 0px)); }
   #bottombar {
-    position:fixed; top:0; left:0; right:0; z-index:1400;
-    display:flex; background:white; border-bottom:2px solid var(--line-soft);
-    box-shadow:0 2px 12px rgba(0,0,0,.18);
+    position:fixed; bottom:0; left:0; right:0; z-index:1400;
+    display:flex; background:white; border-top:2px solid var(--line-soft);
+    box-shadow:0 -2px 12px rgba(0,0,0,.18);
+    padding-bottom:env(safe-area-inset-bottom, 0px);
   }
   /* border-box keeps the button exactly 60px including its underline, which
      is what --navh above assumes. Without it the 4px border is added on top
@@ -301,7 +310,7 @@
           border:none; background:none; cursor:pointer;
           display:flex; flex-direction:column; align-items:center; justify-content:center;
           gap:2px; padding:6px 2px; color:var(--ink-3); font-weight:800;
-          font-size:min(0.94rem, 20px); border-bottom:4px solid transparent; }
+          font-size:min(0.94rem, 20px); border-top:4px solid transparent; }
   .bnav .bicon { font-size:min(1.2941rem, 20px); line-height:1; }
   .bnav .blabel { white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
                   max-width:100%; letter-spacing:-0.01em; }
@@ -312,9 +321,9 @@
                   border-radius:9px; background:var(--navy); color:white;
                   font-size:11px; font-weight:800; line-height:18px; text-align:center; }
   .bnav.on .bcount { background:var(--navy); }
-  /* The active marker moves to the underside now that the bar is on top, so
-     it still points at the panel it belongs to. */
-  .bnav.on { color:var(--navy); border-bottom-color:var(--navy); background:var(--navy-tint); }
+  /* The active marker rides the TOP edge now that the bar is at the foot of
+     the screen, so it still points at the panel it belongs to. */
+  .bnav.on { color:var(--navy); border-top-color:var(--navy); background:var(--navy-tint); }
   .bnav:disabled { opacity:.4; cursor:default; }
 
   /* ==========================================================
@@ -324,7 +333,7 @@
      the one thing here that changes whether you travel at all.
      ========================================================== */
   #weatherbar {
-    position:fixed; top:var(--navh); left:0; right:0; z-index:1390;
+    position:fixed; top:env(safe-area-inset-top, 0px); left:0; right:0; z-index:1390;
     background:#f8fafc; border-bottom:2px solid var(--line-soft);
     padding:6px 12px; box-sizing:border-box;
     display:flex; align-items:center; gap:10px;
@@ -754,9 +763,9 @@
   .arrivetag.nofeed { color:var(--ink-3); font-weight:700; background:var(--surface-2, #f1f5f9); }
   .roadslow { display:block; margin-top:2px; font-size:0.9rem; font-weight:700; color:var(--amber, #b45309); }
   /* The "which way?" sheet for a looked-up bus: one big button per direction. */
-  #dirsheet, #alertsheet { display:none; position:fixed; inset:0; z-index:2000; background:rgba(15,23,42,.55);
+  #dirsheet, #alertsheet, #filtersheet { display:none; position:fixed; inset:0; z-index:2000; background:rgba(15,23,42,.55);
               align-items:flex-end; justify-content:center; padding:10px; }
-  #dirsheet.open, #alertsheet.open { display:flex; }
+  #dirsheet.open, #alertsheet.open, #filtersheet.open { display:flex; }
   /* One block per notice inside the alert sheet. */
   .alertitem { border:2px solid var(--line-soft); border-left:8px solid var(--red); border-radius:12px; padding:10px 12px; margin-top:10px; }
   .alertwho { font-size:1rem; font-weight:800; color:var(--red); }
@@ -958,8 +967,8 @@
   #panel.routemode > *:not(#routefield):not(#routestops):not(#sheetgrip):not(#status) {
     display:none !important;
   }
-  #panel.routemode { top:var(--toph); max-height:calc(100vh - var(--toph));
-                     max-height:calc(100dvh - var(--toph)); border-radius:0;
+  #panel.routemode { top:var(--toph); max-height:calc(100vh - var(--toph) - var(--bottomh));
+                     max-height:calc(100dvh - var(--toph) - var(--bottomh)); border-radius:0;
                      padding-top:16px; }
   /* The whole point is that it fits: the list scrolls inside the panel, the
      header and the search box stay put above it. */
@@ -975,8 +984,8 @@
      still slide a half-read arrival list off the screen. */
   #panel.favmode > #sheetgrip, #panel.setmode > #sheetgrip,
   #panel.mtrmode > #sheetgrip, #panel.stopmode > #sheetgrip { display:none !important; }
-  #panel.favmode, #panel.setmode, #panel.mtrmode, #panel.stopmode { top:var(--toph); max-height:calc(100vh - var(--toph));
-                  max-height:calc(100dvh - var(--toph)); border-radius:0;
+  #panel.favmode, #panel.setmode, #panel.mtrmode, #panel.stopmode { top:var(--toph); max-height:calc(100vh - var(--toph) - var(--bottomh));
+                  max-height:calc(100dvh - var(--toph) - var(--bottomh)); border-radius:0;
                    padding-top:16px; }
   #favview .favhead, #setview .favhead { font-size:1.1765rem; font-weight:800; color:#111;
                       margin:4px 0 14px; }
@@ -1282,8 +1291,8 @@
   #panel.peek { max-height:150px; overflow:hidden; }
   /* Every tall state is capped at the space below the bar, so the top of the
      sheet can never slide underneath it. */
-  #panel.tall { max-height:min(88vh, calc(100vh - var(--toph)));
-                max-height:min(88dvh, calc(100dvh - var(--toph))); }
+  #panel.tall { max-height:min(88vh, calc(100vh - var(--toph) - var(--bottomh)));
+                max-height:min(88dvh, calc(100dvh - var(--toph) - var(--bottomh))); }
 
   /* THE MAP BELONGS TO THE MAP TAB AND TO NOTHING ELSE.
      It used to lie behind every screen, reachable by pulling this sheet
@@ -1293,8 +1302,8 @@
      results list included, which was the last one still hanging over the
      map as a sheet. */
   #panel {
-    top:var(--toph); max-height:calc(100vh - var(--toph));
-    max-height:calc(100dvh - var(--toph)); border-radius:0;
+    top:var(--toph); max-height:calc(100vh - var(--toph) - var(--bottomh));
+    max-height:calc(100dvh - var(--toph) - var(--bottomh)); border-radius:0;
     padding-top:16px; box-shadow:none;
   }
   /* The results screen leads with three tiles that are already framed and
@@ -1307,14 +1316,14 @@
      would read as broken. Both go; every state is the full screen. */
   #panel.peek, #panel.tall, #panel.results,
   #panel.results.peek, #panel.results.tall {
-    max-height:calc(100vh - var(--toph));
-    max-height:calc(100dvh - var(--toph));
+    max-height:calc(100vh - var(--toph) - var(--bottomh));
+    max-height:calc(100dvh - var(--toph) - var(--bottomh));
     overflow-y:auto;
   }
   #sheetgrip { display:none; }
-  /* The bar is overhead now, so the sheet only needs to clear the iPhone
-     home indicator at the bottom, not a 84px bar. */
-  #panel { padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px)); }
+  /* The bar stands below the sheet and carries the home indicator itself, so
+     the sheet needs nothing but its own last line of air. */
+  #panel { padding-bottom:20px; }
 
   /* "Tap on map" cannot work when there is no map behind the panel, and
      there never is now. Typing and GPS cover both ends. */
@@ -1340,14 +1349,13 @@
   #rb-trip .tp { font-size:1rem; }
   #rb-close { width:44px; height:44px; font-size:1.1765rem; top:8px; right:8px; }
 
-  /* The Lands Department logo must stay visible. The bar is overhead now, so
-     the bottom-left corner is clear again — and that is where the sheet's
-     rounded corner leaves map showing. */
-  #landsdlogo { top:auto; bottom:6px; left:8px; }
+  /* The Lands Department logo must stay visible. It sits in the bottom-left
+     corner of the MAP, which now ends where the bar begins — so the offset is
+     measured off --bottomh rather than off the screen. */
+  #landsdlogo { top:auto; bottom:calc(var(--bottomh) + 6px); left:8px; }
 
-  #routebanner { position:absolute; bottom:0; left:0; right:0; z-index:1000;
-                 background:var(--navy); color:white; padding:14px 18px; display:none;
-                 padding-bottom:calc(14px + env(safe-area-inset-bottom, 0px)); }
+  #routebanner { position:absolute; bottom:var(--bottomh); left:0; right:0; z-index:1000;
+                 background:var(--navy); color:white; padding:14px 18px; display:none; }
   #routebanner.ctb { background:#9a3412; }
   /* Planning a trip: the card below carries the route, the terminals and the
      total, so the banner drops all four and keeps the trip and the ✎. */
@@ -1371,9 +1379,10 @@
      over a list of arrival times would be clutter over the one screen
      a rider is actually reading.
      ============================================================== */
-  #maptools, #maplocate, #mtrtoggle { display:none; }
+  #maptools, #maplocate, #mtrtoggle, #spotfilter { display:none; }
   body.mapopen #maptools { display:block; }
-  body.mapopen #maplocate, body.mapopen #mtrtoggle { display:flex; }
+  body.mapopen #maplocate, body.mapopen #mtrtoggle,
+  body.mapopen #spotfilter { display:flex; }
   #maptools { position:fixed; top:calc(var(--toph) + 8px); left:10px; right:10px; z-index:1150; }
   .mtsearch { display:flex; gap:4px; align-items:center; background:var(--surface);
               border:2px solid var(--line); border-radius:var(--r-md); padding:2px 4px;
@@ -1391,15 +1400,28 @@
                 box-shadow:0 2px 10px rgba(0,0,0,.22); }
   #spot-reset.on { display:block; }
   #spot-reset:active { background:#7f1d1d; }
-  /* The chips SCROLL sideways and never wrap. Nine categories in Chinese at
-     特大 are far wider than a 375px phone, and a wrapped second row would
-     push the map itself out from under the rider's thumb. */
-  #spotchips { display:flex; gap:6px; overflow-x:auto; padding:8px 2px 2px; scrollbar-width:none; }
-  #spotchips::-webkit-scrollbar { display:none; }
-  .spotchip { flex:0 0 auto; min-height:44px; padding:4px 14px; border-radius:999px;
-              border:2px solid var(--line); background:var(--surface); color:var(--ink-2);
-              font-size:1rem; font-weight:800; white-space:nowrap; box-shadow:0 2px 8px rgba(0,0,0,.16); }
-  .spotchip.on { background:var(--navy); border-color:var(--navy); color:#fff; }
+  /* WHICH KINDS OF PLACE ARE PINNED — one bubble, not a row of twelve.
+     The chips used to scroll sideways under the search box, which meant the
+     map lost a band across its whole width to a control that is set once and
+     then left alone, and the categories past 博物館 were off the right edge
+     where nobody scrolled to find them. They are a list inside a sheet now,
+     opened from a bubble in the same right-hand stack as 🚇 and 📍 — reached
+     by the same thumb, costing the map nothing until it is asked for.
+     The bubble WEARS the current choice (☰ for 全部, 🚫 for 不顯示, otherwise
+     the category's own pin), so what the map is showing is readable without
+     opening anything. */
+  .filtrow { display:flex; align-items:center; gap:12px; width:100%; text-align:left;
+             border:2px solid var(--line); border-radius:12px; background:var(--surface);
+             padding:8px 12px; margin-top:8px; min-height:58px; color:var(--ink);
+             font-size:1.06rem; font-weight:800; }
+  .filtrow .fi { flex:0 0 1.9rem; font-size:1.4rem; line-height:1; text-align:center; }
+  .filtrow .fn { flex:1 1 auto; min-width:0; }
+  /* The tick keeps its width whether or not it is drawn, so the names do not
+     shuffle sideways as the choice moves down the list. */
+  .filtrow .fk { flex:0 0 auto; font-size:1.2rem; color:var(--navy); visibility:hidden; }
+  .filtrow.on { border-color:var(--navy); background:var(--navy-tint); color:var(--navy); }
+  .filtrow.on .fk { visibility:visible; }
+  .filtrow:active { background:var(--navy-tint); }
   #spotresults { margin-top:6px; background:var(--surface); border:2px solid var(--line);
                  border-radius:var(--r-md); box-shadow:0 4px 16px rgba(0,0,0,.25);
                  max-height:46vh; overflow:auto; }
@@ -1420,7 +1442,7 @@
      setting (36px at 標準, 47px at 特大), so the clearance is MEASURED into
      --attrh rather than guessed — see fitLocateButton(). */
   #maplocate { position:fixed; right:14px;
-               bottom:calc(var(--attrh, 48px) + 12px + env(safe-area-inset-bottom, 0px));
+               bottom:calc(var(--bottomh) + var(--attrh, 48px) + 12px);
                z-index:1150; width:62px; height:62px; border-radius:50%; padding:0;
                border:2px solid var(--line); background:var(--surface); color:var(--ink);
                align-items:center; justify-content:center; font-size:1.7rem;
@@ -1431,12 +1453,21 @@
      stack and measured off the same attribution height, so the two move
      together when the copyright notice changes size. */
   #mtrtoggle { position:fixed; right:14px;
-               bottom:calc(var(--attrh, 48px) + 84px + env(safe-area-inset-bottom, 0px));
+               bottom:calc(var(--bottomh) + var(--attrh, 48px) + 84px);
                z-index:1150; width:62px; height:62px; border-radius:50%; padding:0;
                border:2px solid var(--line); background:var(--surface); color:var(--ink);
                align-items:center; justify-content:center; font-size:1.7rem;
                box-shadow:0 4px 16px rgba(0,0,0,.32); opacity:.75; }
   #mtrtoggle.on { background:var(--navy); border-color:var(--navy); opacity:1; }
+  /* Third in the same stack, above 🚇. 72px apart: a 62px bubble and 10px of
+     air, the same gap 🚇 keeps from 📍. */
+  #spotfilter { position:fixed; right:14px;
+                bottom:calc(var(--bottomh) + var(--attrh, 48px) + 156px);
+                z-index:1150; width:62px; height:62px; border-radius:50%; padding:0;
+                border:2px solid var(--line); background:var(--surface); color:var(--ink);
+                align-items:center; justify-content:center; font-size:1.7rem;
+                box-shadow:0 4px 16px rgba(0,0,0,.32); opacity:.75; }
+  #spotfilter.on { background:var(--navy); border-color:var(--navy); opacity:1; }
   /* Station dots and their names. Kept small: the lines are the shape a
      rider reads at a glance, and the names are for when they have zoomed in. */
   .railname { pointer-events:none; font-size:11px; font-weight:800; color:#0f172a;
@@ -1639,9 +1670,13 @@
        map. Hidden until there is something to take off, so a clean map is
        never carrying a button about nothing. -->
   <button id="spot-reset" type="button"></button>
-  <div id="spotchips"></div>
   <div id="spotresults"></div>
 </div>
+
+<!-- Which kinds of place are pinned. The bubble wears the current choice;
+     the whole list opens in the sheet below it. -->
+<button id="spotfilter" type="button">☰</button>
+<div id="filtersheet" role="dialog" aria-modal="true"><div class="dircard" id="filtercard"></div></div>
 
 <!-- Show or hide the railway on the map. -->
 <button id="mtrtoggle" type="button">🚇</button>
@@ -1784,6 +1819,7 @@ const TEXT = {
     changeTrain:'↓ CHANGE TRAIN', trainsFrequent:'Trains every few minutes', here:'here',
     tabBus:'BUS', tabStop:'BUS', tabMtr:'MTR', tabFav:'SAVED', tabMap:'MAP', tabSet:'SETUP',
     spotSearch:'Search a place to go',
+    spotFilterTitle:'Which places to show', spotFilterDone:'Close',
     spotAll:'All', spotSight:'Sights', spotMuseum:'Museums', spotMonument:'Monuments',
     spotHeritage:'Heritage', spotTemple:'Temples', spotPark:'Parks', spotBeach:'Beaches',
     spotView:'Viewpoints', spotNature:'Country parks',
@@ -2053,6 +2089,7 @@ const TEXT = {
     changeTrain:'↓ 轉綫', trainsFrequent:'港鐵班次頻密，數分鐘一班', here:'於此處',
     tabBus:'巴士', tabStop:'巴士', tabMtr:'港鐵', tabFav:'收藏', tabMap:'地圖', tabSet:'設定',
     spotSearch:'搜尋景點或地點',
+    spotFilterTitle:'顯示邊啲地點', spotFilterDone:'關閉',
     spotAll:'全部', spotSight:'景點', spotMuseum:'博物館', spotMonument:'法定古蹟',
     spotHeritage:'文物徑', spotTemple:'廟宇', spotPark:'公園', spotBeach:'泳灘',
     spotView:'觀景點', spotNature:'郊野公園',
@@ -2384,8 +2421,12 @@ function measureMapChrome() {
   const tools  = document.getElementById('maptools');
   const locate = document.getElementById('maplocate');
   if (seen(tools))  mapChromeTop = Math.round(tools.getBoundingClientRect().bottom) + 12;
-  if (seen(locate)) mapChromeBottom =
-    Math.round(window.innerHeight - locate.getBoundingClientRect().top) + 12;
+  // Measured against the MAP's own bottom edge, not the screen's: the bar
+  // stands below the map now, and reserving its height inside the map would
+  // push every fitBounds up by a band that is not there.
+  const canvas = document.getElementById('map');
+  if (seen(locate) && canvas) mapChromeBottom =
+    Math.round(canvas.getBoundingClientRect().bottom - locate.getBoundingClientRect().top) + 12;
 }
 
 function mapPadding() {
@@ -12222,24 +12263,49 @@ function drawSpots() {
   }
 }
 
-// ------------------------------------------------------------ the chip row
-function renderSpotChips() {
-  const box = document.getElementById('spotchips');
-  if (!box) return;
-  let html = '<button class="spotchip' + (spotFilter ? '' : ' on') +
-             '" data-cat="">' + T('spotAll') + '</button>' +
-             // Somebody reading the streets, or looking for their own bus
-             // stop, wants the pins out of the way. One tap, and back.
-             '<button class="spotchip' + (spotFilter === 'none' ? ' on' : '') +
-             '" data-cat="none">🚫 ' + T('spotNone') + '</button>';
-  for (const cat of SPOT_CATS) {
-    html += '<button class="spotchip' + (spotFilter === cat.c ? ' on' : '') +
-            '" data-cat="' + cat.c + '">' + cat.icon + ' ' + T(cat.key) + '</button>';
+// ------------------------------------------- the filter bubble and its list
+// One control, in two places at once: the bubble says what the map is showing
+// without being opened, and the sheet is where it is changed. Both are drawn
+// from the same SPOT_CATS list, so a new category appears in both or neither.
+function renderSpotFilters() {
+  const button = document.getElementById('spotfilter');
+  if (button) {
+    // ☰ is the neutral state — every kind the zoom allows. Any other choice
+    // shows its own pin, so a map with only temples on it says so.
+    const chosen = spotFilter === 'none' ? { icon:'🚫' } : SPOT_CAT.get(spotFilter);
+    button.textContent = chosen ? chosen.icon : '☰';
+    button.classList.toggle('on', !!spotFilter);
+    button.setAttribute('aria-label', T('spotFilterTitle'));
   }
-  box.innerHTML = html;
+
+  const card = document.getElementById('filtercard');
+  if (card) {
+    const row = (cat, icon, name) =>
+      '<button class="filtrow' + (spotFilter === cat ? ' on' : '') +
+      '" data-cat="' + cat + '"><span class="fi">' + icon + '</span>' +
+      '<span class="fn">' + esc(name) + '</span><span class="fk">✓</span></button>';
+    let html = '<div class="dirhead"><span>' + esc(T('spotFilterTitle')) + '</span></div>' +
+               row('', '☰', T('spotAll')) +
+               // Somebody reading the streets, or looking for their own bus
+               // stop, wants the pins out of the way. One tap, and back.
+               row('none', '🚫', T('spotNone'));
+    for (const cat of SPOT_CATS) html += row(cat.c, cat.icon, T(cat.key));
+    html += '<button class="dircancel" data-filter-close="1">' +
+            esc(T('spotFilterDone')) + '</button>';
+    card.innerHTML = html;
+  }
+
   const search = document.getElementById('spot-search');
   if (search) search.placeholder = T('spotSearch');
   paintMapReset();
+}
+
+function openFilterSheet() {
+  renderSpotFilters();
+  document.getElementById('filtersheet').classList.add('open');
+}
+function closeFilterSheet() {
+  document.getElementById('filtersheet').classList.remove('open');
 }
 
 // ------------------------------------------------- taking the map back
@@ -12953,7 +13019,7 @@ function fitLocateButton() {
 }
 
 function openMapLayer() {
-  renderSpotChips();
+  renderSpotFilters();
   paintRailButton();
   setTimeout(fitLocateButton, 0);
   // The only moment the map's own furniture can be measured is while it is
@@ -12965,17 +13031,21 @@ function openMapLayer() {
       .then(() => { railLayer.addTo(map); drawRail(); });
   }
   if (spots) { drawSpots(); return; }
-  loadSpots().then(() => { renderSpotChips(); drawSpots(); renderSpotResults(); });
+  loadSpots().then(() => { renderSpotFilters(); drawSpots(); renderSpotResults(); });
 }
 
 map.on('moveend', drawSpots);
 map.on('moveend', drawRail);      // station labels follow the view
 
 document.addEventListener('click', event => {
-  const chip = event.target.closest('.spotchip');
+  if (event.target.closest('[data-filter-close]')) { closeFilterSheet(); return; }
+  const chip = event.target.closest('.filtrow');
   if (chip) {
     spotFilter = chip.dataset.cat || '';
-    renderSpotChips();
+    renderSpotFilters();
+    // Choosing is the whole reason the sheet is open, so it gets out of the
+    // way the moment the choice is made rather than waiting to be dismissed.
+    closeFilterSheet();
     drawSpots();
     // The hotel list is a separate download. Ask for it the moment it is
     // wanted, then redraw — the map stays usable while it arrives.
@@ -13024,9 +13094,13 @@ document.addEventListener('click', event => {
 document.getElementById('spotsheet').addEventListener('click', event => {
   if (event.target.id === 'spotsheet') closeSpotSheet();
 });
+document.getElementById('filtersheet').addEventListener('click', event => {
+  if (event.target.id === 'filtersheet') closeFilterSheet();
+});
 
 document.getElementById('maplocate').addEventListener('click', mapLocate);
 document.getElementById('mtrtoggle').addEventListener('click', toggleRail);
+document.getElementById('spotfilter').addEventListener('click', openFilterSheet);
 
 (function wireSpotSearch() {
   const input = document.getElementById('spot-search');
