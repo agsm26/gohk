@@ -43,7 +43,7 @@
    halfway through reading.
    ========================================================================= */
 
-const VERSION = 'gohk-2026-09-10a';
+const VERSION = 'gohk-2026-09-11a';
 const CACHE   = VERSION;
 
 // Fetched at install, before the app is ever called ready. Kept small on

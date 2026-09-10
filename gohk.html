@@ -1089,6 +1089,13 @@
      able to tell a guess from a measurement. */
   .eta-times .sched { color:var(--ink-3); font-weight:700; }
   .schednote { display:block; font-size:0.94rem; font-weight:700; color:var(--ink-3); margin:6px 2px 0; }
+  /* 尾班車. Red on red-tint and set in the row's own size, not smaller:
+     it is the one fact on the screen that can leave somebody standing in
+     the street at midnight, so it does not get to be a footnote. */
+  .lastbus { display:inline-block; margin-left:6px; padding:1px 8px; border-radius:9px;
+             background:var(--red-tint); color:var(--red); font-size:0.94rem;
+             font-weight:800; vertical-align:1px; }
+  .schednote.lastnote { color:var(--red); }
   .eta-arrive { display:block; flex-basis:100%; font-size:0.94rem; font-weight:700; color:var(--green); margin-top:2px; }
   .eta-when { font-weight:800; }
   .eta-fare { display:inline-block; margin-left:8px; padding:1px 7px; border-radius:12px;
@@ -1770,6 +1777,8 @@ const TEXT = {
     nameYourWord:'Your name for it', nameHint:'Leave it blank to keep the real name.',
     nameConfirm:'Save', nameRemove:'Remove from saved',
     etaAbout:'~', etaSchedNote:'~ from the timetable, not a tracked bus',
+    etaLastBus:'LAST BUS',
+    etaLastNote:'LAST BUS = the final departure tonight. Nothing follows it.',
     refresh:'🔄 Refresh times', refreshing:'Refreshing…',
     textSize:'Text size', textNormal:'Normal', textLarge:'Large', textXLarge:'Extra large',
     mtrTitle:'MTR', mtrGeoTitle:'Find your nearest station?',
@@ -2045,6 +2054,8 @@ const TEXT = {
     nameYourWord:'你叫佢乜嘢', nameHint:'唔填就用返原本個名。',
     nameConfirm:'確定', nameRemove:'從收藏中移除',
     etaAbout:'約', etaSchedNote:'「約」是班次表時間，未有實時追蹤',
+    etaLastBus:'尾班車',
+    etaLastNote:'「尾班車」即當晚最後一班，之後沒有了。',
     refresh:'🔄 更新班次', refreshing:'更新中…',
     textSize:'文字大小', textNormal:'標準', textLarge:'大', textXLarge:'特大',
     mtrTitle:'港鐵', mtrGeoTitle:'尋找最近的港鐵站？',
@@ -7475,7 +7486,7 @@ async function loadKmbArrivals(stop, marker) {
 function formatArrivals(entries, opts) {
   if (!entries || entries.length === 0) return '<div class="eta-note">' + T('noBusesListed') + '</div>';
   const now = Date.now(), byRoute = new Map();
-  let anySched = false;
+  let anySched = false, anyLast = false;
 
   for (const entry of entries) {
     if (!entry.eta) continue;
@@ -7491,14 +7502,25 @@ function formatArrivals(entries, opts) {
     // measurement in identical green — the one thing an arrival board must
     // never do. Marked per TIME, not per row: a route usually has some of
     // each, which is the commonest case of the three.
-    const sched = /原定班次|Scheduled/i.test((entry.rmk_tc || '') + ' ' + (entry.rmk_en || ''));
+    const rmk = (entry.rmk_tc || '') + ' ' + (entry.rmk_en || '');
+    const sched = /原定班次|Scheduled/i.test(rmk);
+    // THE LAST BUS OF THE NIGHT, WHICH THIS APP USED TO THROW AWAY.
+    // KMB marks the final departure 最後班次 / "Last Bus" in the same remark
+    // field 原定班次 comes from, and only the second was ever read. So at
+    // 23:35 the screen said 「102 筲箕灣 18 分鐘」 — true, and silent about the
+    // fact that nothing comes after it. A rider who reads that and decides to
+    // finish their tea is stranded. It is the exact failure this app exists
+    // to prevent, and it was one regex away the whole time.
+    const last = /最後班次|Last Bus/i.test(rmk);
     if (!byRoute.has(label)) byRoute.set(label, { minutes: [], sample: entry });
     const bucket = byRoute.get(label).minutes;
     const seen = bucket.find(x => x.m === minutes);
     // Two bays reporting one bus: one time. If either sighting is tracked,
-    // the bus is tracked — real data outranks the timetable.
-    if (seen) { if (!sched) seen.sched = false; }
-    else bucket.push({ m: minutes, sched });
+    // the bus is tracked — real data outranks the timetable. For "last bus"
+    // the safe direction is the opposite: if either bay calls it the last
+    // one, say so. Leaving early costs a wait; not knowing costs the night.
+    if (seen) { if (!sched) seen.sched = false; if (last) seen.last = true; }
+    else bucket.push({ m: minutes, sched, last });
   }
   if (byRoute.size === 0) return '<div class="eta-note">' + T('noBusDue') + '</div>';
   for (const group of byRoute.values()) group.minutes.sort((a, b) => a.m - b.m);
@@ -7572,14 +7594,18 @@ function formatArrivals(entries, opts) {
     }
     const shown = group.minutes.slice(0, 3);
     if (shown.some(x => x.sched)) anySched = true;
+    if (shown.some(x => x.last)) anyLast = true;
     const sortKey = stopsAway !== undefined ? group.minutes[0].m + stopsAway * MINUTES_PER_STOP : group.minutes[0].m;
     items.push({ sortKey, html:
       '<div class="eta-row">' + star + '<span class="eta-route">' + route + '</span>' +
       '<span class="eta-dest">' + dest + '</span>' + fareTag + poleTag +
       '<span class="eta-times">' +
-      shown.map(x => x.sched
-        ? '<span class="sched">' + esc(T('etaAbout')) + (x.m === 0 ? T('due') : x.m + T('min')) + '</span>'
-        : (x.m === 0 ? T('due') : x.m + T('min'))).join(', ') +
+      shown.map(x => {
+        const when = x.sched
+          ? '<span class="sched">' + esc(T('etaAbout')) + (x.m === 0 ? T('due') : x.m + T('min')) + '</span>'
+          : (x.m === 0 ? T('due') : x.m + T('min'));
+        return when + (x.last ? ' <span class="lastbus">' + esc(T('etaLastBus')) + '</span>' : '');
+      }).join(', ') +
       '</span>' + arriveTag + '</div>' });
   }
   items.sort((a, b) => a.sortKey - b.sortKey);
@@ -7587,6 +7613,7 @@ function formatArrivals(entries, opts) {
   // a timetabled time, so repeating the sentence on each of them would bury
   // the times it is meant to explain.
   return items.map(x => x.html).join('') +
+    (anyLast ? '<div class="schednote lastnote">' + esc(T('etaLastNote')) + '</div>' : '') +
     (anySched ? '<div class="schednote">' + esc(T('etaSchedNote')) + '</div>' : '');
 }
 
