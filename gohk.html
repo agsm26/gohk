@@ -681,6 +681,35 @@
   .rsdrow { font-size:0.94rem; color:var(--ink-2); line-height:1.5; padding:3px 0;
             border-top:1px solid var(--line-soft); }
   .rsdrow b { color:var(--ink); }
+  /* A ROUTE WITH NOTHING RUNNING ON IT.
+     Twenty-four stops each quietly saying 「沒有班次資料」 reads as an app that
+     has broken, not as a bus that has finished for the night. The rows go
+     grey together and ONE line at the top says why. Dimmed, never disabled:
+     the names, the stop order and the ☆ are all still worth having, and a
+     dead button is a dead end. */
+  #routestops.rsoff .rsrow { opacity:.55; }
+  #routestops.rsoff .rsname { color:var(--ink-2); }
+  .rsoffnote { display:block; margin:8px 0 4px; padding:10px 12px; border-radius:10px;
+               background:var(--red-tint); color:var(--red);
+               font-size:1.0588rem; font-weight:800; line-height:1.4; }
+  /* The walk to the stop you just chose, on the stop you just chose. */
+  .rsgo { display:block; margin:8px 0 2px; padding:11px 10px; min-height:48px;
+          box-sizing:border-box; border:2px solid var(--navy); border-radius:10px;
+          background:var(--surface); color:var(--navy); font-size:1.0588rem;
+          font-weight:800; text-align:center; text-decoration:none; }
+  .rsgo:active { background:var(--navy-tint); }
+  /* Its OWN line. As a fourth item in the row's flex it stole the width from
+     the stop name — 發祥街西 broke into 「發祥 / 街西」 and 在此上車 stacked
+     three words high. It is full width under the row it belongs to, and
+     takes no space at all on the rows that do not have one. */
+  .rsgocell { flex:0 0 100%; }
+  .rsgocell:empty { display:none; }
+  /* A direction that is known to have finished for the day. Still tappable —
+     the stop list and the hours are worth reading either way. */
+  .dirbtn.diroff { opacity:.6; }
+  .dirofftag { display:inline-block; margin-left:8px; padding:1px 8px; border-radius:9px;
+               background:var(--red-tint); color:var(--red);
+               font-size:0.94rem; font-weight:800; vertical-align:2px; }
   /* Saved places on the 車站 tab: pill buttons, one tap each. */
   .destchips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:6px; }
 
@@ -827,7 +856,7 @@
                background:#f3f4f6; font-weight:800; font-size:1rem; color:var(--ink); }
 
   .rsrow { display:flex; align-items:center; gap:8px; padding:8px 6px;
-           border-bottom:2px solid var(--surface-2); }
+           border-bottom:2px solid var(--surface-2); flex-wrap:wrap; }
   .rsrow:last-child { border-bottom:none; }
   /* The number is the point of the list, so it is the one thing that never
      shrinks and never wraps. */
@@ -1984,6 +2013,9 @@ const TEXT = {
     rsBoarding:'● GETTING ON HERE', rsStopsAway:'{n} stops from your stop',
     rsOneStopAway:'1 stop from your stop', rsBefore:'before your stop',
     rsCheckingEta:'checking…', rsNoEta:'no times listed',
+    rsNoService:'⛔ This route is not running at this hour.',
+    rsAllQuiet:'⛔ No bus is due at any stop checked on this route.',
+    rsOffTag:'not running',
     rsEtaFailed:'times unavailable', rsClose:'Close the stop list',
     rsBoardAuto:'● GETTING ON HERE (you are nearby)', rsBoardNear:'● Nearest stop to you (about {m} m)', rsAlight:'▼ GETTING OFF HERE',
     rsAfterAlight:'after your stop', rsStops:'{n} stops', rsOneStop:'1 stop',
@@ -2253,6 +2285,9 @@ const TEXT = {
     rsBoarding:'● 在此上車', rsStopsAway:'距離上車站 {n} 個站',
     rsOneStopAway:'距離上車站 1 個站', rsBefore:'在上車站之前',
     rsCheckingEta:'查詢中…', rsNoEta:'沒有班次資料',
+    rsNoService:'⛔ 此路線現時沒有服務。',
+    rsAllQuiet:'⛔ 此路線已查的車站全部沒有班次。',
+    rsOffTag:'現時停駛',
     rsEtaFailed:'無法取得班次', rsClose:'關閉車站列表',
     rsBoardAuto:'● 在此上車（你在附近）', rsBoardNear:'● 最近的車站（約 {m} 米）', rsAlight:'▼ 在此下車',
     rsAfterAlight:'在下車站之後', rsStops:'{n} 個站', rsOneStop:'1 個站',
@@ -4195,6 +4230,31 @@ function maskLabel(mask) {
   return out;
 }
 
+// Is NOW inside one of the day's running windows? Split out so the route
+// screen can ask the same question of a context, and answer it the same way.
+function svcArcsCoverNow(summary, nowMins) {
+  if (!summary || !summary.arcs.length) return null;    // nothing to go on
+  return summary.arcs.some(arc => {
+    const end = arc.from + arc.len - 1;
+    return (nowMins >= arc.from && nowMins <= end) ||
+           (end >= 1440 && nowMins + 1440 <= end);      // arc running past midnight
+  });
+}
+
+// THE SAME QUESTION, AND THE THIRD ANSWER IT IS ALLOWED TO GIVE.
+// true = running, false = definitely not, **null = we do not know**. Greying
+// a route out is telling a rider not to wait for it, so it may only ever be
+// done on the first two. isRunningNow() falls back to the "N means night bus"
+// naming convention when there is no timetable; that guess is fine for
+// ranking a list and nowhere near good enough to cross a route off.
+function routeServiceNow(context) {
+  const info = serviceInfoFor(context);
+  const today = info ? patternsForToday(info.freq) : { masks: [], state: 'noData' };
+  if (today.state === 'closed' || today.state === 'closedPh') return false;
+  const summary = today.masks.length ? svcSummary(info.freq, today.masks) : null;
+  return svcArcsCoverNow(summary, minutesNow());
+}
+
 function isRunningNow(routeKey) {
   const nowMins = minutesNow();
   const info = serviceInfo.get(routeKey);
@@ -4203,13 +4263,7 @@ function isRunningNow(routeKey) {
   if (today.state === 'closed' || today.state === 'closedPh') return false;
   const summary = today.masks.length ? svcSummary(info.freq, today.masks) : null;
 
-  if (summary && summary.arcs.length) {
-    return summary.arcs.some(arc => {
-      const end = arc.from + arc.len - 1;
-      return (nowMins >= arc.from && nowMins <= end) ||
-             (end >= 1440 && nowMins + 1440 <= end);   // arc running past midnight
-    });
-  }
+  if (summary && summary.arcs.length) return svcArcsCoverNow(summary, nowMins);
 
   // No readable timetable — fall back to the naming convention.
   const routeNo = routeKey.split('|')[0].toUpperCase();
@@ -7801,17 +7855,26 @@ function showDirections(routeNo, variants, company) {
 
   let choices = [];                      // { from, to, note, go }
   let extras  = [];
+  // Known to be outside its hours? Then say so HERE, before the rider picks
+  // a direction and waits for twenty-four stops to come back empty. null is
+  // "no timetable" and is left alone — see routeServiceNow.
+  const off = ctx => routeServiceNow(ctx) === false;
   if (company === 'CITYBUS') {
     const route = variants[0];
     for (const direction of ['outbound', 'inbound']) {
       const from = direction === 'outbound' ? endName(route, 'orig') : endName(route, 'dest');
       const to   = direction === 'outbound' ? endName(route, 'dest') : endName(route, 'orig');
-      choices.push({ from, to, note: null, go: () => showCtbRoute(route, direction, from, to) });
+      choices.push({ from, to, note: null,
+        off: off({ routeNo, dir: direction === 'outbound' ? 'O' : 'I', serviceType: '1', co: 'ctb' }),
+        go: () => showCtbRoute(route, direction, from, to) });
     }
   } else {
     const { main, special } = kmbDirections(variants);
-    choices = main.map(r => ({ from: endName(r, 'orig'), to: endName(r, 'dest'), note: null, go: () => showKmbRoute(r) }));
-    extras  = special.map(r => ({ from: endName(r, 'orig'), to: endName(r, 'dest'), note: T('special'), go: () => showKmbRoute(r) }));
+    const asCtx = r => ({ routeNo, dir: r.bound, serviceType: r.service_type, co: 'kmb' });
+    choices = main.map(r => ({ from: endName(r, 'orig'), to: endName(r, 'dest'), note: null,
+                               off: off(asCtx(r)), go: () => showKmbRoute(r) }));
+    extras  = special.map(r => ({ from: endName(r, 'orig'), to: endName(r, 'dest'), note: T('special'),
+                                  off: off(asCtx(r)), go: () => showKmbRoute(r) }));
   }
 
   // TAKING OVER THE PANEL IS THIS FUNCTION'S JOB, not the caller's.
@@ -7826,8 +7889,9 @@ function showDirections(routeNo, variants, company) {
   const sheet = document.getElementById('dirsheet');
   const card  = document.getElementById('dircard');
   const button = (c, i, cls) =>
-    '<button class="dirbtn' + (cls || '') + '" data-dir="' + i + '">' +
-    '<b>' + T('towards') + ' <i>' + esc(c.to) + '</i></b>' +
+    '<button class="dirbtn' + (cls || '') + (c.off ? ' diroff' : '') + '" data-dir="' + i + '">' +
+    '<b>' + T('towards') + ' <i>' + esc(c.to) + '</i>' +
+    (c.off ? ' <span class="dirofftag">' + esc(T('rsOffTag')) + '</span>' : '') + '</b>' +
     '<small>' + T('from') + ' ' + esc(c.from) + (c.note ? ' · <span class="dirnote">⚠ ' + esc(c.note) + '</span>' : '') + '</small></button>';
   const all = choices.concat(extras);
   card.innerHTML = '<div class="dirhead"><b>' + esc(routeNo) + '</b><span>' + T('dirTitle') + '</span></div>' +
@@ -11376,7 +11440,10 @@ function clearRouteStops() {
     navigator.geolocation.clearWatch(routeStopsState.watchId);
   routeStopsState = null;
   const box = document.getElementById('routestops');
-  if (box) box.innerHTML = '';
+  // The "nothing running" class lives on the BOX, which outlives the list
+  // inside it. Emptying innerHTML left it behind, so the next route opened
+  // already greyed out — including routes the timetable says are running.
+  if (box) { box.classList.remove('rsoff'); delete box.dataset.offReason; box.innerHTML = ''; }
 }
 
 // The timetable row for the route on screen. serviceInfo is keyed
@@ -11497,7 +11564,8 @@ function renderRouteStops(context, stops) {
 
   setTimeout(refreshAlerts, 0);           // the route on screen is now watched
   routeStopsState = { context, stops, boardAt: null, alightAt: null, autoBoard: false,
-                      watchId: null, observer: null, inFlight: 0, queue: [] };
+                      watchId: null, observer: null, inFlight: 0, queue: [],
+                      etaAsked: 0, etaWithBus: 0, serviceNow: null };
 
   const head = document.createElement('div');
   head.className = 'rshead';
@@ -11547,6 +11615,18 @@ function renderRouteStops(context, stops) {
 
   const info = routeInfoBlock(context);
   if (info) box.appendChild(info);
+
+  // ONE LINE INSTEAD OF TWENTY-FOUR.
+  // Only ever drawn on something known: routeServiceNow() answers null when
+  // there is no timetable, and null must not grey a route out.
+  const offNote = document.createElement('div');
+  offNote.className = 'rsoffnote';
+  offNote.id = 'rsoffnote';
+  offNote.style.display = 'none';
+  box.appendChild(offNote);
+  const serving = routeServiceNow(context);
+  routeStopsState.serviceNow = serving;
+  if (serving === false) markRouteOff(T('rsNoService'), 'closed');
 
   // CITYBUS FARES AND HOURS ARRIVE LATE, ON PURPOSE.
   // They live in hk-bus-lite.json, which at 487 KB over the wire is the
@@ -11601,6 +11681,11 @@ function renderRouteStops(context, stops) {
     eta.className = 'rseta quiet';
     eta.textContent = T('rsCheckingEta');
     pick.appendChild(name); pick.appendChild(note); pick.appendChild(eta);
+    // Filled only for the stop chosen as the boarding one — see
+    // paintStopCounts. Outside the <button>, because a link inside a button
+    // is not something a phone can be relied on to open.
+    const go = document.createElement('div');
+    go.className = 'rsgocell';
 
     // First tap: where you get on. A later stop: where you get off. Tapping a
     // mark again clears it; tapping an earlier stop moves the boarding mark.
@@ -11673,8 +11758,10 @@ function renderRouteStops(context, stops) {
     }
 
     row.appendChild(num); row.appendChild(pick); row.appendChild(star);
+    row.appendChild(go);
     row.etaCell = eta;
     row.noteCell = note;
+    row.goCell = go;
     box.appendChild(row);
   });
 
@@ -11733,6 +11820,25 @@ function paintStopCounts() {
     const note = row.noteCell;
     note.className = '';
     note.textContent = '';
+    // THE WALK THERE, ON THE STOP YOU JUST PICKED.
+    // It lived only on the ➤ beside the route-number box, which lights up
+    // after 📍 finds the nearest stop — so a rider who chose their stop from
+    // the list by hand never got one. Drawn on the boarding stop only: you
+    // do not walk to the stop you get OFF at, you arrive there on the bus.
+    if (row.goCell) row.goCell.textContent = '';
+    if (board !== null && index === board && row.goCell) {
+      const stop = routeStopsState.stops[index];
+      const lat = Number(stop && stop.lat), lng = Number(stop && stop.long);
+      if (isFinite(lat) && isFinite(lng)) {
+        const link = document.createElement('a');
+        link.className = 'rsgo';
+        link.href = walkUrl(lat, lng);
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = T('sdWalkHere');
+        row.goCell.appendChild(link);
+      }
+    }
     if (board === null) continue;
 
     if (index === board) {
@@ -11757,6 +11863,54 @@ function paintStopCounts() {
     // mattered, and it pushed the name and the times apart for no gain.
   }
   paintRideBanner();
+}
+
+// Grey the whole list and say why. `reason` ranks the two messages: the
+// timetable's 「現時沒有服務」 is a fact about the route and outranks the
+// observed 「已查的車站全部沒有班次」, which is only a fact about right now.
+// Without the rank the weaker one arrived a moment later and overwrote it.
+function markRouteOff(text, reason) {
+  const box = document.getElementById('routestops');
+  const note = document.getElementById('rsoffnote');
+  if (!box || !note) return;
+  if (box.dataset.offReason === 'closed' && reason !== 'closed') return;
+  box.dataset.offReason = reason || 'quiet';
+  box.classList.add('rsoff');
+  note.textContent = text;
+  note.style.display = 'block';
+}
+
+// A BUS ON THE SCREEN OUTRANKS ANYTHING SAID ABOUT THE SCREEN.
+// Stops answer one at a time, so "nothing is due anywhere" can be true of the
+// first six and wrong by the tenth — and the timetable itself is sometimes
+// contradicted by a bus that is actually coming. Whichever put the notice
+// there, an arrival takes it away: a real countdown is the better evidence.
+function clearRouteOff() {
+  const box = document.getElementById('routestops');
+  const note = document.getElementById('rsoffnote');
+  if (box) { box.classList.remove('rsoff'); delete box.dataset.offReason; }
+  if (note) { note.textContent = ''; note.style.display = 'none'; }
+}
+
+// WHAT THE APP CAN SAY WHEN IT HAS NO TIMETABLE.
+// 914X has no freq entry in any bundled file, so routeServiceNow() answers
+// null and the route may not be crossed off on a schedule it has never seen.
+// But "every stop I asked came back with nothing" is an OBSERVATION, not a
+// claim about the timetable, and at midnight it is the whole answer. Six is
+// the number of rows the list loads without being scrolled, so the test can
+// actually be reached; the wording says "checked", because that is what was.
+const RS_QUIET_MIN_STOPS = 6;
+
+function noteRouteQuiet() {
+  const st = routeStopsState;
+  if (!st || st.etaWithBus > 0) return;
+  // The timetable says this route IS running now. KMB only publishes about
+  // an hour ahead, so an empty feed at 06:10 on a half-hourly route means a
+  // wait, not a closure — and greying the route out would talk somebody out
+  // of a bus that is genuinely coming. The empty cells already say enough.
+  if (st.serviceNow === true) return;
+  if (st.etaAsked < RS_QUIET_MIN_STOPS) return;
+  markRouteOff(T('rsAllQuiet'), 'quiet');
 }
 
 const RS_AUTO_BOARD_M = 250;    // "standing at the stop", give or take a road
@@ -11897,7 +12051,15 @@ function watchForVisibleRows() {
 
 async function loadStopEta(row) {
   if (!routeStopsState) return;
-  const { context, stops } = routeStopsState;
+  // WHOSE ROUTE THIS ANSWER BELONGS TO.
+  // Every check below used to be `if (!routeStopsState) return`, which only
+  // catches the list being CLOSED. Open route A, open route B a second later,
+  // and A's replies were still arriving — landing in B's cells and counting
+  // towards B's "nothing is running anywhere", which greyed out a route that
+  // was running perfectly well. The state object is the identity: if it has
+  // been replaced, this answer is about a screen that no longer exists.
+  const mine = routeStopsState;
+  const { context, stops } = mine;
   const stop = stops[Number(row.dataset.index)];
   const cell = row.etaCell;
   if (!stop || !cell) return;
@@ -11918,17 +12080,23 @@ async function loadStopEta(row) {
       minutes = etaMinutes(rows, context.dir, context.serviceType);
     }
 
-    if (!routeStopsState) return;                 // list closed while waiting
+    if (routeStopsState !== mine) return;          // closed, or another route
+    mine.etaAsked++;
     if (minutes.length === 0) {
       cell.className = 'rseta quiet';
       cell.textContent = T('rsNoEta');
+      noteRouteQuiet();
       return;
     }
+    mine.etaWithBus++;
+    clearRouteOff();
     cell.className = 'rseta';
     cell.textContent = minutes.slice(0, 3)
       .map(m => (m <= 0 ? T('due') : m + T('min'))).join(' · ');
   } catch (error) {
-    if (!routeStopsState) return;
+    if (routeStopsState !== mine) return;
+    // A failed request is not an absent bus, so it is NOT counted towards
+    // "nothing is running" — that would turn a flaky signal into a claim.
     cell.className = 'rseta quiet';
     cell.textContent = T('rsEtaFailed');
   }
