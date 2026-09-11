@@ -260,6 +260,7 @@
   .cotag.nlb { background:#dcfce7; color:var(--green); }
   .cotag.gmb { background:#f3e8ff; color:#6b21a8; }
   .cotag.mtr { background:var(--red-tint); color:var(--red); }
+  .cotag.lrt { background:#fef3c7; color:#854d0e; }
 
   /* BOTTOM BAR — map, bus, train, favourites, settings.
      It sits at the foot of the screen, under the thumb, which is the half of
@@ -1828,7 +1829,11 @@ const TEXT = {
     mtrNearby:'Nearest stations', mtrNoneNear:'No MTR station within 1.5 km. Type a station name instead.',
     lrtTitle:'Light Rail', lrtNearby:'Light Rail stops near you',
     lrtPlatform:'Platform {n}', lrtNoTrains:'No trains listed right now.',
-    lrtBack:'Choose another stop', lrtLoading:'Checking the Light Rail\u2026',
+    lrtBack:'Choose another stop', lrtBackTo:'Back to {s}', lrtLoading:'Checking the Light Rail\u2026',
+    lrtRoute:'Light Rail {n}', railChangeHere:'Change railway here',
+    lrtCheckBoard:'Read the platform board for the next {n}',
+    lrtOutDir:'Leave the platform and walk {d}',
+    railFareSplit:'\u2139 MTR does not publish one price for Light Rail and train together, so no total is shown. Each part shows its own fare.',
     mtrSearchPh:'Type a station name…', mtrSaved:'Your saved stations', mtrChange:'Change',
     mtrLineStrip:'Tap or slide a station to stand there', mtrNextStops:'Stations ahead — tap one for the arrival time',
     mtrAway:'about {m} m away', mtrNearestTag:'nearest station',
@@ -1890,9 +1895,12 @@ const TEXT = {
     boardHereShort:'Board right here', stepWalk:'Walk {m} min ({d} m)',
     stepTo:'to', stepArrive:'and you are at',
     changeBusPlain:'Change buses here', changeTrainPlain:'Change lines here',
+    changeToTrain:'Change to the train here', changeToLrt:'Change to the Light Rail here',
 
     totalBuses:'buses to take', totalTrains:'trains to take',
     totalBus1:'bus to take', totalTrain1:'train to take',
+    totalLrts:'Light Rail rides', totalLrt1:'Light Rail ride',
+    totalRails:'rail rides', totalRail1:'rail ride',
     boardHere:'✓ Board right here at', walkTo:'🚶 Walk', minTo:'min to',
     rideTo:'Ride to', stops:'stops', stations:'stations', changeBus:'↓ CHANGE BUS',
     changeTrain:'↓ CHANGE TRAIN', trainsFrequent:'Trains every few minutes', here:'here',
@@ -2010,6 +2018,7 @@ const TEXT = {
     dirTitle:'Which way?', dirMore:'{n} special / peak-hour services ▾', dirLess:'Hide special services ▴', cancel:'Cancel',
     mustChange:'⚠ You must change bus once.',
     mustChangeTrain:'⚠ You must change line once, inside the station.',
+    mustChangeRail:'⚠ You change between the Light Rail and the train — a short walk outside.',
     lotsWalking:'⚠ About {n} minutes of walking in total. Check the other options if that is too much.',
     easiestYourStop:'EASIEST FROM YOUR STOP', gentlest:'GENTLEST', fastest:'FASTEST',
     leastWalking:'LEAST WALKING', boardAt:'Board at', leastEffort:'— least walking and changing',
@@ -2057,6 +2066,7 @@ const TEXT = {
     boardHereRail:'TAKE THE {route} HERE', alightHereRail:'GET OFF AT THIS STATION',
     checkPlatform:'Follow the signs inside the station to this exit.',
     checkGates:'Once inside, follow the signs to the platform.',
+    checkLrtPlatform:'Light Rail platforms are in the road. Check the platform number, and the route number on the front of the train.',
     // Spelt out, because "walk W" is a compass badge, not a sentence.
     wayN:'north', wayNE:'north-east', wayE:'east', waySE:'south-east',
     wayS:'south', waySW:'south-west', wayW:'west', wayNW:'north-west',
@@ -2111,7 +2121,11 @@ const TEXT = {
     mtrNearby:'最近的車站', mtrNoneNear:'1.5 公里內沒有港鐵站，請輸入車站名稱。',
     lrtTitle:'輕鐵', lrtNearby:'附近輕鐵站',
     lrtPlatform:'{n} 號月台', lrtNoTrains:'現時沒有班次資料。',
-    lrtBack:'選擇其他車站', lrtLoading:'正在查詢輕鐵…',
+    lrtBack:'選擇其他車站', lrtBackTo:'返回 {s}', lrtLoading:'正在查詢輕鐵…',
+    lrtRoute:'輕鐵 {n}', railChangeHere:'在此轉乘另一鐵路',
+    lrtCheckBoard:'請看月台顯示屏的下班 {n}',
+    lrtOutDir:'落車後往{d}行',
+    railFareSplit:'ℹ 港鐵沒有公佈輕鐵連港鐵的合併車費，所以不顯示總數。每程分別顯示該程車費。',
     mtrSearchPh:'輸入車站名稱…', mtrSaved:'你收藏的車站', mtrChange:'更改',
     mtrLineStrip:'按一下或滑動車站即可換站', mtrNextStops:'沿途車站 — 按一下計算到達時間',
     mtrAway:'距離約 {m} 米', mtrNearestTag:'最近車站',
@@ -2168,9 +2182,12 @@ const TEXT = {
     boardHereShort:'就在此處上車', stepWalk:'步行 {m} 分鐘（約 {d} 米）',
     stepTo:'至', stepArrive:'即到達',
     changeBusPlain:'在此轉乘巴士', changeTrainPlain:'在此轉綫',
+    changeToTrain:'在此轉乘港鐵列車', changeToLrt:'在此轉乘輕鐵',
 
     totalBuses:'程巴士', totalTrains:'程港鐵',
     totalBus1:'程巴士', totalTrain1:'程港鐵',
+    totalLrts:'程輕鐵', totalLrt1:'程輕鐵',
+    totalRails:'程鐵路', totalRail1:'程鐵路',
     boardHere:'✓ 就在此處上車：', walkTo:'🚶 步行', minTo:'分鐘至',
     rideTo:'乘搭至', stops:'個站', stations:'個站', changeBus:'↓ 轉乘巴士',
     changeTrain:'↓ 轉綫', trainsFrequent:'港鐵班次頻密，數分鐘一班', here:'於此處',
@@ -2285,6 +2302,7 @@ const TEXT = {
     dirTitle:'去邊個方向？', dirMore:'另有 {n} 條特別 / 繁忙時間班次 ▾', dirLess:'收起特別班次 ▴', cancel:'取消',
     mustChange:'⚠ 需轉乘一次巴士。',
     mustChangeTrain:'⚠ 需於站內轉綫一次。',
+    mustChangeRail:'⚠ 需由輕鐵轉乘港鐵列車，要在站外步行一小段。',
     lotsWalking:'⚠ 全程約需步行 {n} 分鐘。如太多，請考慮其他選擇。',
     easiestYourStop:'由你的車站出發（最輕鬆）', gentlest:'最輕鬆', fastest:'最快',
     leastWalking:'最少步行', boardAt:'上車站：', leastEffort:'— 最少步行及轉乘',
@@ -2330,6 +2348,7 @@ const TEXT = {
     boardHereRail:'在此乘搭{route}', alightHereRail:'在此站落車',
     checkPlatform:'請跟車站內的指示牌前往該出口。',
     checkGates:'入閘後請跟指示牌前往月台。',
+    checkLrtPlatform:'輕鐵月台在馬路中間。請看清楚月台號碼，以及車頭的路線號碼。',
     wayN:'往北', wayNE:'往東北', wayE:'往東', waySE:'往東南',
     wayS:'往南', waySW:'往西南', wayW:'往西', wayNW:'往西北',
     towards:'開往', thenWalkTo:'然後步行前往',
@@ -2658,6 +2677,7 @@ loadOnce('kmb-stops', 'https://data.etabus.gov.hk/v1/transport/kmb/stop',
   data => {
     allStops = data;                 // this REPLACES the array...
     addStationsToSearch();           // ...so the stations have to go back in
+    addLrtStopsToSearch();           // ...and the Light Rail stops with them
     drawStops();
     // Not 「放大地圖可見巴士站」 any more: there is no map on this screen to
     // zoom, and the dots it spoke of were switched off when the map tab
@@ -3259,7 +3279,12 @@ let updateAsked   = false;  // did the rider ask for the new version?
 // rejection and the stations simply never appeared — no message, no clue.
 const MTR_URL = 'mtr.json';
 let mtrData = null;        // { lines, stations, fares, lineNames }
-let railGraph = null;      // station code -> [{ to, line, minutes }]
+let railGraph = null;      // node -> [{ to, line, minutes }] — trains AND Light Rail
+// Up here for the same reason mtrData is: loadMtr() reads this on its very
+// first line, and the startup call to it happens hundreds of lines above the
+// rail section. A `let` declared down there is still in its dead zone when
+// that call runs, and the whole load throws before it starts.
+let mtrLoading = null;     // the in-flight download, shared by every caller
 
 // Same rule again: askAboutLocation() runs at start-up, so anything it reads
 // must be declared before then. This one was especially sneaky — geoChoice()
@@ -4312,6 +4337,7 @@ function fareForLeg(routeNo, bound, serviceType, boardStopId, co) {
   // Trains are priced per station pair, not per boarding stop, and MTR
   // publishes every pair exactly. No estimating needed here.
   if (company === 'mtr') return null;   // handled by journeyFare, which sees both ends
+  if (company === 'lrt') return null;   // same — the Light Rail is priced stop pair to stop pair
 
   // FIRST the small local fare file. The route index already knows this
   // stop's position along the route, which is all stopFare() needs — and
@@ -4401,8 +4427,22 @@ function stopFare(routeNo, bound, serviceType, seq, co) {
 // way we do for buses would overcharge every interchange, so rail is priced
 // once, end to end.
 function journeyFare(journey) {
-  if (journey.legs.length > 0 && journey.legs.every(leg => leg.co === 'mtr'))
-    return railFare(journey.legs[0].on.stop, journey.legs[journey.legs.length - 1].off.stop);
+  const legs = journey.legs;
+  if (legs.length === 0) return null;
+
+  if (legs.every(leg => leg.co === 'mtr'))
+    return railFare(legs[0].on.stop, legs[legs.length - 1].off.stop);
+
+  if (legs.every(leg => leg.co === 'lrt'))
+    return lrtFare(legs[0].on.stop, legs[legs.length - 1].off.stop);
+
+  // BOTH RAILWAYS, AND NO PRICE WE CAN PROVE.
+  // MTR publishes a Light Rail fare table and a train fare table and no
+  // combined one — checked, both files, every pair. What is actually charged
+  // at 屯門 or 元朗 when you change may well be less than the two added
+  // together, so adding them would be inventing a number. The total stays
+  // blank and each railway shows its own published fare on its own step.
+  if (legs.some(leg => leg.co === 'lrt')) return null;
 
   const fares = journey.legs.map(leg =>
     fareForLeg(leg.route, leg.bound, leg.serviceType, leg.on.stop, leg.co));
@@ -4540,13 +4580,81 @@ const RAIL_CHANGE_MIN = 4;      // walking between platforms and waiting again
 const RAIL_FIRST_HOUR = 6;      // first trains are around 05:50-06:00 network-wide
 const RAIL_LAST_HOUR  = 1;      // last trains are around 00:30-01:00
 
+// THE LIGHT RAIL IS PART OF THE SAME NETWORK.
+// Its stops are nodes in the same graph as the stations, joined to them by
+// WALK links wherever a Light Rail stop stands at a heavy-rail station —
+// 屯門, 兆康, 元朗, 天水圍 and the short walks around 朗屏. One search then
+// plans 天逸 → 尖沙咀 without anybody having to know where one railway ends
+// and the other begins.
+const LR_NODE   = 'LR:';        // node id prefix — never collides with a 3-letter station code
+const LR_LINE   = 'LR:';        // line code prefix, e.g. LR:505
+const RAIL_WALK = 'WALK';       // a pseudo-line: this step is on your feet
+const RAIL_LINK_M = 400;        // a Light Rail stop this close to a station is that station's stop
+const LRT_CHANGE_MIN = 5;       // Light Rail headways are longer than the trains'
+const RAIL_ALT_MAX_MIN = 15;    // how much worse a second option may be and still be worth a tap
+
+// HOW LONG A LIGHT RAIL RIDE TAKES — an estimate, and said to be one.
+// The heavy-rail times above are distance ÷ line speed because MTR publishes
+// no station-to-station timetable; the Light Rail has none either, and it is
+// harder still: it runs in the street, waits at traffic lights, and its track
+// winds far more than the straight line between two stops.
+//
+// So this figure is deliberately NOT the ~20 km/h the vehicles average on
+// track. It is 14 km/h measured against the STRAIGHT LINE between stops,
+// which is what this app can compute. That reproduces roughly 50 minutes for
+// the 610's full run and 21 minutes for the 505's, and it errs long rather
+// than short — telling somebody a trip is quicker than it is, is the half of
+// the error that makes them miss something.
+const LRT_SPEED = 14;
+
+function isLrtNode(id)   { return typeof id === 'string' && id.slice(0, 3) === LR_NODE; }
+function isLrtLine(code) { return typeof code === 'string' && code.slice(0, 3) === LR_LINE; }
+function lrtIdOf(node)   { return String(node).slice(LR_NODE.length); }
+
+// Where a node sits, whichever railway it belongs to.
+function railNodePos(id) {
+  if (isLrtNode(id)) {
+    const row = lrtData && lrtData.stops[lrtIdOf(id)];
+    return row ? [row[2], row[3]] : null;
+  }
+  const s = mtrData && mtrData.stations[id];
+  return s ? [s[2], s[3]] : null;
+}
+
+// ONE DOWNLOAD, HOWEVER MANY PARTS OF THE APP ASK FOR IT.
+// Six places call this — the startup line, the planner, the 港鐵 tab, the
+// map — and "if (mtrData) return" only stops the ones that arrive after the
+// file has finished downloading. Everybody who asks while it is still on the
+// way used to start their own copy: measured at NINE fetches of mtr.json on
+// one cold load, which on a phone is nine times 72 KB of somebody's data.
+// They share the one promise now, the same way the NLB route list does.
+// mtrLoading itself is declared beside mtrData near the top of the file —
+// the startup call reads it long before this line is reached.
 async function loadMtr() {
   if (mtrData) return;
+  if (mtrLoading) return mtrLoading;
+  mtrLoading = loadMtrOnce();
+  try { return await mtrLoading; } finally { mtrLoading = null; }
+}
+
+async function loadMtrOnce() {
   try {
     const response = await fetch(MTR_URL, { signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw new Error('server said ' + response.status);
     mtrData = await response.json();
     buildRailGraph();
+
+    // THE LIGHT RAIL COMES WITH THE TRAINS NOW.
+    // It used to be fetched only when the 港鐵 tab opened, on the grounds
+    // that a rider in Sha Tin should not pay for 37 KB about Tuen Mun. That
+    // stopped being right the moment the two railways became one network: a
+    // journey to 天逸 cannot be planned from a file nobody has downloaded.
+    // It is 37 KB against the 2 MB of bus data already on its way, it is
+    // kept for a week, and the graph is rebuilt the moment it lands so the
+    // trains never wait for it.
+    loadLrt()
+      .then(() => { buildRailGraph(); addLrtStopsToSearch(); })
+      .catch(error => console.warn('Light Rail unavailable:', error.message));
 
     // Stations join the searchable places. Without this you cannot type
     // "Kowloon Tong" or "九龍塘" and get the station, which makes an MTR
@@ -4565,7 +4673,10 @@ async function loadMtr() {
 // treat them as just another place. The MTR: prefix keeps their ids from ever
 // colliding with a bus stop id.
 function addStationsToSearch() {
-  if (!mtrData || allStops.some(s => s.isStation)) return;
+  // Tested for MTR stations specifically, not for "any station": the Light
+  // Rail stops below also carry isStation, and if they ever landed first a
+  // looser test would silently leave every train station out of the search.
+  if (!mtrData || allStops.some(s => s.isStation && !s.isLrtStop)) return;
   const label = lang === 'zh' ? ' 站' : ' Station';
   for (const [code, s] of Object.entries(mtrData.stations)) {
     allStops.push({
@@ -4576,60 +4687,186 @@ function addStationsToSearch() {
   }
 }
 
+// And the Light Rail stops, for exactly the same reason. Somebody going to
+// 天逸 could not type it: it was not a station, not a bus stop and not an
+// attraction, so the only place in the whole app it existed was a list you
+// had to be standing in Tin Shui Wai to see. They carry 輕鐵 / Light Rail in
+// the name because 元朗 is a station AND a stop, and the rider choosing
+// between them in a list deserves to be told which is which.
+function addLrtStopsToSearch() {
+  if (!lrtData || allStops.some(s => s.isLrtStop)) return;
+  for (const [id, row] of Object.entries(lrtData.stops)) {
+    allStops.push({
+      stop: 'LRT:' + id, isStation: true, isLrtStop: true,
+      name_en: row[0] + ' (Light Rail)',
+      name_tc: (row[1] || row[0]) + '站（輕鐵）',
+      lat: row[2], long: row[3]
+    });
+  }
+}
+
 function buildRailGraph() {
   railGraph = new Map();
-  const join = (a, b, line) => {
-    const A = mtrData.stations[a], B = mtrData.stations[b];
-    if (!A || !B) return;
-    const km = metresBetween(A[2], A[3], B[2], B[3]) / 1000;
-    const minutes = (km / (RAIL_SPEED[line] || 33)) * 60;
+  if (!mtrData) return;
+
+  const link = (a, b, line, minutes, extra) => {
     if (!railGraph.has(a)) railGraph.set(a, []);
-    railGraph.get(a).push({ to: b, line, minutes });
+    railGraph.get(a).push(Object.assign({ to: b, line, minutes }, extra || null));
   };
+  // One direction, the way the service actually runs.
+  const ride = (a, b, line, speed, via) => {
+    const A = railNodePos(a), B = railNodePos(b);
+    if (!A || !B) return;
+    const km = metresBetween(A[0], A[1], B[0], B[1]) / 1000;
+    link(a, b, line, (km / speed) * 60, via ? { via } : null);
+  };
+
   // Every branch matters: Lok Ma Chau and LOHAS Park live only on one variant,
-  // and taking just the longest one strands them.
+  // and taking just the longest one strands them. Heavy-rail lines are listed
+  // once and run both ways, so both ways are added here.
   for (const [line, variants] of Object.entries(mtrData.lines))
     for (const stops of variants)
       for (let i = 0; i < stops.length - 1; i++) {
-        join(stops[i], stops[i + 1], line);
-        join(stops[i + 1], stops[i], line);
+        ride(stops[i], stops[i + 1], line, RAIL_SPEED[line] || 33);
+        ride(stops[i + 1], stops[i], line, RAIL_SPEED[line] || 33);
       }
-}
 
-// Cheapest path by time, counting a change of line as four extra minutes.
-// The state is (station, line you arrived on), so staying put costs nothing
-// and changing costs the penalty exactly once.
-function railRoute(from, to) {
-  if (!railGraph || from === to) return null;
+  if (!lrtData) return;    // the trains still work on their own
 
-  const best = new Map([[from + '|', { cost: 0, path: [{ station: from, line: null }] }]]);
-  const settled = new Set();
+  // THE LIGHT RAIL, one edge per hop the service really makes.
+  // NOT mirrored the way the heavy rail is: lrt.json lists each route's two
+  // directions separately because several of them are not mirror images —
+  // the 705 and 706 are the two halves of a loop, and a rider cannot ride
+  // either of them backwards. Adding the reverse would invent a service.
+  for (const [key, stops] of Object.entries(lrtData.routes)) {
+    const line = LR_LINE + key.split('|')[0];
+    for (let i = 0; i < stops.length - 1; i++)
+      ride(LR_NODE + stops[i], LR_NODE + stops[i + 1], line, LRT_SPEED, key);
+  }
 
-  for (;;) {
-    let key = null, here = null;
-    for (const [k, v] of best)
-      if (!settled.has(k) && (!here || v.cost < here.cost)) { key = k; here = v; }
-    if (!key) return null;
-    settled.add(key);
-
-    const [station, line] = key.split('|');
-    if (station === to) return here;
-
-    for (const edge of (railGraph.get(station) || [])) {
-      const cost = here.cost + edge.minutes + (line && line !== edge.line ? RAIL_CHANGE_MIN : 0);
-      const next = edge.to + '|' + edge.line;
-      if (!best.has(next) || cost < best.get(next).cost)
-        best.set(next, { cost, path: here.path.concat([{ station: edge.to, line: edge.line }]) });
+  // WHERE THE TWO RAILWAYS TOUCH.
+  // Worked out from the positions rather than from a list typed in here: a
+  // hand-written list of interchanges is a thing that goes stale silently,
+  // and the distance is checkable. Both directions, because an interchange
+  // is a place you can walk through either way.
+  for (const id of Object.keys(lrtData.stops)) {
+    const row = lrtData.stops[id];
+    for (const code of Object.keys(mtrData.stations)) {
+      const s = mtrData.stations[code];
+      const metres = metresBetween(row[2], row[3], s[2], s[3]);
+      if (metres > RAIL_LINK_M) continue;
+      const minutes = walkingEstimate(metres).minutes;
+      link(LR_NODE + id, code, RAIL_WALK, minutes, { metres });
+      link(code, LR_NODE + id, RAIL_WALK, minutes, { metres });
     }
   }
 }
 
-// A station in the same shape as a bus stop, so the cards and the map can
-// draw it without knowing it is a station at all.
-function railStop(code) {
-  const s = mtrData && mtrData.stations[code];
+// ONE SEARCH FROM ONE STARTING POINT, settling the whole network.
+// The state is (node, line you arrived on), so staying on a train costs
+// nothing and changing costs the wait exactly once — four minutes for a
+// train, five for the Light Rail, whose trains are further apart.
+//
+// Two things changed when the Light Rail went in and the graph grew: the
+// queue is a heap rather than a scan of every unsettled state, and each
+// state remembers the state it came from rather than a copy of the whole
+// path so far. The old shape was fine for 97 stations and would not have
+// been for 165 nodes searched eight times per journey.
+function railSearch(from) {
+  if (!railGraph) return null;
+
+  const best = new Map();
+  const heap = [];                       // { cost, key }, smallest cost on top
+  const push = entry => {
+    heap.push(entry);
+    let i = heap.length - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (heap[parent].cost <= heap[i].cost) break;
+      [heap[parent], heap[i]] = [heap[i], heap[parent]];
+      i = parent;
+    }
+  };
+  const pop = () => {
+    const top = heap[0], last = heap.pop();
+    if (heap.length) {
+      heap[0] = last;
+      let i = 0;
+      for (;;) {
+        const l = i * 2 + 1, r = l + 1;
+        let small = i;
+        if (l < heap.length && heap[l].cost < heap[small].cost) small = l;
+        if (r < heap.length && heap[r].cost < heap[small].cost) small = r;
+        if (small === i) break;
+        [heap[small], heap[i]] = [heap[i], heap[small]];
+        i = small;
+      }
+    }
+    return top;
+  };
+
+  const startKey = from + '|';
+  best.set(startKey, { cost: 0, prev: null, node: from, line: null, edge: null });
+  push({ cost: 0, key: startKey });
+
+  const settled = new Set();
+  while (heap.length) {
+    const { key } = pop();
+    if (settled.has(key)) continue;
+    settled.add(key);
+    const here = best.get(key);
+
+    for (const edge of (railGraph.get(here.node) || [])) {
+      // Walking from a station to a stop to another station is not an
+      // interchange, it is wandering. One walk at a time.
+      if (here.line === RAIL_WALK && edge.line === RAIL_WALK) continue;
+      const boarding = edge.line !== RAIL_WALK && here.line && here.line !== edge.line;
+      const cost = here.cost + edge.minutes +
+                   (boarding ? (isLrtLine(edge.line) ? LRT_CHANGE_MIN : RAIL_CHANGE_MIN) : 0);
+      const nextKey = edge.to + '|' + edge.line;
+      const seen = best.get(nextKey);
+      if (seen && seen.cost <= cost) continue;
+      best.set(nextKey, { cost, prev: key, node: edge.to, line: edge.line, edge });
+      push({ cost, key: nextKey });
+    }
+  }
+  return best;
+}
+
+// The cheapest way to be standing at `to`, read back out of a finished search.
+function railPathTo(best, to) {
+  if (!best) return null;
+  let bestKey = null, bestCost = Infinity;
+  for (const [key, state] of best)
+    if (state.node === to && state.cost < bestCost) { bestCost = state.cost; bestKey = key; }
+  if (bestKey === null) return null;
+
+  const path = [];
+  for (let key = bestKey; key !== null; key = best.get(key).prev) {
+    const state = best.get(key);
+    path.push({ station: state.node, line: state.line, edge: state.edge });
+  }
+  path.reverse();
+  return { cost: bestCost, path };
+}
+
+function railRoute(from, to) {
+  if (!railGraph || from === to) return null;
+  return railPathTo(railSearch(from), to);
+}
+
+// A station — or a Light Rail stop — in the same shape as a bus stop, so the
+// cards and the map can draw it without knowing what it is.
+function railStop(id) {
+  if (isLrtNode(id)) {
+    const row = lrtData && lrtData.stops[lrtIdOf(id)];
+    if (!row) return null;
+    return { stop: id, name_en: row[0], name_tc: row[1] || row[0],
+             lat: row[2], long: row[3], lrt: true };
+  }
+  const s = mtrData && mtrData.stations[id];
   if (!s) return null;
-  return { stop: code, name_en: s[0], name_tc: s[1], lat: s[2], long: s[3] };
+  return { stop: id, name_en: s[0], name_tc: s[1], lat: s[2], long: s[3] };
 }
 
 // ============================================================
@@ -4666,6 +4903,35 @@ async function loadLrt() {
 function lrtName(id) {
   const row = lrtData && lrtData.stops[id];
   return row ? (lang === 'zh' ? row[1] : row[0]) : id;
+}
+
+// WHAT ELSE YOU CAN CATCH WITHOUT LEAVING THIS PLACE.
+// The same 400 m the journey planner joins the two railways with, so what a
+// rider is offered on screen and what the planner will route them through
+// are the same thing — one of them being quietly more generous than the
+// other is how an app starts contradicting itself.
+function lrtStopsAtStation(code) {
+  const s = mtrData && mtrData.stations[code];
+  if (!s || !lrtData) return [];
+  const out = [];
+  for (const id of Object.keys(lrtData.stops)) {
+    const row = lrtData.stops[id];
+    const metres = metresBetween(s[2], s[3], row[2], row[3]);
+    if (metres <= RAIL_LINK_M) out.push({ id, metres });
+  }
+  return out.sort((a, b) => a.metres - b.metres);
+}
+
+function stationsAtLrtStop(id) {
+  const row = lrtData && lrtData.stops[id];
+  if (!row || !mtrData) return [];
+  const out = [];
+  for (const code of Object.keys(mtrData.stations)) {
+    const s = mtrData.stations[code];
+    const metres = metresBetween(row[2], row[3], s[2], s[3]);
+    if (metres <= RAIL_LINK_M) out.push({ code, metres });
+  }
+  return out.sort((a, b) => a.metres - b.metres);
 }
 
 function lrtStopsNear(lat, lng, limit) {
@@ -4744,9 +5010,34 @@ function railFare(a, b) {
 }
 
 function railLineName(code) {
+  if (isLrtLine(code)) return T('lrtRoute').replace('{n}', code.slice(LR_LINE.length));
   const pair = mtrData && mtrData.lineNames && mtrData.lineNames[code];
   if (!pair) return code;
   return lang === 'zh' ? pair[1] : pair[0];
+}
+
+// The Light Rail is priced stop pair to stop pair, exactly like the trains,
+// from MTR's own published adult Octopus table. Keys are the two stop ids
+// sorted as TEXT, which is how the file was built ('100' before '20').
+function lrtFare(a, b) {
+  if (!lrtData || !lrtData.fares) return null;
+  const x = isLrtNode(a) ? lrtIdOf(a) : String(a);
+  const y = isLrtNode(b) ? lrtIdOf(b) : String(b);
+  const fare = lrtData.fares[x < y ? x + '|' + y : y + '|' + x];
+  return typeof fare === 'number' && fare > 0 ? fare : null;
+}
+
+// The stretch of a journey spent on one railway, as [firstIndex, lastIndex],
+// or null if it never touches it. Used to price that stretch once — a rail
+// fare covers the whole ride on that railway, changes included.
+function legRun(journey, co) {
+  let first = -1, last = -1;
+  journey.legs.forEach((leg, index) => {
+    if (leg.co !== co) return;
+    if (first < 0) first = index;
+    last = index;
+  });
+  return first < 0 ? null : [first, last];
 }
 
 function railRunningNow() {
@@ -4754,22 +5045,48 @@ function railRunningNow() {
   return hour >= RAIL_FIRST_HOUR || hour < RAIL_LAST_HOUR;
 }
 
-// Up to three genuinely different train journeys, best first. Two stations
+// EVERYWHERE YOU COULD GET ON A RAILWAY FROM HERE — stations and Light Rail
+// stops in one list, nearest first, with each network guaranteed a place.
+// A straight "five nearest" would be all Light Rail in Tuen Mun, where the
+// stops are 300 m apart and the station is one of them; the rider would lose
+// the train they were probably going to take.
+function railNodesNear(lat, lng, limit) {
+  const reach = limit || WALK_LIMIT_M;
+  const out = railStationsNear(lat, lng, reach).map(n => ({ node: n.code, metres: n.metres }));
+  if (lrtData) {
+    const lrt = [];
+    for (const id of Object.keys(lrtData.stops)) {
+      const row = lrtData.stops[id];
+      const metres = metresBetween(lat, lng, row[2], row[3]);
+      if (metres <= reach) lrt.push({ node: LR_NODE + id, metres });
+    }
+    lrt.sort((a, b) => a.metres - b.metres);
+    for (const n of lrt.slice(0, 3)) out.push(n);
+  }
+  return out.sort((a, b) => a.metres - b.metres);
+}
+
+// Up to three genuinely different rail journeys, best first. Two stations
 // can both be in walking range of the same address — Central and Hong Kong
 // are one example — and they lead to different lines, so it is worth
 // offering the alternative rather than silently picking one.
 function railJourneys(startLat, startLng, endLat, endLng) {
   if (!mtrData || !railGraph) return [];
 
-  const fromList = railStationsNear(startLat, startLng);
-  const toList   = railStationsNear(endLat, endLng);
+  const fromList = railNodesNear(startLat, startLng);
+  const toList   = railNodesNear(endLat, endLng);
   if (fromList.length === 0 || toList.length === 0) return [];
 
   const found = [];
   for (const a of fromList) {
+    // ONE search per starting point, not one per pair. Every destination is
+    // read out of the same finished search, which is what keeps a network
+    // twice the old size from costing eight times the old wait.
+    const best = railSearch(a.node);
+    if (!best) continue;
     for (const b of toList) {
-      if (a.code === b.code) continue;
-      const path = railRoute(a.code, b.code);
+      if (a.node === b.node) continue;
+      const path = railPathTo(best, b.node);
       if (!path) continue;
 
       const walkOn = walkingEstimate(a.metres), walkOff = walkingEstimate(b.metres);
@@ -4782,7 +5099,16 @@ function railJourneys(startLat, startLng, endLat, endLng) {
 
   // Drop journeys that use the same stations and lines as one already kept.
   const seen = new Set(), out = [];
+  // AN ALTERNATIVE HAS TO BE ONE SOMEBODY MIGHT ACTUALLY TAKE.
+  // With two railways in the graph there are always more ways to do a trip,
+  // and most of the extra ones are jokes: ride one Light Rail stop, walk
+  // five minutes back to the station you were standing at, get the same
+  // train. Anything more than a quarter of an hour worse than the best is
+  // not a choice, it is clutter on a screen an older rider has to read.
+  const ceiling = found.length ? found[0].total + RAIL_ALT_MAX_MIN : Infinity;
+
   for (const journey of found) {
+    if (journey.total > ceiling) break;         // sorted by total, so the rest are worse
     const id = journey.legs[0].on.stop + '>' +
                journey.legs.map(l => l.lineCode).join('>') + '>' +
                journey.legs[journey.legs.length - 1].off.stop;
@@ -4796,31 +5122,59 @@ function railJourneys(startLat, startLng, endLat, endLng) {
 
 // Turn a rail path into the same journey object the bus planner produces, so
 // every card, fare line, map draw and sort works on it unchanged.
+//
+// Three kinds of step come out of the search and each becomes something
+// different here: a run of same-line hops is a LEG, a WALK between the two
+// railways is the GAP between two legs, and a WALK at either end is simply
+// part of the walk the rider is already being told about.
 function buildRailJourney(found, walkOn, walkOff) {
   const path = found.path;
-  const legs = [];
-  let startAt = 0;
+  const legs = [], transferWalks = [];
+  let pending = null;          // a walk not yet attached to anything
+  let i = 1;
 
-  // Split wherever the line changes — one leg per train.
-  for (let i = 1; i <= path.length; i++) {
-    const ending = i === path.length || (i > 1 && path[i].line !== path[i - 1].line);
-    if (!ending) continue;
-    const line = path[startAt + 1] ? path[startAt + 1].line : path[1].line;
+  while (i < path.length) {
+    const line = path[i].line;
+
+    if (line === RAIL_WALK) {
+      const hop = walkingEstimate((path[i].edge && path[i].edge.metres) || 0);
+      if (legs.length === 0) walkOn = addWalks(walkOn, hop);   // before the first train
+      else pending = hop;                                      // between two trains
+      i++;
+      continue;
+    }
+
+    const startAt = i - 1;
+    while (i < path.length && path[i].line === line) i++;
+
+    const on = railStop(path[startAt].station), off = railStop(path[i - 1].station);
+    if (!on || !off) return null;
+    if (legs.length) transferWalks.push(pending);   // the gap before THIS leg
+    pending = null;
+
+    const lrt = isLrtLine(line);
     legs.push({
-      route: railLineName(line), lineCode: line,
-      on: railStop(path[startAt].station), off: railStop(path[i - 1].station),
-      stops: (i - 1) - startAt,
+      route: railLineName(line),
+      lineCode: lrt ? line.slice(LR_LINE.length) : line,
+      on, off, stops: (i - 1) - startAt,
       path: path.slice(startAt, i).map(p => railStop(p.station)).filter(Boolean),
-      bound: 'O', serviceType: '1', co: 'mtr'
+      bound: 'O', serviceType: '1', co: lrt ? 'lrt' : 'mtr',
+      lrtVia: lrt ? ((path[startAt + 1].edge || {}).via || null) : null
     });
-    startAt = i - 1;
   }
-  if (legs.length === 0 || legs.some(leg => !leg.on || !leg.off)) return null;
+
+  // A walk still in hand after the last leg is the start of the walk out.
+  if (pending) walkOff = addWalks(walkOff, pending);
+  if (legs.length === 0) return null;
 
   return {
-    legs, walkOn, walkOff, transferWalks: [], fares: 1, rail: true,
+    legs, walkOn, walkOff, transferWalks, fares: 1, rail: true,
     total: Math.round(walkOn.minutes + found.cost + walkOff.minutes)
   };
+}
+
+function addWalks(a, b) {
+  return { metres: a.metres + b.metres, minutes: a.minutes + b.minutes };
 }
 
 // Stops in ~1 km cells, built once per stop list. "Within 600 m" then reads
@@ -5723,7 +6077,8 @@ const OPERATORS = {
   ctb: { en:'CITYBUS', zh:'城巴',   css:'ctb' },
   nlb: { en:'NLB',     zh:'嶼巴',   css:'nlb' },
   gmb: { en:'MINIBUS', zh:'小巴',   css:'gmb' },
-  mtr: { en:'MTR',     zh:'港鐵',   css:'mtr' }
+  mtr: { en:'MTR',     zh:'港鐵',   css:'mtr' },
+  lrt: { en:'LIGHT RAIL', zh:'輕鐵', css:'lrt' }
 };
 
 function coName(co) {
@@ -5776,6 +6131,17 @@ function buildCompareStrip(picks) {
   }
 }
 
+// "2 程港鐵" over a trip that is one Light Rail ride and one train is a small
+// lie in the biggest figure on the card. A journey that touches both railways
+// gets the word that covers both.
+function ridesWord(journey, isTrainTrip, legCount) {
+  if (!isTrainTrip) return T(legCount === 1 ? 'totalBus1' : 'totalBuses');
+  const kinds = new Set(journey.legs.map(leg => leg.co));
+  if (kinds.has('lrt') && kinds.has('mtr')) return T(legCount === 1 ? 'totalRail1' : 'totalRails');
+  if (kinds.has('lrt')) return T(legCount === 1 ? 'totalLrt1' : 'totalLrts');
+  return T(legCount === 1 ? 'totalTrain1' : 'totalTrains');
+}
+
 function makeCard(pick) {
   const journey = pick.journey;
   const card = document.createElement('div');
@@ -5783,8 +6149,13 @@ function makeCard(pick) {
   card.dataset.number = pick.number;
 
   const boardsAtChosen = !!startPoint.stop && journey.legs[0].on.stop === startPoint.stop.stop;
-  const isTrainTrip = journey.legs[0].co === 'mtr';
+  const isTrainTrip = !!journey.rail || journey.legs[0].co === 'mtr';
   const legCount = journey.legs.length;
+
+  // Each railway is paid for once, whatever it is called in between, so the
+  // price is worked out for the whole stretch spent on it and shown on the
+  // step where that stretch begins.
+  const mtrRun = legRun(journey, 'mtr'), lrtRun = legRun(journey, 'lrt');
 
   // ---- THE BLUE HEAD: everything the rider decides on, in one block ----
   // Four figures, each with its unit under it and a plain-words line under
@@ -5835,8 +6206,7 @@ function makeCard(pick) {
         // "1 buses to take" and "change 1 time(s)" are a machine talking.
         // English gets its singulars; Chinese uses the same string for both.
         cell(legCount,
-             legCount === 1 ? T(isTrainTrip ? 'totalTrain1' : 'totalBus1')
-                            : T(isTrainTrip ? 'totalTrains' : 'totalBuses'),
+             ridesWord(journey, isTrainTrip, legCount),
              changes === 0 ? T('noteNoChange')
                : changes === 1 ? T('noteChange1')
                : T('noteChanges').replace('{n}', changes),
@@ -5863,9 +6233,12 @@ function makeCard(pick) {
   if (legCount > 1) {
     // Changing platform inside a station is not the same as getting off one
     // bus and finding another in the street, and it should not read as if
-    // it were.
+    // it were. Crossing between the Light Rail and the trains is neither:
+    // it IS a walk outside, so it must not promise 「站內轉綫」.
+    const crossesRailways = mtrRun && lrtRun;
     inner += '<div class="jwarn" style="background:#fef3c7;color:#92400e">' +
-             T(isTrainTrip ? 'mustChangeTrain' : 'mustChange') + '</div>';
+             T(crossesRailways ? 'mustChangeRail'
+               : isTrainTrip ? 'mustChangeTrain' : 'mustChange') + '</div>';
   }
 
   // ---- THE STEPS, NUMBERED ----
@@ -5919,20 +6292,25 @@ function makeCard(pick) {
 
   journey.legs.forEach((leg, index) => {
     const isTrain = leg.co === 'mtr';
-    // One train fare covers the whole ride, changes included, so it is shown
-    // once on the first leg rather than repeated on each.
+    const isLrt   = leg.co === 'lrt';
+    // One fare covers the whole ride on one railway, changes included, so it
+    // is shown once where that railway is boarded rather than on every leg.
     const legFare = isTrain
-      ? (index === 0 ? journeyFare(journey) : null)
+      ? (mtrRun && index === mtrRun[0]
+           ? railFare(journey.legs[mtrRun[0]].on.stop, journey.legs[mtrRun[1]].off.stop) : null)
+      : isLrt
+      ? (lrtRun && index === lrtRun[0]
+           ? lrtFare(journey.legs[lrtRun[0]].on.stop, journey.legs[lrtRun[1]].off.stop) : null)
       : fareForLeg(leg.route, leg.bound, leg.serviceType, leg.on.stop, leg.co);
 
     steps += stepHtml(
-      (isTrain ? '\u{1F687} ' : '\u{1F68C} ') +
+      (isTrain ? '\u{1F687} ' : isLrt ? '\u{1F688} ' : '\u{1F68C} ') +
       '<span class="jsroute">' + esc(leg.route) + '</span>' +
       '<span class="cotag ' + coClass(leg.co) + '">' + coName(leg.co) + '</span>' +
       (legFare !== null ? '<span class="legfare">' + fareText(legFare) + '</span>' : ''),
       T('rideTo') + ' <b>' + esc(stopName(leg.off)) + '</b>' +
       ' <span class="jscount">(' + leg.stops + ' ' +
-      T(isTrain ? 'stations' : 'stops') + ')</span>');
+      T(isTrain || isLrt ? 'stations' : 'stops') + ')</span>');
 
     if (index < legCount - 1) {
       // Hong Kong runs Bus-Bus Interchange schemes where the second fare is
@@ -5948,12 +6326,24 @@ function makeCard(pick) {
       // The walk that belongs to THIS gap, not always the first one.
       const next = journey.legs[index + 1];
       const hop = (journey.transferWalks || [])[index];
-      steps += '<li class="jschange">' +
-               T(next && next.co === 'mtr' && isTrain ? 'changeTrainPlain' : 'changeBusPlain') +
+      const nextCo = next ? next.co : '';
+      // Crossing between the two railways is worth naming: "change lines"
+      // is not what a rider does when they walk off the Light Rail and
+      // through the gate at 屯門.
+      const what = (isLrt && nextCo === 'mtr') ? 'changeToTrain'
+                 : (isTrain && nextCo === 'lrt') ? 'changeToLrt'
+                 : (nextCo === 'mtr' || nextCo === 'lrt') && (isTrain || isLrt) ? 'changeTrainPlain'
+                 : 'changeBusPlain';
+      steps += '<li class="jschange">' + T(what) +
                (hop
                  ? ' — ' + T('stepWalk').replace('{m}', hop.minutes).replace('{d}', hop.metres) +
                    ' ' + T('stepTo') + ' ' + esc(stopName(next.on))
                  : '') + '</li>';
+      // Why the total price is blank. Said once, where it happens.
+      if (what === 'changeToTrain' || what === 'changeToLrt') {
+        steps += '<li class="jwarn" style="background:#eff6ff;color:#1e40af;list-style:none">' +
+                 T('railFareSplit') + '</li>';
+      }
     }
   });
 
@@ -5963,13 +6353,15 @@ function makeCard(pick) {
   // asked of the gazetteer once the card is on screen. A bus stop has no
   // exits, so it gets the ➤ and the 🔍 and nothing else.
   const lastOff = journey.legs[legCount - 1].off;
+  const lastCo  = journey.legs[legCount - 1].co;
   const outId = 'jexit-' + pick.number;
   let outLine = '';
-  if (journey.legs[legCount - 1].co === 'mtr') {
+  if (lastCo === 'mtr' || lastCo === 'lrt') {
     const face = Math.round(bearingBetween(Number(lastOff.lat), Number(lastOff.long),
                                            endPoint.lat, endPoint.lng) / 45) % 8;
     outLine = '<div class="jsexit" id="' + outId + '">' +
-              T('sdExitDir').replace('{d}', esc(T(WAY_KEYS[face]))) + '</div>';
+              T(lastCo === 'lrt' ? 'lrtOutDir' : 'sdExitDir')
+                .replace('{d}', esc(T(WAY_KEYS[face]))) + '</div>';
   }
   steps += stepHtml('\u{1F6B6} ' + T('stepWalk').replace('{m}', journey.walkOff.minutes)
                       .replace('{d}', journey.walkOff.metres),
@@ -5989,7 +6381,10 @@ function makeCard(pick) {
 
   card.innerHTML = inner;
 
-  if (outLine) fillStationExit(lastOff, endPoint, outId);
+  // Only the heavy rail has lettered exits to look up. A Light Rail stop is
+  // a platform in the street — you are already outside — so it keeps the
+  // direction line and is not asked about.
+  if (outLine && lastCo === 'mtr') fillStationExit(lastOff, endPoint, outId);
 
   const firstLeg = journey.legs[0], lastLeg2 = journey.legs[journey.legs.length - 1];
 
@@ -6482,10 +6877,21 @@ function savedStations() {
     let best = null, bestMetres = Infinity;
     for (const [code, s] of Object.entries(mtrData.stations)) {
       const m = metresBetween(fav.lat, fav.long, s[2], s[3]);
-      if (m < bestMetres) { bestMetres = m; best = code; }
+      if (m < bestMetres) { bestMetres = m; best = { kind: 'mtr', id: code }; }
     }
-    if (best && bestMetres <= 200 && !out.some(x => x.code === best))
-      out.push({ code: best, label: stopName(fav) });
+    // A saved place in Tin Shui Wai sits on a Light Rail stop, not a station,
+    // and used to count as neither. Both railways are searched now and the
+    // nearer one wins.
+    if (lrtData) {
+      for (const id of Object.keys(lrtData.stops)) {
+        const row = lrtData.stops[id];
+        const m = metresBetween(fav.lat, fav.long, row[2], row[3]);
+        if (m < bestMetres) { bestMetres = m; best = { kind: 'lrt', id }; }
+      }
+    }
+    if (best && bestMetres <= 200 && !out.some(x => x.kind === best.kind && x.id === best.id))
+      out.push({ kind: best.kind, id: best.id,
+                 name: best.kind === 'lrt' ? lrtName(best.id) : stationName(best.id) });
   }
   return out.slice(0, 3);
 }
@@ -7398,13 +7804,14 @@ function zoomToStopDetail(stop, fromPoint, leg, isBoarding) {
   // the exit LETTER is asked of the government gazetteer at the moment the
   // card opens, and is shown only if it comes back — this app has no exit
   // data of its own and will not invent one.
-  const isRail = leg && leg.co === 'mtr';
+  const isLrtLeg = leg && leg.co === 'lrt';
+  const isRail = isLrtLeg || (leg && leg.co === 'mtr');
   let exitLine = '';
   if (!isBoarding && isRail) {
     const face = Math.round(bearingBetween(Number(stop.lat), Number(stop.long),
                                            endPoint.lat, endPoint.lng) / 45) % 8;
     exitLine = '<div class="sd-exit" id="sd-exit">' +
-               T('sdExitDir').replace('{d}', esc(T(WAY_KEYS[face]))) + '</div>';
+               T(isLrtLeg ? 'lrtOutDir' : 'sdExitDir').replace('{d}', esc(T(WAY_KEYS[face]))) + '</div>';
   }
 
   panel.innerHTML =
@@ -7424,10 +7831,14 @@ function zoomToStopDetail(stop, fromPoint, leg, isBoarding) {
     '<a class="sd-go" href="' + esc(goHref) + '" target="_blank" rel="noopener">' + goText + '</a>' +
     // "Check you are on the correct side of the road" is a bus stop's problem.
     // Inside a station the question is which sign to follow, so it says that.
+    // A Light Rail platform is neither: it is in the middle of a road, and
+    // several routes call at it, so the thing to check is the number on the
+    // front of the train.
     '<div class="sd-note">' +
-      T(!isRail ? 'checkSide' : isBoarding ? 'checkGates' : 'checkPlatform') + '</div>';
+      T(isLrtLeg ? 'checkLrtPlatform' : !isRail ? 'checkSide'
+        : isBoarding ? 'checkGates' : 'checkPlatform') + '</div>';
 
-  if (!isBoarding && isRail) fillStationExit(stop, endPoint, 'sd-exit');
+  if (!isBoarding && isRail && !isLrtLeg) fillStationExit(stop, endPoint, 'sd-exit');
 
   document.getElementById('sd-close').addEventListener('click', () => {
     panel.style.display = 'none';
@@ -7565,9 +7976,8 @@ function railDirectionKey(lineCode, fromCode, toCode, block) {
   return null;
 }
 
-async function loadTrainTimes(pick, line) {
+async function loadTrainTimes(pick, line, tile) {
   const leg = pick.journey.legs[0];
-  const tile = document.getElementById('ceta-' + pick.number);
   const setBoth = (text, cssClass) => {
     line.className = cssClass || 'jnext';
     line.textContent = text;
@@ -7609,19 +8019,106 @@ async function loadTrainTimes(pick, line) {
   }
 }
 
+// Where the route variant this leg rides actually ends, in the rider's
+// language — used to tell the two directions of one route number apart.
+function lrtTerminusName(via) {
+  const stops = via && lrtData && lrtData.routes && lrtData.routes[via];
+  if (!stops || !stops.length) return '';
+  return lrtName(stops[stops.length - 1]);
+}
+
+// THE NEXT LIGHT RAIL TRAIN at the stop this journey boards from.
+//
+// The same route number passes the same stop in both directions, so the
+// number alone is not enough — put somebody on the 505 at 屯門 without
+// checking and half the time they ride away from where they are going. The
+// board names where each train is heading, so:
+//   one destination for this number here  -> that is the direction (this is
+//                                            how the 705/706 loop answers,
+//                                            calling itself 天水圍循環綫)
+//   several                               -> take the one whose destination
+//                                            is this leg's own terminus
+//   neither matches                       -> say to read the board. A wrong
+//                                            train is worse than no time.
+async function loadLrtNext(pick, line, tile) {
+  const leg = pick.journey.legs[0];
+  const alive = () => document.getElementById('next-' + pick.number) === line;
+  const giveUp = message => {
+    if (!alive()) return;
+    line.className = 'jnext waiting';
+    line.textContent = message;
+    if (tile) tile.textContent = '—';
+  };
+
+  try {
+    const response = await fetch(LRT_SCHEDULE + encodeURIComponent(lrtIdOf(leg.on.stop)),
+                                 { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error('server said ' + response.status);
+    const data = await response.json();
+    if (!alive()) return;
+
+    const dest = t => String((lang === 'zh' ? t.dest_ch : t.dest_en) || '').trim();
+    const mine = [];
+    for (const p of (data.platform_list || []))
+      for (const t of (p.route_list || []))
+        if (t.route_no && String(t.route_no) === String(leg.lineCode)) mine.push(t);
+
+    if (!mine.length) { giveUp(T('lrtCheckBoard').replace('{n}', leg.lineCode)); return; }
+
+    const places = new Set(mine.map(dest));
+    let rows = mine;
+    if (places.size > 1) {
+      const terminus = lrtTerminusName(leg.lrtVia);
+      rows = mine.filter(t => terminus && dest(t) === terminus);
+      if (!rows.length) { giveUp(T('lrtCheckBoard').replace('{n}', leg.lineCode)); return; }
+    }
+
+    // The board writes the wait out itself — "9 分鐘", or a bare "-" for a
+    // train that is right here. The words are shown as they arrive; only the
+    // dash is spelled out, because on its own it means nothing.
+    const first = rows[0];
+    const raw = String((lang === 'zh' ? first.time_ch : first.time_en) || '').trim();
+    const when = (raw === '-' || raw === '') ? T('dueNow') : raw;
+
+    line.className = 'jnext';
+    line.innerHTML = T('next') + ' ' + esc(leg.lineCode) + ' ' + T('towards') + ' ' +
+                     esc(dest(first)) + ' <span class="mins">' + esc(when) + '</span>';
+    if (tile) tile.textContent = leg.lineCode + ' ' + when;
+  } catch (error) {
+    console.warn('Live Light Rail times unavailable:', error);
+    giveUp(T('etaOffline'));
+  }
+}
+
 async function loadNextBus(pick) {
   const line = document.getElementById('next-' + pick.number);
   if (!line) return;
 
+  // WHOSE CARD IS THIS? Bus options and train options are BOTH numbered 1, 2,
+  // 3, and both lists write into next-N and ceta-N. Search a trip, then open
+  // the 港鐵 tab, and a bus request still in the air finishes and writes its
+  // route number onto the train card — 269M, 22 分鐘, over a journey with no
+  // bus in it. Both elements are grabbed ONCE, here, and written to by
+  // reference: when the cards are rebuilt these nodes are detached and the
+  // late answer lands nowhere, which is exactly what it should do.
+  const tile = document.getElementById('ceta-' + pick.number);
   const leg = pick.journey.legs[0];
 
   // Trains have their own feed, keyed by line and station.
   if (leg.co === 'mtr') {
     line.className = 'jnext';
     line.textContent = T('trainsFrequent');
-    const tile = document.getElementById('ceta-' + pick.number);
     if (tile) tile.textContent = T('frequentShort');
-    loadTrainTimes(pick, line);
+    loadTrainTimes(pick, line, tile);
+    return;
+  }
+
+  // The Light Rail has its own board, per stop, and it hands back the wait
+  // already written out — "4 分鐘", or "-" for a train standing there.
+  if (leg.co === 'lrt') {
+    line.className = 'jnext';
+    line.textContent = T('lrtLoading');
+    loadLrtNext(pick, line, tile);
     return;
   }
 
@@ -7645,11 +8142,10 @@ async function loadNextBus(pick) {
       // fetched here rather than through the shared URL below.
       const rows = await fetchNlbRows(leg.on, new Set([leg.route])).catch(() => []);
       const soon = etaEntries(rows, null, null).slice(0, 3);
-      const tile = document.getElementById('ceta-' + pick.number);
       if (!soon.length) {
         line.className = 'jnext waiting';
         line.textContent = T('noBusDue');
-        if (tile) tile.textContent = '—';
+      if (tile) tile.textContent = '—';
         return;
       }
       line.className = 'jnext';
@@ -7663,8 +8159,7 @@ async function loadNextBus(pick) {
     if (leg.co === 'gmb') {
       line.className = 'jnext waiting';
       line.textContent = T('noLiveMinibus');
-      const gmbTile = document.getElementById('ceta-' + pick.number);
-      if (gmbTile) gmbTile.textContent = '—';
+      if (tile) tile.textContent = '—';
       return;
     }
 
@@ -7676,8 +8171,7 @@ async function loadNextBus(pick) {
     if (!url) {
       line.className = 'jnext waiting';
       line.textContent = T('liveUnavailable') + ' ' + leg.route;
-      const noTile = document.getElementById('ceta-' + pick.number);
-      if (noTile) noTile.textContent = '—';
+      if (tile) tile.textContent = '—';
       return;
     }
 
@@ -7701,17 +8195,15 @@ async function loadNextBus(pick) {
     if (arrivals.length === 0) {
       line.className = 'jnext waiting';
       line.textContent = T('noBusDue');
-      const emptyTile = document.getElementById('ceta-' + pick.number);
-      if (emptyTile) emptyTile.textContent = '—';
+      if (tile) tile.textContent = '—';
       return;
     }
 
     const soonest = arrivals[0];
     const clock = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
 
-    const tileEta = document.getElementById('ceta-' + pick.number);
-    if (tileEta) {
-      tileEta.textContent = soonest.route + ' ' +
+    if (tile) {
+      tile.textContent = soonest.route + ' ' +
         (soonest.minutes === 0 ? T('dueNow') : soonest.minutes + T('min'));
     }
 
@@ -11127,12 +11619,27 @@ function renderMtrView() {
   // view: the Light Rail has platforms, not lines and directions, and
   // pretending otherwise would mean inventing a shape its data has not got.
   if (st.lrt) {
-    view.innerHTML = '<div class="favhead">🚈 ' + T('lrtTitle') + '</div>' +
-      '<div class="mtrsta"><div class="mtrname">🚈 ' + esc(lrtName(st.lrt)) + '</div>' +
+    const change = stationsAtLrtStop(st.lrt);
+    view.innerHTML = '<div class="favhead">🚇 ' + T('mtrTitle') + '</div>' +
+      '<div class="mtrsta"><div class="mtrname">🚈 ' + esc(lrtName(st.lrt)) +
+        ' <small>' + esc(T('lrtTitle')) + '</small></div>' +
       '<button class="refreshbtn" data-mtr-act="lrt-refresh">' + T('refresh') + '</button></div>' +
+      // The other railway, from here. 屯門 and 元朗 are one place to a rider
+      // even though they are two networks to the data, so the way across is
+      // on the screen rather than four taps back through the picker.
+      (change.length
+        ? '<div class="mtrsub">' + T('railChangeHere') + '</div><div class="mtrpick">' +
+          change.slice(0, 2).map(n => '<button data-mtr-station="' + esc(n.code) + '">🚇 ' +
+            esc(stationName(n.code)) + '<span class="mtrdist">' + Math.round(n.metres) + ' m</span></button>').join('') +
+          '</div>'
+        : '') +
       '<div id="lrtboard">' + (st.lrtHtml || '<div class="favempty">' + T('lrtLoading') + '</div>') + '</div>' +
+      // Where this button goes depends on how you got here — back to the
+      // station whose 輕鐵 button you tapped, or back to the picker. It
+      // should say which, rather than promising a list and showing 屯門.
       '<button class="btn" data-mtr-act="lrt-back" style="width:100%;margin-top:12px">' +
-      T('lrtBack') + '</button>';
+      (st.station ? esc(T('lrtBackTo').replace('{s}', stationName(st.station))) : T('lrtBack')) +
+      '</button>';
     return;
   }
 
@@ -11153,28 +11660,31 @@ function renderMtrView() {
         html += '<div class="mtrpick"><button data-mtr-act="geo-yes">' + T('myLocation') + '</button></div>';
       }
       if (herePoint) {
-        const near = railStationsNear(herePoint.lat, herePoint.lng, MTR_NEAR_M);
+        // ONE NEAREST LIST, BOTH RAILWAYS.
+        // Standing at 屯門 you are at a station and at a Light Rail stop at
+        // the same time; two lists headed "nearest stations" and "Light Rail
+        // near you" made the rider decide which railway they wanted before
+        // they had been told what was there. Nearest is nearest.
+        const near = railStationsNear(herePoint.lat, herePoint.lng, MTR_NEAR_M)
+          .map(n => ({ kind: 'mtr', id: n.code, name: stationName(n.code), metres: n.metres }))
+          .concat(lrtStopsNear(herePoint.lat, herePoint.lng, LRT_NEAR_M)
+            .map(n => ({ kind: 'lrt', id: n.id, name: lrtName(n.id), metres: n.metres })))
+          .sort((a, b) => a.metres - b.metres)
+          .slice(0, 4);
         if (near.length) {
           html += '<div class="mtrsub">' + T('mtrNearby') + '</div><div class="mtrpick">' +
-            near.slice(0, 3).map(n => '<button data-mtr-station="' + n.code + '">📍 ' + esc(stationName(n.code)) +
+            near.map(n => '<button data-mtr-' + (n.kind === 'lrt' ? 'lrt' : 'station') +
+              '="' + esc(n.id) + '">' + (n.kind === 'lrt' ? '🚈 ' : '🚇 ') + esc(n.name) +
               '<span class="mtrdist">' + Math.round(n.metres) + ' m</span></button>').join('') + '</div>';
         } else {
           html += '<div class="favempty">' + T('mtrNoneNear') + '</div>';
-        }
-        // The Light Rail, when the rider is actually near it. Nothing is
-        // shown in Sha Tin, and nothing is downloaded there either.
-        const lrtNear = lrtStopsNear(herePoint.lat, herePoint.lng, LRT_NEAR_M);
-        if (lrtNear.length) {
-          html += '<div class="mtrsub">' + T('lrtNearby') + '</div><div class="mtrpick">' +
-            lrtNear.slice(0, 3).map(n => '<button data-mtr-lrt="' + esc(n.id) + '">🚈 ' +
-              esc(lrtName(n.id)) + '<span class="mtrdist">' + Math.round(n.metres) + ' m</span></button>').join('') +
-            '</div>';
         }
       }
       const saved = savedStations();
       if (saved.length) {
         html += '<div class="mtrsub">' + T('mtrSaved') + '</div><div class="mtrpick">' +
-          saved.map(sv => '<button data-mtr-station="' + sv.code + '">⭐ ' + esc(stationName(sv.code)) + '</button>').join('') + '</div>';
+          saved.map(sv => '<button data-mtr-' + (sv.kind === 'lrt' ? 'lrt' : 'station') + '="' +
+            esc(sv.id) + '">⭐ ' + esc(sv.name) + '</button>').join('') + '</div>';
       }
       if (trainFavs.length) {
         html += '<div class="mtrsub">' + T('mtrSavedTrains') + '</div><div class="mtrpick">' +
@@ -11205,6 +11715,17 @@ function renderMtrView() {
           T(st.loading ? 'refreshing' : 'refresh') + '</button>' +
           '<button class="refreshbtn" data-mtr-act="change">' + T('mtrChange') + '</button></div>' +
           '<div class="rshint">' + T('mtrLineStrip') + '</div>';
+
+  // The Light Rail, when this station has it — 屯門, 兆康, 元朗, 天水圍 and
+  // the short walk at 朗屏. Worked out from the positions, so a new station
+  // or a moved stop changes this on its own.
+  const lrtHere = lrtStopsAtStation(st.station);
+  if (lrtHere.length) {
+    html += '<div class="mtrsub">' + T('railChangeHere') + '</div><div class="mtrpick">' +
+      lrtHere.slice(0, 2).map(n => '<button data-mtr-lrt="' + esc(n.id) + '">🚈 ' +
+        esc(lrtName(n.id)) + ' ' + esc(T('lrtTitle')) +
+        '<span class="mtrdist">' + Math.round(n.metres) + ' m</span></button>').join('') + '</div>';
+  }
 
   // A direction button: where it goes, and the next train or two under it.
   const dirBtn = (line, d, cls) => {
@@ -11295,19 +11816,48 @@ function renderMtrView() {
   mtrCentreStrip();
 }
 
+// Searching the railways searches BOTH of them. Typing 天逸 used to find
+// nothing at all, because the only place that stop existed was a list three
+// taps away that you had to be standing beside Tuen Mun to see.
 function mtrRenderSearch(query) {
   const box = document.getElementById('mtr-search-results');
   if (!box || !mtrData) return;
   const q = sc(String(query || '').trim().toLowerCase());
   box.innerHTML = '';
   if (!q) return;
-  const starts = code => { const s = mtrData.stations[code]; return (sc(s[1] || '').startsWith(q) || s[0].toLowerCase().startsWith(q)) ? 0 : 1; };
-  const hits = Object.keys(mtrData.stations).filter(code => {
-    const s = mtrData.stations[code];
-    return sc(s[1] || '').includes(q) || s[0].toLowerCase().includes(q);
-  }).sort((a, b) => starts(a) - starts(b) || stationName(a).length - stationName(b).length).slice(0, 6);
+
+  const candidates = Object.keys(mtrData.stations)
+    .map(code => ({ kind: 'mtr', id: code,
+                    zh: sc(mtrData.stations[code][1] || ''),
+                    en: String(mtrData.stations[code][0] || '').toLowerCase(),
+                    name: stationName(code) }));
+  if (lrtData) {
+    for (const id of Object.keys(lrtData.stops)) {
+      const row = lrtData.stops[id];
+      candidates.push({ kind: 'lrt', id,
+                        zh: sc(row[1] || ''), en: String(row[0] || '').toLowerCase(),
+                        name: lrtName(id) });
+    }
+  }
+
+  const hits = candidates
+    .filter(c => c.zh.includes(q) || c.en.includes(q))
+    .sort((a, b) => {
+      const starts = c => (c.zh.startsWith(q) || c.en.startsWith(q)) ? 0 : 1;
+      // A station before a stop of the same name: 元朗 the station is what
+      // somebody typing 元朗 into a railway search almost always means, and
+      // the Light Rail stop is one tap away from it either way.
+      return starts(a) - starts(b) ||
+             (a.kind === b.kind ? 0 : a.kind === 'mtr' ? -1 : 1) ||
+             a.name.length - b.name.length;
+    })
+    .slice(0, 6);
+
   box.innerHTML = hits.length
-    ? hits.map(code => '<button data-mtr-station="' + code + '">🚇 ' + esc(stationName(code)) + '</button>').join('')
+    ? hits.map(c => '<button data-mtr-' + (c.kind === 'lrt' ? 'lrt' : 'station') + '="' + esc(c.id) + '">' +
+        (c.kind === 'lrt' ? '🚈 ' : '🚇 ') + esc(c.name) +
+        (c.kind === 'lrt' ? ' <span class="mtrdist">' + esc(T('lrtTitle')) + '</span>' : '') +
+        '</button>').join('')
     : '<div class="favempty">' + T('noMatch') + '</div>';
 }
 
