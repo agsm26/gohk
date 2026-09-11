@@ -9629,13 +9629,24 @@ const NLB_BASE = 'https://rt.data.gov.hk/v2/transport/nlb';
 let nlbRoutes = null;                    // the operator's own route list
 const nlbRouteIdCache = new Map();       // "route|bound" -> routeId or null
 
+let nlbRoutesLoading = null;
 async function loadNlbRoutes() {
   if (nlbRoutes) return nlbRoutes;
-  const response = await fetch(NLB_BASE + '/route.php?action=list',
-                               { signal: AbortSignal.timeout(10000) });
-  if (!response.ok) throw new Error('server said ' + response.status);
-  nlbRoutes = ((await response.json()).routes || []);
-  return nlbRoutes;
+  // ONE DOWNLOAD, NOT EIGHT.
+  // fetchNlbRows asks for up to eight routes at once through Promise.all, and
+  // every one of them called this. `nlbRoutes` is only assigned after the
+  // await, so all eight sailed past the check above and fetched the same list
+  // — eight times, on somebody's mobile data. The in-flight promise is shared
+  // instead, which is what loadLrt already does a few hundred lines up.
+  if (nlbRoutesLoading) return nlbRoutesLoading;
+  nlbRoutesLoading = (async () => {
+    const response = await fetch(NLB_BASE + '/route.php?action=list',
+                                 { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error('server said ' + response.status);
+    nlbRoutes = ((await response.json()).routes || []);
+    return nlbRoutes;
+  })();
+  try { return await nlbRoutesLoading; } finally { nlbRoutesLoading = null; }
 }
 
 // WHICH routeId IS OUR DIRECTION?
@@ -10941,8 +10952,12 @@ function clockIn(minutes) {
 
 function renderMtrView() {
   const view = document.getElementById('mtrview');
-  if (!view || !mtrData) return;
+  if (!view) return;
   const st = mtrState;
+
+  // The Light Rail screen is drawn BEFORE the heavy-rail guard below: it
+  // reads lrt.json and nothing else, and there is no reason a failed
+  // mtr.json should take the Light Rail down with it.
 
   // ---- A LIGHT RAIL STOP, if one is chosen ----
   // Its own small screen rather than a fourth thing crammed into the station
@@ -10958,6 +10973,7 @@ function renderMtrView() {
     return;
   }
 
+  if (!mtrData) return;
   let html = '<div class="favhead">🚇 ' + T('mtrTitle') + '</div>';
 
   // ---- 1. WHICH STATION ----
@@ -12355,7 +12371,14 @@ async function loadStopEta(row) {
     let entries = [];
     if (String(context.co).toUpperCase() === 'NLB') {
       const routeId = await nlbRouteIdFor(context.routeNo, context.dir, context.serviceType);
-      if (routeId) {
+      // NOT FINDING THE ROUTE IS NOT FINDING NO BUS.
+      // Falling through with an empty list here counted this stop as "asked,
+      // nothing due", and six of those grey the whole route out and announce
+      // 「全部沒有班次」 — a claim about the world built on a failure to look.
+      // Thrown, so it lands in the same catch a dead connection does, which
+      // already knows not to count it.
+      if (!routeId) throw new Error('no NLB routeId for ' + context.routeNo);
+      {
         const response = await fetch(NLB_BASE + '/stop.php?action=estimatedArrivals&routeId=' +
           encodeURIComponent(routeId) + '&stopId=' + encodeURIComponent(stop.stop) +
           '&language=' + (lang === 'zh' ? 'zh' : 'en'),
