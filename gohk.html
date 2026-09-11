@@ -4811,7 +4811,7 @@ function buildRailJourney(found, walkOn, walkOff) {
   if (legs.length === 0 || legs.some(leg => !leg.on || !leg.off)) return null;
 
   return {
-    legs, walkOn, walkOff, transferWalk: null, fares: 1, rail: true,
+    legs, walkOn, walkOff, transferWalks: [], fares: 1, rail: true,
     total: Math.round(walkOn.minutes + found.cost + walkOff.minutes)
   };
 }
@@ -4962,6 +4962,132 @@ const MIN_USEFUL_LEG_M = 700;
 // gets an "effort score" as well as a time, and these weights say what we
 // think that effort is worth. They are deliberately visible and adjustable
 // rather than buried in the sorting code.
+// ============================================================
+// TWO CHANGES
+// ============================================================
+// Reached only when a direct bus and a single change both found nothing —
+// Tuen Mun to Sai Kung, say, where the app used to shrug.
+//
+// THE TRANSFERS MUST BE AT THE SAME STOP ID. The one-change search allows a
+// short walk between two different poles; this one does not, deliberately.
+// Walk-matching every candidate against every other would be the product of
+// three lists again, and a wrong walk invented in the middle of an already
+// long journey is the worst place to be wrong. Within one operator a pole id
+// IS the pole, so KMB-to-KMB and Citybus-to-Citybus chains are found; a
+// change between two operators' own stop ids is not. Fewer answers, every
+// one of them real.
+const TWO_CHANGE_MAX = 6;        // candidates kept; they are sorted after
+const TWO_CHANGE_SCAN = 400000;  // stop entries this pass may look at
+
+function twoChangeRide(routeKey, fromSeq, toSeq) {
+  const path = pathBetween(routeKey, fromSeq, toSeq);
+  return { path, minutes: rideMinutesForPath(path), metres: pathMetres(path) };
+}
+
+function findTwoChange(boardable, alightable, showNotRunning) {
+  if (!routeIndex || !stopIndex) return [];
+  const out = [];
+
+  // Every stop reachable on ONE bus from the start, keeping the quickest way
+  // to each. One entry per stop, not one per route, or the middle pass below
+  // would be looking at the same place a dozen times.
+  const forward = new Map();
+  for (const [keyA, board] of boardable) {
+    if (!showNotRunning && !isRunningNow(keyA)) continue;
+    for (const entry of (routeIndex.get(keyA) || [])) {
+      if (entry.seq <= board.seq) continue;
+      const have = forward.get(entry.stopId);
+      const guess = entry.seq - board.seq;            // stops, as a cheap rank
+      if (have && have.stops <= guess) continue;
+      forward.set(entry.stopId, { key: keyA, boardSeq: board.seq, offSeq: entry.seq,
+                                  stops: guess, board });
+    }
+  }
+  if (!forward.size) return [];
+
+  // ...and every stop from which ONE bus finishes the trip.
+  const backward = new Map();
+  for (const [keyB, alight] of alightable) {
+    if (!showNotRunning && !isRunningNow(keyB)) continue;
+    for (const entry of (routeIndex.get(keyB) || [])) {
+      if (entry.seq >= alight.seq) continue;
+      const have = backward.get(entry.stopId);
+      const guess = alight.seq - entry.seq;
+      if (have && have.stops <= guess) continue;
+      backward.set(entry.stopId, { key: keyB, onSeq: entry.seq, alightSeq: alight.seq,
+                                   stops: guess, alight });
+    }
+  }
+  if (!backward.size) return [];
+
+  // ONE PASS over the network. For each route, walk it in order: remember the
+  // best place it meets the forward set, and the first time it later meets
+  // the backward set is a journey.
+  let scanned = 0;
+  for (const [keyM, entries] of routeIndex) {
+    if (out.length >= TWO_CHANGE_MAX || scanned > TWO_CHANGE_SCAN) break;
+    if (!showNotRunning && !isRunningNow(keyM)) continue;
+    const numM = routeNumberOf(keyM);
+
+    const ordered = entries.slice().sort((x, y) => x.seq - y.seq);
+    scanned += ordered.length;
+    let on = null;                       // where we would join this middle bus
+
+    for (const entry of ordered) {
+      const f = forward.get(entry.stopId);
+      if (f && routeNumberOf(f.key) !== numM && (!on || f.stops < on.f.stops)) {
+        on = { stopId: entry.stopId, seq: entry.seq, f };
+      }
+      if (!on || entry.seq <= on.seq) continue;
+
+      const b = backward.get(entry.stopId);
+      if (!b) continue;
+      const numA = routeNumberOf(on.f.key), numB = routeNumberOf(b.key);
+      // Three genuinely different buses. Getting off a 60M to wait for
+      // another 60M is not a journey, it is a mistake.
+      if (numB === numM || numB === numA) continue;
+
+      const changeOff = stopById.get(on.stopId), changeOn2 = stopById.get(entry.stopId);
+      if (!changeOff || !changeOn2) continue;
+
+      // on.seq is the MIDDLE route's sequence number at the shared stop.
+      // Leg A has to be sliced with the FIRST route's own sequence — they
+      // are different numbering on different routes, and using M's made leg
+      // A zero stops long, so every candidate failed the length test below
+      // and the search silently found nothing at all.
+      const legA = twoChangeRide(on.f.key, on.f.boardSeq, on.f.offSeq);
+      const legM = twoChangeRide(keyM, on.seq, entry.seq);
+      const legB = twoChangeRide(b.key, b.onSeq, b.alightSeq);
+      // Each leg has to be worth getting on a bus for.
+      if (legA.metres < MIN_USEFUL_LEG_M || legM.metres < MIN_USEFUL_LEG_M ||
+          legB.metres < MIN_USEFUL_LEG_M) continue;
+
+      const walkOn = walkingEstimate(on.f.board.metres);
+      const walkOff = walkingEstimate(b.alight.metres);
+      const legOf = (key, onStop, offStop, ride, stops) => ({
+        route: routeNumberOf(key), on: onStop, off: offStop, stops, path: ride.path,
+        bound: key.split('|')[1], serviceType: key.split('|')[2],
+        co: key.split('|')[3] || 'kmb'
+      });
+
+      out.push({
+        legs: [
+          legOf(on.f.key, on.f.board.stop, changeOff, legA, on.f.offSeq - on.f.boardSeq),
+          legOf(keyM, changeOff, changeOn2, legM, entry.seq - on.seq),
+          legOf(b.key, changeOn2, b.alight.stop, legB, b.alightSeq - b.onSeq)
+        ],
+        // Both changes are at the same pole, so neither carries a walk. When
+        // that stops being true this is where the walks go.
+        walkOn, walkOff, transferWalks: [null, null], fares: 3,
+        total: walkOn.minutes + legA.minutes + legM.minutes + legB.minutes +
+               walkOff.minutes + TRANSFER_PENALTY_MIN * 2
+      });
+      break;                             // one answer per middle route is plenty
+    }
+  }
+  return out;
+}
+
 const EFFORT = {
   perWalkMinute:     3,    // walking is three times as costly as sitting
   perTransfer:      12,    // changing bus: stairs, crossings, uncertainty
@@ -4969,21 +5095,29 @@ const EFFORT = {
   perRideMinute:     1     // sitting on the bus is the cheapest minute
 };
 
+// EVERY WALK BETWEEN TWO BUSES, NOT THE FIRST ONE.
+// `transferWalk` was a single object because the planner could only ever
+// build one change. With two changes there are two of these gaps and the
+// second was invisible to the score, the walking total and the card — so a
+// journey with a six-minute hike in the middle read as having none.
+function transferWalkMinutes(journey) {
+  return (journey.transferWalks || []).reduce((n, w) => n + (w ? w.minutes : 0), 0);
+}
+
 function effortScore(journey) {
   const walkMinutes = journey.walkOn.minutes + journey.walkOff.minutes;
-  const transferWalkMinutes = journey.transferWalk ? journey.transferWalk.minutes : 0;
+  const transferWalkMins = transferWalkMinutes(journey);
   const transfers = journey.legs.length - 1;
 
   return walkMinutes * EFFORT.perWalkMinute
-       + transferWalkMinutes * EFFORT.perTransferWalk
+       + transferWalkMins * EFFORT.perTransferWalk
        + transfers * EFFORT.perTransfer
        + journey.total * EFFORT.perRideMinute;
 }
 
 // Total time on foot — the number an older rider most wants to know.
 function totalWalkMinutes(journey) {
-  return journey.walkOn.minutes + journey.walkOff.minutes +
-         (journey.transferWalk ? journey.transferWalk.minutes : 0);
+  return journey.walkOn.minutes + journey.walkOff.minutes + transferWalkMinutes(journey);
 }
 // Two speeds, because one number cannot describe both. A local bus stopping
 // every 300 m is slow; an express on the highway is not. We pick by distance.
@@ -5132,7 +5266,7 @@ async function findBuses() {
                  stops: alight.seq - board.seq, path,
                  bound: routeKey.split('|')[1], serviceType: routeKey.split('|')[2],
                  co: routeKey.split('|')[3] || 'kmb' }],
-        walkOn, walkOff, transferWalk: null, fares: 1,
+        walkOn, walkOff, transferWalks: [], fares: 1,
         total: walkOn.minutes + rideMinutesForPath(path) + walkOff.minutes
       });
     }
@@ -5202,11 +5336,30 @@ async function findBuses() {
               bound: keyB.split('|')[1], serviceType: keyB.split('|')[2],
               co: keyB.split('|')[3] || 'kmb' }
           ],
-          walkOn, walkOff, transferWalk, fares: 2,
+          walkOn, walkOff, transferWalks: transferWalk ? [transferWalk] : [null], fares: 2,
           total: walkOn.minutes + best.minutes + walkOff.minutes +
                  (transferWalk ? transferWalk.minutes : 0)
         });
       }
+    }
+
+    // ---- TWO CHANGES: only when nothing simpler exists ----
+    // A three-bus answer is never what somebody wants when a one-bus answer
+    // is sitting there, so this does not run at all unless the two searches
+    // above came back empty. That is also what keeps it affordable: the
+    // expensive pass never happens on the common journey.
+    //
+    // It is NOT the obvious nesting. boardable x middle x alightable over a
+    // network of thousands of routes would lock up the phone in somebody's
+    // hand. This meets in the middle instead:
+    //   forward  — every stop you can reach on ONE bus from the start
+    //   backward — every stop from which ONE bus finishes the trip
+    // then one pass over the network looking for a route that touches the
+    // first set and, LATER ALONG ITSELF, the second. Three map lookups per
+    // stop instead of a product of three lists.
+    if (journeys.length === 0) {
+      const twoChange = findTwoChange(boardable, alightable, showNotRunning);
+      for (const j of twoChange) journeys.push(j);
     }
 
     // ---- BY TRAIN ----
@@ -5774,7 +5927,7 @@ function makeCard(pick) {
       ' <span class="jscount">(' + leg.stops + ' ' +
       T(isTrain ? 'stations' : 'stops') + ')</span>');
 
-    if (index === 0 && legCount > 1) {
+    if (index < legCount - 1) {
       // Hong Kong runs Bus-Bus Interchange schemes where the second fare is
       // free or discounted. The rules are NOT published in any API we use,
       // so we flag the possibility instead of inventing a price.
@@ -5785,13 +5938,14 @@ function makeCard(pick) {
       }
       // 「在此轉乘巴士」 already says where, so the old 「於此處」 tail is not
       // appended any more — together they read 「在此轉乘巴士 於此處」.
+      // The walk that belongs to THIS gap, not always the first one.
+      const next = journey.legs[index + 1];
+      const hop = (journey.transferWalks || [])[index];
       steps += '<li class="jschange">' +
-               T(journey.legs[1] && journey.legs[1].co === 'mtr' && isTrain
-                 ? 'changeTrainPlain' : 'changeBusPlain') +
-               (journey.transferWalk
-                 ? ' — ' + T('stepWalk').replace('{m}', journey.transferWalk.minutes)
-                     .replace('{d}', journey.transferWalk.metres) +
-                   ' ' + T('stepTo') + ' ' + esc(stopName(journey.legs[1].on))
+               T(next && next.co === 'mtr' && isTrain ? 'changeTrainPlain' : 'changeBusPlain') +
+               (hop
+                 ? ' — ' + T('stepWalk').replace('{m}', hop.minutes).replace('{d}', hop.metres) +
+                   ' ' + T('stepTo') + ' ' + esc(stopName(next.on))
                  : '') + '</li>';
     }
   });
