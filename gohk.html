@@ -1971,7 +1971,7 @@ const TEXT = {
     mtrClear:'Clear what you typed', railMapTitle:'The whole railway',
     railMapHint:'Or tap a line below to see its stations.', rmStations:'{n} stations',
     railNetAria:'Map of every station and Light Rail stop',
-    railNetDrag:'Drag with one finger, pinch to zoom. Tap a station for its trains, or a line to open it below.',
+    railNetDrag:'Drag with one finger, pinch to zoom. ★ is a place you saved. Tap a station for its trains, or a line to open it below.',
     railNetSeeAll:'See it all', railNetIn:'Zoom in', railNetOut:'Zoom out',
     railNetZoom:'size {n} of {m}',
     lrtCheckBoard:'Read the platform board for the next {n}',
@@ -2195,7 +2195,7 @@ const TEXT = {
     rsNearNow:'You are near {s}', rsNotOnRoute:'You are not near this route yet',
     rsNeedLocation:'Allow location to count down as you ride',
     favTrains:'MY TRAINS', noTrainsLong:'No trains saved. On the MTR tab, choose a station and direction, then tap ☆.',
-    favTrainOpen:'Show next trains', mtrSavedTrains:'Your saved trains',
+    favTrainOpen:'Show next trains',
     trainSaved:'Saved {s}', trainRemoved:'Removed {s}', liveOpenRoute:'Show all stops ›',
     findingYou:'Finding you…', tapMapNow:'Now tap anywhere on the map to set your',
     mergedStops:'{n} stop codes here',
@@ -2273,7 +2273,7 @@ const TEXT = {
     mtrClear:'清除輸入', railMapTitle:'全綫路綫圖',
     railMapHint:'或按下面的路綫展開車站。', rmStations:'{n} 個站',
     railNetAria:'全港車站及輕鐵站地圖',
-    railNetDrag:'單指拖動，兩指開合放大縮細。按車站睇班次，按路綫就會在下面展開。',
+    railNetDrag:'單指拖動，兩指開合放大縮細。★ 是你收藏的車站。按車站睇班次，按路綫就會在下面展開。',
     railNetSeeAll:'睇晒全部', railNetIn:'放大', railNetOut:'縮細',
     railNetZoom:'第 {n} / {m} 級',
     lrtCheckBoard:'請看月台顯示屏的下班 {n}',
@@ -2489,7 +2489,7 @@ const TEXT = {
     rsNearNow:'你正接近 {s}', rsNotOnRoute:'你尚未接近此路線',
     rsNeedLocation:'允許使用位置，乘車時會自動倒數',
     favTrains:'我的列車', noTrainsLong:'尚未收藏列車。在「港鐵」選好車站及方向後，按 ☆ 收藏。',
-    favTrainOpen:'查看下班列車', mtrSavedTrains:'你收藏的列車',
+    favTrainOpen:'查看下班列車',
     trainSaved:'已收藏 {s}', trainRemoved:'已移除 {s}', liveOpenRoute:'查看所有車站 ›',
     findingYou:'正在定位…', tapMapNow:'請在地圖上點選以設定',
     mergedStops:'此處有 {n} 個站牌',
@@ -12023,16 +12023,46 @@ const RM_LABELS = ['none', 'cross', 'ends', 'all', 'lrt'];
 let railMapView = { zoom: 2, at: null, line: null, pick: null, focus: null };
 let railNetCache = { key: '', html: '' };
 
+// EVERY SAVED PLACE, AS A POINT ON THE MAP.
+// The two lists of saved chips are gone from this screen: a saved station is
+// a PLACE, and a list of names says nothing about where it is or what else is
+// near it. They are stars on the network map instead — you see 太子 sitting
+// on the red line next to 旺角, which is the thing you actually wanted to
+// know. Nothing is lost: the 收藏 tab still holds all of them with live
+// times, and it is one tap away.
+//
+// A saved TRAIN (station + line + direction) marks its station too, and when
+// exactly one is saved there the star opens it with the direction already
+// chosen — the shortcut the old list gave. Two at one station and the star
+// opens the station, which shows both directions anyway.
+function savedRailMarks() {
+  const marks = new Map();
+  for (const sv of savedStations())
+    marks.set(sv.kind === 'lrt' ? LR_NODE + sv.id : sv.id, { name: sv.name, fav: -1 });
+  trainFavs.forEach((t, i) => {
+    if (!t || !t.station) return;
+    const had = marks.get(t.station);
+    if (had) { had.fav = had.fav === -1 ? i : -2; return; }   // -2: more than one, open the station
+    marks.set(t.station, { name: stationName(t.station), fav: i });
+  });
+  return marks;
+}
+
 function railNetworkHtml() {
   if (!mtrData) return '';
   const zoom = Math.max(0, Math.min(RM_ZOOMS.length - 1, railMapView.zoom));
+  // The saved places are part of the drawing, so a star added or removed has
+  // to invalidate it — the cache key holds them the same way it holds the
+  // zoom and the open line.
+  const savedKey = [...savedRailMarks().keys()].sort().join(',');
   const key = lang + (lrtData ? '+lrt' : '') + '|' + zoom +
-              '|' + (railMapView.line || '') + '|' + (railMapView.pick || '');
+              '|' + (railMapView.line || '') + '|' + (railMapView.pick || '') + '|' + savedKey;
   if (railNetCache.key === key) return railNetCache.html;
 
   const perKm = RM_ZOOMS[zoom];
   const labels = RM_LABELS[zoom];
   const openLine = railMapView.line;
+  const marks = savedRailMarks();
 
   const points = [];
   for (const code of Object.keys(mtrData.stations)) {
@@ -12113,11 +12143,23 @@ function railNetworkHtml() {
   }
 
   // ---- the stops ----
+  const starR = Math.max(11, Math.round(dotR * 1.9));
+  const star = (x, y, node, mark) =>
+    '<circle class="rmpt" data-mtr-net="' + esc(node) + '"' +
+      (mark.fav >= 0 ? ' data-mtr-fav="' + mark.fav + '"' : '') +
+      ' cx="' + x + '" cy="' + y + '" r="' + starR + '" fill="white" stroke="#b45309" ' +
+      'stroke-width="2.5"><title>' + esc(mark.name) + '</title></circle>' +
+    '<text x="' + x + '" y="' + (y + starR * 0.38) + '" text-anchor="middle" font-size="' +
+      Math.round(starR * 1.7) + '" fill="#f59e0b" stroke="#78350f" stroke-width="1" ' +
+      'paint-order="stroke" pointer-events="none">\u2605</text>';
+
   if (lrtData) {
     for (const id of Object.keys(lrtData.stops)) {
       const row = lrtData.stops[id];
-      const on = railMapView.pick === LR_NODE + id;
-      dots += '<circle class="rmpt" data-mtr-net="' + esc(LR_NODE + id) + '" cx="' + X(row[3]) +
+      const node = LR_NODE + id, mark = marks.get(node);
+      if (mark) { dots += star(X(row[3]), Y(row[2]), node, mark); continue; }
+      const on = railMapView.pick === node;
+      dots += '<circle class="rmpt" data-mtr-net="' + esc(node) + '" cx="' + X(row[3]) +
               '" cy="' + Y(row[2]) + '" r="' + (on ? lrtR + 4 : lrtR) + '" fill="' +
               (on ? '#1e3a8a' : '#b45309') + '" stroke="white" stroke-width="2"><title>' +
               esc(lrtName(id)) + '</title></circle>';
@@ -12125,6 +12167,8 @@ function railNetworkHtml() {
   }
   for (const code of Object.keys(mtrData.stations)) {
     const st = mtrData.stations[code];
+    const mark = marks.get(code);
+    if (mark) { dots += star(X(st[3]), Y(st[2]), code, mark); continue; }
     const on = railMapView.pick === code;
     // White-filled, like every metro map: an interchange belongs to more than
     // one line and cannot honestly be painted a single colour.
@@ -12144,7 +12188,7 @@ function railNetworkHtml() {
   // and each is drawn only if its box touches nothing already on the map.
   // The rule then works at any size: a few names when zoomed out, all of
   // them when zoomed in, and never a collision at either.
-  names += rmPlaceLabels(X, Y, dotR, lrtR, labels === 'lrt');
+  names += rmPlaceLabels(X, Y, dotR, lrtR, labels === 'lrt', marks, starR);
 
   const html =
     '<div class="rmnetbox" id="rmnet">' +
@@ -12181,11 +12225,27 @@ function rmLabel(x, y, text) {
 // the end of a line, which beats an ordinary station. Each is drawn only if
 // its box clears every box already placed AND every station dot — a name
 // sitting on top of another station's dot hides the thing it is next to.
-function rmPlaceLabels(X, Y, dotR, lrtR, withLrt) {
+function rmPlaceLabels(X, Y, dotR, lrtR, withLrt, marks, starR) {
   const taken = [];
   const hits = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
 
   const candidates = [];
+  // A SAVED PLACE IS NAMED WHATEVER ELSE HAPPENS, and its name sits BESIDE
+  // the star rather than above it — a star with a name to its right reads as
+  // one thing, which is how every map marks a place you chose. These boxes go
+  // down first, so everything else has to work around them instead.
+  let saved = '';
+  for (const [node, mark] of (marks || new Map())) {
+    const pos = railNodePos(node);
+    if (!pos) continue;
+    const x = X(pos[1]), y = Y(pos[0]);
+    const w = rmTextWidth(mark.name);
+    const left = x + starR + 5;
+    taken.push([x - starR, y - starR, left + w + 3, y + starR]);
+    saved += '<text x="' + left + '" y="' + (y + 6) + '" text-anchor="start" font-size="16" ' +
+             'font-weight="800" fill="#78350f" stroke="white" stroke-width="4" ' +
+             'paint-order="stroke" pointer-events="none">' + esc(mark.name) + '</text>';
+  }
   const ends = new Set();
   for (const variants of Object.values(mtrData.lines))
     for (const stops of variants) { ends.add(stops[0]); ends.add(stops[stops.length - 1]); }
@@ -12195,6 +12255,7 @@ function rmPlaceLabels(X, Y, dotR, lrtR, withLrt) {
     const lines = whichLinesServe(code).length;
     // Dots are obstacles whatever happens to their own name.
     taken.push([X(st[3]) - dotR, Y(st[2]) - dotR, X(st[3]) + dotR, Y(st[2]) + dotR]);
+    if (marks && marks.has(code)) continue;          // already named beside its star
     candidates.push({ rank: lines > 1 ? 100 + lines : (ends.has(code) ? 50 : 10),
                       x: X(st[3]), y: Y(st[2]) - dotR - 6, text: stationName(code) });
   }
@@ -12202,12 +12263,13 @@ function rmPlaceLabels(X, Y, dotR, lrtR, withLrt) {
     for (const id of Object.keys(lrtData.stops)) {
       const row = lrtData.stops[id];
       taken.push([X(row[3]) - lrtR, Y(row[2]) - lrtR, X(row[3]) + lrtR, Y(row[2]) + lrtR]);
+      if (marks && marks.has(LR_NODE + id)) continue;
       candidates.push({ rank: 5, x: X(row[3]), y: Y(row[2]) - lrtR - 6, text: lrtName(id) });
     }
   }
   candidates.sort((a, b) => b.rank - a.rank);
 
-  let out = '';
+  let out = saved;
   for (const c of candidates) {
     const half = rmTextWidth(c.text) / 2;
     const box = [c.x - half - 2, c.y - 15, c.x + half + 2, c.y + 4];
@@ -12555,32 +12617,12 @@ function renderMtrView() {
       }
     }
 
-    const saved = savedStations();
-    if (saved.length) {
-      // No ⭐ inside the chip: the heading above it already says these are
-      // saved, and at 特大 in English the star was taking a line of its own
-      // away from the name.
-      // FOUR ACROSS IN CHINESE, THREE IN ENGLISH. A saved station is two or
-      // three characters in Chinese and fits four to a row at 特大; the same
-      // four columns turned Tsim Sha Tsui into 「Tsim Sha…」 and cut the A off
-      // AsiaWorld-Expo. The names are simply longer, so the row is shorter.
-      html += '<div class="mtrsub">' + T('mtrSaved') + '</div>' +
-        '<div class="mtrgrid' + (lang === 'zh' ? ' four' : '') + '">' +
-        saved.map(sv => '<button class="mtrchip' + (sv.kind === 'lrt' ? ' lrt' : '') +
-          '" data-mtr-' + (sv.kind === 'lrt' ? 'lrt' : 'station') + '="' + esc(sv.id) + '">' +
-          '<span class="cname">' + esc(sv.name) + '</span>' +
-          '<span class="cmeta">' + (sv.kind === 'lrt' ? '\u{1F688}' : '\u{1F687}') +
-          '</span></button>').join('') +
-        '</div>';
-    }
-    if (trainFavs.length) {
-      html += '<div class="mtrsub">' + T('mtrSavedTrains') + '</div><div class="mtrgrid pairs">' +
-        trainFavs.map((t, i) => '<button class="mtrchip train" data-mtr-act="train" data-index="' + i +
-          '" style="border-top-color:' + (MTR_LINE_COLOURS[t.line] || '#999') + '">' +
-          '<span class="cname">' + esc(stationName(t.station)) + '</span>' +
-          '<span class="cmeta">' + T('towards') + ' ' + esc(stationName(t.dest)) + '</span></button>').join('') +
-        '</div>';
-    }
+    // THE SAVED LISTS ARE GONE FROM THIS SCREEN.
+    // A saved station is a PLACE, and a list of names says nothing about
+    // where it is or what is near it. They are ★ on the network map below
+    // instead, so you see 太子 sitting on the red line next to 旺角 — which
+    // is the thing you wanted to know. Nothing is lost: the 收藏 tab still
+    // holds every one of them, with live times, one tap away.
 
     // ---- AND THE WHOLE RAILWAY, UNDERNEATH ----
     html += railMapHtml();
@@ -12775,7 +12817,7 @@ function showRailResults() {
 // One listener for the whole screen: it is redrawn from scratch on every
 // change, so per-button handlers would be lost on each redraw.
 document.getElementById('mtrview').addEventListener('click', event => {
-  const el = event.target.closest('[data-mtr-station],[data-mtr-dir],[data-mtr-dest],[data-mtr-jump],[data-mtr-act],[data-mtr-lrt],[data-mtr-map],[data-mtr-net],[data-mtr-line]');
+  const el = event.target.closest('[data-mtr-station],[data-mtr-dir],[data-mtr-dest],[data-mtr-jump],[data-mtr-act],[data-mtr-lrt],[data-mtr-map],[data-mtr-net],[data-mtr-line],[data-mtr-fav]');
   if (!el) return;
   const d = el.dataset;
   // A STATION TAPPED ON THE MAP OPENS THE STATION — every line through it,
@@ -12785,6 +12827,12 @@ document.getElementById('mtrview').addEventListener('click', event => {
   if (d.mtrNet) {
     keepRailNetAt();
     railMapView.pick = d.mtrNet;
+    // A star standing for exactly one saved train opens that train, direction
+    // and all — the shortcut the old 你收藏的列車 list gave.
+    if (d.mtrFav !== undefined && trainFavs[Number(d.mtrFav)]) {
+      mtrOpenSaved(trainFavs[Number(d.mtrFav)]);
+      return;
+    }
     if (isLrtNode(d.mtrNet)) { mtrState = freshMtrState(); lrtOpen(lrtIdOf(d.mtrNet)); }
     else mtrSetStation(d.mtrNet);
     return;
@@ -12863,7 +12911,6 @@ document.getElementById('mtrview').addEventListener('click', event => {
       renderMtrView();
       break;
     }
-    case 'train': mtrOpenSaved(trainFavs[Number(d.index)]); break;
   }
 });
 document.getElementById('mtrview').addEventListener('input', event => {
