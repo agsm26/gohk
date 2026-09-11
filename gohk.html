@@ -415,6 +415,78 @@
                     padding:8px 12px; display:flex; align-items:center; gap:10px; }
   .mtrpick button .mtrdist { margin-left:auto; color:var(--ink-3); font-weight:700; white-space:nowrap; }
   .mtrpick button.dim { border-style:dashed; background:#f8fafc; }
+
+  /* THE SEARCH ROW, AND IT IS THE FIRST THING ON THE SCREEN.
+     Three controls in one row: the pin that finds you, the box, and the ✕
+     that empties it. It leads because it is the one control that always
+     works — before the location is known, before anything has been saved,
+     and when the rider wants a station they are nowhere near. It replaces
+     both a 「輸入車站名稱」 heading of its own AND a separate full-width
+     「使用我的位置」 button, which is two rows saved at the top of a screen
+     whose whole problem was that the useful part sat below the fold. */
+  .mtrfind { display:flex; align-items:center; gap:6px; margin:0 0 10px; }
+  .mtrfind input { flex:1 1 auto; min-width:0; box-sizing:border-box; padding:12px 14px;
+                   border:2px solid var(--line); border-radius:12px;
+                   font-size:1.0588rem; min-height:52px; }
+  .mtrfind .findbtn { flex:0 0 auto; min-width:52px; min-height:52px; padding:0 6px;
+                      border:2px solid var(--line); border-radius:12px; background:white;
+                      font-size:1.29rem; line-height:1; cursor:pointer; color:var(--ink-2); }
+  /* The pin lights up once it HAS your position, so the rider can see at a
+     glance whether "nearest" below means anything. */
+  .mtrfind .findbtn.on { border-color:var(--navy); background:var(--navy-tint); }
+
+  /* NEAREST, SAVED STATIONS AND SAVED TRAINS AS CHIPS.
+     A station name is two or three characters and it was getting a whole row
+     — four saved things and the search box fell off the bottom of the phone,
+     on a screen used by people who do not scroll. Three to a row fits a
+     four-character name AND its distance at 特大; saved trains carry a
+     station and a destination, so they get two to a row instead. */
+  .mtrgrid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr));
+             gap:6px; margin-bottom:4px; }
+  .mtrgrid.pairs { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .mtrchip { display:flex; flex-direction:column; align-items:center; justify-content:center;
+             gap:2px; min-height:64px; padding:6px 4px; border:2px solid var(--line);
+             border-radius:14px; background:white; color:var(--ink); font-weight:800;
+             text-align:center; overflow:hidden; cursor:pointer; }
+  /* break-word, NOT anywhere: "anywhere" lets the browser break mid-word
+     even when a hyphen is sitting right there, and turned AsiaWorld-Expo
+     into "AsiaWorl / d-Expo". */
+  .mtrchip .cname { font-size:1rem; line-height:1.2; overflow-wrap:break-word;
+                    display:-webkit-box; -webkit-line-clamp:2;
+                    -webkit-box-orient:vertical; overflow:hidden; }
+  .mtrchip .cmeta { font-size:0.94rem; font-weight:700; color:var(--ink-3); line-height:1.15;
+                    max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* A saved train is a line as much as a station, so it wears the line's
+     colour along its top edge — the same stripe the line sections use.
+     The Light Rail is marked the same way, in the same amber the rail map
+     uses for it: an emoji in the NAME cost a whole line at 特大 in English
+     (「🚇」 then 「Kenne…」 then the distance) and pushed Kennedy Town out of
+     its own chip. Colour costs nothing. */
+  .mtrchip.train { border-top-width:8px; }
+  .mtrchip.lrt { border-top:8px solid #b45309; }
+  /* 「Going towards Lo Wu」 is the whole point of a saved train and it does
+     not fit on one line at 特大. It is the one meta line allowed to wrap. */
+  .mtrchip.train .cmeta { white-space:normal; overflow-wrap:anywhere;
+                          display:-webkit-box; -webkit-line-clamp:2;
+                          -webkit-box-orient:vertical; }
+
+  /* THE MAP OF THE RAILWAY, at the bottom, out of the way of everything the
+     rider came for. Not a picture of a map: the real network read out of
+     mtr.json and lrt.json, one line per row, each row sliding sideways, and
+     every station a button. A picture cannot be tapped, cannot be read at
+     特大, and would go stale the day a station opens. */
+  .railmap { margin-top:20px; padding-top:14px; border-top:2px solid var(--line-soft); }
+  .rmhint { font-size:0.94rem; font-weight:700; color:var(--ink-3); margin:-4px 0 10px; }
+  .rmline { margin:0 0 12px; }
+  .rmname { display:flex; align-items:center; gap:8px; font-size:1rem; font-weight:800;
+            color:var(--ink-2); margin-bottom:2px; }
+  .rmdot { flex:0 0 auto; width:18px; height:18px; border-radius:9px; background:var(--line); }
+  .rmstrip { display:flex; align-items:center; overflow-x:auto; padding:4px 0 8px;
+             -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
+  .rmstop { flex:0 0 auto; min-height:48px; padding:0 10px; border:2px solid var(--line);
+            border-radius:10px; background:white; font-weight:700; font-size:0.94rem;
+            white-space:nowrap; color:var(--ink); cursor:pointer; }
+  .rmjoin { flex:0 0 auto; width:14px; height:5px; background:var(--line); }
   .mtrlines, .mtrdirs, .mtrdests { display:flex; flex-wrap:wrap; gap:8px; }
   .mtrdir { flex:1 1 45%; min-height:56px; border:2px solid var(--line); border-radius:10px;
             background:white; font-size:1.06rem; font-weight:800; color:var(--ink); cursor:pointer;
@@ -1831,10 +1903,12 @@ const TEXT = {
     lrtPlatform:'Platform {n}', lrtNoTrains:'No trains listed right now.',
     lrtBack:'Choose another stop', lrtBackTo:'Back to {s}', lrtLoading:'Checking the Light Rail\u2026',
     lrtRoute:'Light Rail {n}', railChangeHere:'Change railway here',
+    mtrClear:'Clear what you typed', railMapTitle:'The whole railway',
+    railMapHint:'Slide a line sideways. Tap any station to open it.',
     lrtCheckBoard:'Read the platform board for the next {n}',
     lrtOutDir:'Leave the platform and walk {d}',
     railFareSplit:'\u2139 MTR does not publish one price for Light Rail and train together, so no total is shown. Each part shows its own fare.',
-    mtrSearchPh:'Type a station name…', mtrSaved:'Your saved stations', mtrChange:'Change',
+    mtrSearchPh:'Station name…', mtrSaved:'Your saved stations', mtrChange:'Change',
     mtrLineStrip:'Tap or slide a station to stand there', mtrNextStops:'Stations ahead — tap one for the arrival time',
     mtrAway:'about {m} m away', mtrNearestTag:'nearest station',
     mtrNextTrains:'Next trains',
@@ -2123,6 +2197,8 @@ const TEXT = {
     lrtPlatform:'{n} 號月台', lrtNoTrains:'現時沒有班次資料。',
     lrtBack:'選擇其他車站', lrtBackTo:'返回 {s}', lrtLoading:'正在查詢輕鐵…',
     lrtRoute:'輕鐵 {n}', railChangeHere:'在此轉乘另一鐵路',
+    mtrClear:'清除輸入', railMapTitle:'全綫路綫圖',
+    railMapHint:'左右滑動每條綫，按車站即可查看。',
     lrtCheckBoard:'請看月台顯示屏的下班 {n}',
     lrtOutDir:'落車後往{d}行',
     railFareSplit:'ℹ 港鐵沒有公佈輕鐵連港鐵的合併車費，所以不顯示總數。每程分別顯示該程車費。',
@@ -4738,8 +4814,9 @@ function buildRailGraph() {
   // directions separately because several of them are not mirror images —
   // the 705 and 706 are the two halves of a loop, and a rider cannot ride
   // either of them backwards. Adding the reverse would invent a service.
-  for (const [key, stops] of Object.entries(lrtData.routes)) {
+  for (const key of Object.keys(lrtData.routes)) {
     const line = LR_LINE + key.split('|')[0];
+    const stops = lrtRouteStops(key);
     for (let i = 0; i < stops.length - 1; i++)
       ride(LR_NODE + stops[i], LR_NODE + stops[i + 1], line, LRT_SPEED, key);
   }
@@ -4898,6 +4975,18 @@ async function loadLrt() {
     return lrtData;
   })();
   try { return await lrtLoading; } finally { lrtLoading = null; }
+}
+
+// MTR'S OWN ROUTE FILE REPEATS A TERMINUS.
+// The 507 lists 田景 at sequence 1 AND sequence 2 in one direction — the two
+// platforms at that terminus, written as two calls. Read straight out, that
+// is a hop from a stop to itself: a zero-length edge in the graph and
+// 「田景 — 田景」 drawn on the map. Consecutive repeats are dropped here, once,
+// so nothing downstream has to know. A stop that appears twice at DIFFERENT
+// points of a loop is left alone, because that one is real.
+function lrtRouteStops(key) {
+  const stops = (lrtData && lrtData.routes && lrtData.routes[key]) || [];
+  return stops.filter((id, i) => id !== stops[i - 1]);
 }
 
 function lrtName(id) {
@@ -6893,7 +6982,9 @@ function savedStations() {
       out.push({ kind: best.kind, id: best.id,
                  name: best.kind === 'lrt' ? lrtName(best.id) : stationName(best.id) });
   }
-  return out.slice(0, 3);
+  // Six, not three: they are chips three to a row now, so six is two rows
+  // and still leaves the search box at the top of the screen.
+  return out.slice(0, 6);
 }
 
 // innerHTML += re-parses the WHOLE container, replacing every existing node.
@@ -11330,7 +11421,7 @@ const MTR_CACHE_MS = 30000;    // the feed itself is refreshed about this often
 
 let mtrState = freshMtrState();
 function freshMtrState() {
-  return { station:null, line:null, dir:null, dest:null,
+  return { station:null, line:null, dir:null, dest:null, query:'',
            lrt:null, lrtHtml:'',
            blocks:{}, alerts:{}, blocksFor:null, fetchedAt:0,
            loading:false, locating:false, locateTried:false, noneNear:false };
@@ -11605,6 +11696,109 @@ function clockIn(minutes) {
     .toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
+// ============================================================
+// THE RAIL MAP
+// ============================================================
+// Every line and every Light Rail route, drawn out of the same two files the
+// journey planner searches — so what a rider can tap here and what the app
+// will actually route them along can never disagree. A picture of MTR's own
+// map would be prettier and would be the wrong thing: it cannot be tapped, it
+// cannot grow with the text-size setting, it is somebody else's artwork, and
+// it goes stale the day a station opens.
+//
+// Built once and kept. It changes only when the language does or when
+// lrt.json finally lands, and rebuilding four hundred buttons every time a
+// station is saved is work for nothing.
+let railMapCache = { key: '', html: '' };
+
+// The longest variant is the spine; anything that lives only on another
+// variant is spliced in AFTER the stop it branches off, never tacked on the
+// end where it would draw a journey nobody can make. On the trains that is
+// 落馬洲 and 康城; on the Light Rail it is the far half of the 705/706 loop.
+function mergedRailOrder(variants) {
+  const order = (variants.reduce((a, b) => (b.length > a.length ? b : a), variants[0]) || []).slice();
+  for (const raw of variants) {
+    // A branch is sometimes written running the other way. mtr.json lists
+    // the 將軍澳綫's as 康城 → 將軍澳 → 調景嶺, outwards to inwards, so the
+    // stop before 康城 is nothing at all and 康城 landed at the far end of
+    // the line, past 寶琳. Turn the variant to face the spine first.
+    const variant = facesSameWay(raw, order) ? raw : raw.slice().reverse();
+    variant.forEach((code, i) => {
+      if (order.includes(code)) return;
+      const at = i > 0 ? order.indexOf(variant[i - 1]) : -1;
+      if (at >= 0) order.splice(at + 1, 0, code); else order.push(code);
+    });
+  }
+  return order;
+}
+
+// Do this variant's stops run the same way round as the spine? Answered from
+// the first TWO stops the two lists share, which is all it takes.
+function facesSameWay(variant, order) {
+  let first = -1, second = -1;
+  for (const code of variant) {
+    const at = order.indexOf(code);
+    if (at < 0) continue;
+    if (first < 0) { first = at; continue; }
+    second = at; break;
+  }
+  return first < 0 || second < 0 || second > first;
+}
+
+function railMapHtml() {
+  if (!mtrData) return '';
+  const key = lang + (lrtData ? '+lrt' : '');
+  if (railMapCache.key === key) return railMapCache.html;
+
+  const strip = chips => '<div class="rmstrip">' + chips.join('<span class="rmjoin"></span>') + '</div>';
+  const row = (name, colour, chips) =>
+    '<div class="rmline"><div class="rmname">' +
+      '<span class="rmdot" style="background:' + colour + '"></span>' + esc(name) + '</div>' +
+      strip(chips) + '</div>';
+
+  let html = '<div class="railmap"><div class="mtrsub">🗺 ' + T('railMapTitle') + '</div>' +
+             '<div class="rmhint">' + T('railMapHint') + '</div>';
+
+  for (const [line, variants] of Object.entries(mtrData.lines)) {
+    const order = mergedRailOrder(variants);
+    const colour = MTR_LINE_COLOURS[line] || '#999';
+    html += row(railLineName(line), colour, order.map(code =>
+      '<button class="rmstop" data-mtr-station="' + esc(code) +
+      '" style="border-top:6px solid ' + colour + '">' + esc(stationName(code)) + '</button>'));
+  }
+
+  if (lrtData && lrtData.routes) {
+    // ONE colour for the whole Light Rail, not one per route. MTR publishes
+    // no colour per Light Rail route and this app does not invent data —
+    // twelve made-up colours would read as twelve facts.
+    const LRT_COLOUR = '#b45309';
+    // A route's two directions are merged the same way a train line's
+    // branches are. It matters most on the 705/706, where the "directions"
+    // are the two halves of one loop: taking either alone would leave 天慈,
+    // 天湖 and 銀座 off the map of a route that calls at all three.
+    const byNumber = new Map();
+    for (const routeKey of Object.keys(lrtData.routes)) {
+      const number = routeKey.split('|')[0];
+      if (!byNumber.has(number)) byNumber.set(number, []);
+      byNumber.get(number).push(lrtRouteStops(routeKey));
+    }
+    const numbers = [...byNumber.keys()].sort((a, b) =>
+      (parseInt(a, 10) - parseInt(b, 10)) || a.localeCompare(b));
+
+    html += '<div class="mtrsub">🚈 ' + T('lrtTitle') + '</div>';
+    for (const number of numbers) {
+      html += row(T('lrtRoute').replace('{n}', number), LRT_COLOUR,
+        mergedRailOrder(byNumber.get(number)).map(id =>
+          '<button class="rmstop" data-mtr-lrt="' + esc(id) +
+          '" style="border-top:6px solid ' + LRT_COLOUR + '">' + esc(lrtName(id)) + '</button>'));
+    }
+  }
+
+  html += '</div>';
+  railMapCache = { key, html };
+  return html;
+}
+
 function renderMtrView() {
   const view = document.getElementById('mtrview');
   if (!view) return;
@@ -11644,59 +11838,87 @@ function renderMtrView() {
   }
 
   if (!mtrData) return;
-  let html = '<div class="favhead">🚇 ' + T('mtrTitle') + '</div>';
+  // No 「🚇 港鐵」 heading on this screen. The tab at the bottom is already
+  // lit and says 港鐵, and the row it cost was the row the search box needed
+  // to be above the fold.
+  let html = '';
 
   // ---- 1. WHICH STATION ----
   if (!st.station) {
+    // THE SEARCH ROW FIRST, ALWAYS — even while the phone is still finding
+    // itself. Waiting on the GPS used to blank the whole screen, so somebody
+    // who already knew they wanted 尖沙咀 had to wait for an answer to a
+    // question they had not asked.
+    html += '<div class="mtrfind">' +
+      '<button class="findbtn' + (herePoint ? ' on' : '') + '" data-mtr-act="geo-yes" ' +
+        'aria-label="' + esc(T('myLocation')) + '" title="' + esc(T('myLocation')) + '">\u{1F4CD}</button>' +
+      '<input id="mtr-search" type="text" placeholder="' + esc(T('mtrSearchPh')) +
+        '" autocomplete="off" value="' + esc(st.query || '') + '">' +
+      '<button class="findbtn" data-mtr-act="clear-search" ' +
+        'aria-label="' + esc(T('mtrClear')) + '" title="' + esc(T('mtrClear')) + '">✕</button>' +
+      '</div>' +
+      '<div class="mtrpick" id="mtr-search-results"></div>';
+
+    if (navigator.geolocation && geoChoice() !== 'no' && geoChoice() !== 'yes' && !herePoint) {
+      html += '<div class="mtrgeo"><div class="geotitle">' + T('mtrGeoTitle') + '</div>' +
+              '<div class="geobody">' + T('mtrGeoBody') + '</div>' +
+              '<div class="geobtns"><button class="geoyes" data-mtr-act="geo-yes">' + T('geoYes') + '</button>' +
+              '<button class="geono" data-mtr-act="geo-no">' + T('geoNo') + '</button></div></div>';
+    }
+
     if (st.locating) {
       html += '<div class="favempty">' + T('findingYou') + '</div>';
-    } else {
-      if (navigator.geolocation && geoChoice() !== 'no' && geoChoice() !== 'yes' && !herePoint) {
-        html += '<div class="mtrgeo"><div class="geotitle">' + T('mtrGeoTitle') + '</div>' +
-                '<div class="geobody">' + T('mtrGeoBody') + '</div>' +
-                '<div class="geobtns"><button class="geoyes" data-mtr-act="geo-yes">' + T('geoYes') + '</button>' +
-                '<button class="geono" data-mtr-act="geo-no">' + T('geoNo') + '</button></div></div>';
-      } else if (navigator.geolocation && !herePoint) {
-        html += '<div class="mtrpick"><button data-mtr-act="geo-yes">' + T('myLocation') + '</button></div>';
+    } else if (herePoint) {
+      // ONE NEAREST LIST, BOTH RAILWAYS.
+      // Standing at 屯門 you are at a station and at a Light Rail stop at
+      // the same time; two lists headed "nearest stations" and "Light Rail
+      // near you" made the rider decide which railway they wanted before
+      // they had been told what was there. Nearest is nearest.
+      const near = railStationsNear(herePoint.lat, herePoint.lng, MTR_NEAR_M)
+        .map(n => ({ kind: 'mtr', id: n.code, name: stationName(n.code), metres: n.metres }))
+        .concat(lrtStopsNear(herePoint.lat, herePoint.lng, LRT_NEAR_M)
+          .map(n => ({ kind: 'lrt', id: n.id, name: lrtName(n.id), metres: n.metres })))
+        .sort((a, b) => a.metres - b.metres)
+        .slice(0, 6);
+      if (near.length) {
+        html += '<div class="mtrsub">' + T('mtrNearby') + '</div><div class="mtrgrid">' +
+          near.map(n => '<button class="mtrchip' + (n.kind === 'lrt' ? ' lrt' : '') +
+            '" data-mtr-' + (n.kind === 'lrt' ? 'lrt' : 'station') + '="' + esc(n.id) + '">' +
+            '<span class="cname">' + esc(n.name) + '</span>' +
+            '<span class="cmeta">' + Math.round(n.metres) + ' m</span></button>').join('') + '</div>';
+      } else {
+        html += '<div class="favempty">' + T('mtrNoneNear') + '</div>';
       }
-      if (herePoint) {
-        // ONE NEAREST LIST, BOTH RAILWAYS.
-        // Standing at 屯門 you are at a station and at a Light Rail stop at
-        // the same time; two lists headed "nearest stations" and "Light Rail
-        // near you" made the rider decide which railway they wanted before
-        // they had been told what was there. Nearest is nearest.
-        const near = railStationsNear(herePoint.lat, herePoint.lng, MTR_NEAR_M)
-          .map(n => ({ kind: 'mtr', id: n.code, name: stationName(n.code), metres: n.metres }))
-          .concat(lrtStopsNear(herePoint.lat, herePoint.lng, LRT_NEAR_M)
-            .map(n => ({ kind: 'lrt', id: n.id, name: lrtName(n.id), metres: n.metres })))
-          .sort((a, b) => a.metres - b.metres)
-          .slice(0, 4);
-        if (near.length) {
-          html += '<div class="mtrsub">' + T('mtrNearby') + '</div><div class="mtrpick">' +
-            near.map(n => '<button data-mtr-' + (n.kind === 'lrt' ? 'lrt' : 'station') +
-              '="' + esc(n.id) + '">' + (n.kind === 'lrt' ? '🚈 ' : '🚇 ') + esc(n.name) +
-              '<span class="mtrdist">' + Math.round(n.metres) + ' m</span></button>').join('') + '</div>';
-        } else {
-          html += '<div class="favempty">' + T('mtrNoneNear') + '</div>';
-        }
-      }
-      const saved = savedStations();
-      if (saved.length) {
-        html += '<div class="mtrsub">' + T('mtrSaved') + '</div><div class="mtrpick">' +
-          saved.map(sv => '<button data-mtr-' + (sv.kind === 'lrt' ? 'lrt' : 'station') + '="' +
-            esc(sv.id) + '">⭐ ' + esc(sv.name) + '</button>').join('') + '</div>';
-      }
-      if (trainFavs.length) {
-        html += '<div class="mtrsub">' + T('mtrSavedTrains') + '</div><div class="mtrpick">' +
-          trainFavs.map((t, i) => '<button data-mtr-act="train" data-index="' + i + '" style="border-left:12px solid ' +
-            (MTR_LINE_COLOURS[t.line] || '#999') + '">★ ' + esc(stationName(t.station)) + ' · ' +
-            T('towards') + ' ' + esc(stationName(t.dest)) + '</button>').join('') + '</div>';
-      }
-      html += '<div class="mtrsub">' + T('mtrSearchPh').replace('…', '') + '</div>' +
-              '<div class="frow"><input id="mtr-search" type="text" placeholder="' + esc(T('mtrSearchPh')) + '" autocomplete="off"></div>' +
-              '<div class="mtrpick" id="mtr-search-results"></div>';
     }
+
+    const saved = savedStations();
+    if (saved.length) {
+      // No ⭐ inside the chip: the heading above it already says these are
+      // saved, and at 特大 in English the star was taking a line of its own
+      // away from the name.
+      html += '<div class="mtrsub">' + T('mtrSaved') + '</div><div class="mtrgrid">' +
+        saved.map(sv => '<button class="mtrchip' + (sv.kind === 'lrt' ? ' lrt' : '') +
+          '" data-mtr-' + (sv.kind === 'lrt' ? 'lrt' : 'station') + '="' + esc(sv.id) + '">' +
+          '<span class="cname">' + esc(sv.name) + '</span></button>').join('') +
+        '</div>';
+    }
+    if (trainFavs.length) {
+      html += '<div class="mtrsub">' + T('mtrSavedTrains') + '</div><div class="mtrgrid pairs">' +
+        trainFavs.map((t, i) => '<button class="mtrchip train" data-mtr-act="train" data-index="' + i +
+          '" style="border-top-color:' + (MTR_LINE_COLOURS[t.line] || '#999') + '">' +
+          '<span class="cname">' + esc(stationName(t.station)) + '</span>' +
+          '<span class="cmeta">' + T('towards') + ' ' + esc(stationName(t.dest)) + '</span></button>').join('') +
+        '</div>';
+    }
+
+    // ---- AND THE WHOLE RAILWAY, UNDERNEATH ----
+    html += railMapHtml();
     view.innerHTML = html;
+    // The box keeps what was typed across a redraw, so its results have to
+    // come back with it — otherwise a redraw triggered by something else
+    // (the Light Rail file landing, a saved station changing) leaves a query
+    // sitting in the box above an empty list.
+    if (st.query) mtrRenderSearch(st.query);
     return;
   }
 
@@ -11889,6 +12111,17 @@ document.getElementById('mtrview').addEventListener('click', event => {
   if (d.mtrDir)     return mtrSetDir(d.mtrDir, d.line);
   if (d.mtrDest)    return mtrSetDest(d.mtrDest);
   switch (d.mtrAct) {
+    // ✕ empties the box and the list under it. Deliberately does NOT put
+    // the keyboard back up: somebody who has just cleared a search usually
+    // wants to see the screen they cleared it off.
+    case 'clear-search': {
+      mtrState.query = '';
+      const box = document.getElementById('mtr-search');
+      if (box) box.value = '';
+      const found = document.getElementById('mtr-search-results');
+      if (found) found.innerHTML = '';
+      break;
+    }
     case 'lrt-back':    mtrState.lrt = null; mtrState.lrtHtml = ''; renderMtrView(); break;
     case 'lrt-refresh': lrtOpen(mtrState.lrt); break;
     case 'change':  mtrState = Object.assign(freshMtrState(), { locateTried: true }); renderMtrView(); break;
@@ -11907,7 +12140,12 @@ document.getElementById('mtrview').addEventListener('click', event => {
   }
 });
 document.getElementById('mtrview').addEventListener('input', event => {
-  if (event.target.id === 'mtr-search') mtrRenderSearch(event.target.value);
+  if (event.target.id !== 'mtr-search') return;
+  // Remembered on the state, not just in the box: this screen is rebuilt
+  // from scratch on every change, and a rebuild used to empty what somebody
+  // was halfway through typing.
+  mtrState.query = event.target.value;
+  mtrRenderSearch(event.target.value);
 });
 
 // ============================================================
