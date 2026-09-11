@@ -381,6 +381,19 @@
      direction with trains is not a choice.
      ========================================================== */
   .mtrsub { font-size:1rem; font-weight:800; color:var(--ink-3); margin:14px 0 8px; }
+  /* The Light Rail board. Platforms, not lines and directions — that is the
+     shape the operator's own data has, and inventing another would mean
+     guessing which way a train at 三聖 is pointing. */
+  .lrtplat { margin:14px 0 6px; font-size:1rem; font-weight:800; color:var(--ink-3); }
+  .lrtrow { display:flex; align-items:center; gap:10px; padding:10px 12px; margin-bottom:6px;
+            border:2px solid var(--line-soft); border-radius:12px; background:var(--surface); }
+  .lrtno { flex:0 0 auto; min-width:54px; padding:2px 8px; border-radius:9px;
+           background:var(--red-tint); color:var(--red);
+           font-size:1.1765rem; font-weight:800; text-align:center; }
+  .lrtdest { flex:1 1 auto; min-width:0; font-size:1.0588rem; font-weight:800;
+             color:var(--ink); overflow-wrap:anywhere; }
+  .lrtwhen { flex:0 0 auto; font-size:1.1765rem; font-weight:800; color:var(--green);
+             white-space:nowrap; }
   /* A new section: a rule and air above it, so 起點 is not read as part of 目的地. */
   .mtrsub.sectionbreak { margin-top:24px; padding-top:14px; border-top:2px solid var(--line-soft); }
   /* 起點 is a row now, not a heading, so the rule that separates it from
@@ -1813,6 +1826,9 @@ const TEXT = {
     mtrTitle:'MTR', mtrGeoTitle:'Find your nearest station?',
     mtrGeoBody:'If you allow it, the app finds the MTR station closest to you and shows the next trains. Your location stays on this phone.',
     mtrNearby:'Nearest stations', mtrNoneNear:'No MTR station within 1.5 km. Type a station name instead.',
+    lrtTitle:'Light Rail', lrtNearby:'Light Rail stops near you',
+    lrtPlatform:'Platform {n}', lrtNoTrains:'No trains listed right now.',
+    lrtBack:'Choose another stop', lrtLoading:'Checking the Light Rail\u2026',
     mtrSearchPh:'Type a station name…', mtrSaved:'Your saved stations', mtrChange:'Change',
     mtrLineStrip:'Tap or slide a station to stand there', mtrNextStops:'Stations ahead — tap one for the arrival time',
     mtrAway:'about {m} m away', mtrNearestTag:'nearest station',
@@ -2093,6 +2109,9 @@ const TEXT = {
     mtrTitle:'港鐵', mtrGeoTitle:'尋找最近的港鐵站？',
     mtrGeoBody:'允許後，本app會找出離你最近的港鐵站，並顯示下班列車。你的位置只留在這部手機。',
     mtrNearby:'最近的車站', mtrNoneNear:'1.5 公里內沒有港鐵站，請輸入車站名稱。',
+    lrtTitle:'輕鐵', lrtNearby:'附近輕鐵站',
+    lrtPlatform:'{n} 號月台', lrtNoTrains:'現時沒有班次資料。',
+    lrtBack:'選擇其他車站', lrtLoading:'正在查詢輕鐵…',
     mtrSearchPh:'輸入車站名稱…', mtrSaved:'你收藏的車站', mtrChange:'更改',
     mtrLineStrip:'按一下或滑動車站即可換站', mtrNextStops:'沿途車站 — 按一下計算到達時間',
     mtrAway:'距離約 {m} 米', mtrNearestTag:'最近車站',
@@ -4604,6 +4623,100 @@ function railStop(code) {
   const s = mtrData && mtrData.stations[code];
   if (!s) return null;
   return { stop: code, name_en: s[0], name_tc: s[1], lat: s[2], long: s[3] };
+}
+
+// ============================================================
+// LIGHT RAIL
+// ============================================================
+// The backbone of Tuen Mun and Yuen Long, and until now completely absent
+// from an app several of whose saved stops are on it. 37 KB, so it is
+// fetched only when the 港鐵 tab is opened — a rider in Sha Tin never pays
+// for it.
+//
+// MTR publishes the network and the fares but NO coordinates with them, so
+// the positions come from HK Bus Crawling, the same source the Citybus stop
+// positions already come from. See lrt.json's own `source` line.
+const LRT_URL = 'lrt.json';
+const LRT_SCHEDULE = 'https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=';
+const LRT_NEAR_M = 1200;
+let lrtData = null, lrtLoading = null;
+
+async function loadLrt() {
+  if (lrtData) return lrtData;
+  if (lrtLoading) return lrtLoading;
+  lrtLoading = (async () => {
+    const cached = await cacheGet('lrt-network');
+    if (cached) { lrtData = cached; return lrtData; }
+    const response = await fetch(LRT_URL, { signal: AbortSignal.timeout(15000) });
+    if (!response.ok) throw new Error('server said ' + response.status);
+    lrtData = await response.json();
+    cachePut('lrt-network', lrtData);
+    return lrtData;
+  })();
+  try { return await lrtLoading; } finally { lrtLoading = null; }
+}
+
+function lrtName(id) {
+  const row = lrtData && lrtData.stops[id];
+  return row ? (lang === 'zh' ? row[1] : row[0]) : id;
+}
+
+function lrtStopsNear(lat, lng, limit) {
+  if (!lrtData) return [];
+  const near = [];
+  for (const id of Object.keys(lrtData.stops)) {
+    const row = lrtData.stops[id];
+    const m = metresBetween(lat, lng, row[2], row[3]);
+    if (m <= (limit || LRT_NEAR_M)) near.push({ id, metres: m });
+  }
+  return near.sort((a, b) => a.metres - b.metres).slice(0, 4);
+}
+
+// THE BOARD, IN THE OPERATOR'S OWN WORDS.
+// getSchedule hands back a ready-made "11 分鐘" / "11 mins", and a bare "-"
+// for a train standing at the platform. Those strings are shown as they
+// arrive rather than parsed into minutes and rebuilt: every parse is a
+// chance to turn a train that is here into a train that is not.
+async function lrtBoardHtml(stopId) {
+  const response = await fetch(LRT_SCHEDULE + encodeURIComponent(stopId),
+                               { signal: AbortSignal.timeout(10000) });
+  if (!response.ok) throw new Error('server said ' + response.status);
+  const data = await response.json();
+  const rows = [];
+  for (const p of (data.platform_list || [])) {
+    const trains = (p.route_list || []).filter(t => t.route_no);
+    if (!trains.length) continue;
+    rows.push('<div class="lrtplat">' + esc(T('lrtPlatform').replace('{n}', p.platform_id)) + '</div>' +
+      trains.map(t => {
+        const when = String((lang === 'zh' ? t.time_ch : t.time_en) || '').trim();
+        return '<div class="lrtrow">' +
+          '<span class="lrtno">' + esc(t.route_no) + '</span>' +
+          '<span class="lrtdest">' + esc(T('towards')) + ' ' +
+            esc((lang === 'zh' ? t.dest_ch : t.dest_en) || '') + '</span>' +
+          '<span class="lrtwhen">' + esc(when) + '</span></div>';
+      }).join(''));
+  }
+  return rows.length ? rows.join('') : '<div class="favempty">' + T('lrtNoTrains') + '</div>';
+}
+
+// Open one Light Rail stop and fill its board. The board is fetched every
+// time rather than cached: a train time from two minutes ago is the one
+// thing an arrivals board must never show.
+async function lrtOpen(stopId) {
+  if (!stopId) return;
+  mtrState.lrt = stopId;
+  mtrState.lrtHtml = '';
+  renderMtrView();
+  try {
+    const html = await lrtBoardHtml(stopId);
+    if (mtrState.lrt !== stopId) return;         // moved on while waiting
+    mtrState.lrtHtml = html;
+  } catch (error) {
+    if (mtrState.lrt !== stopId) return;
+    mtrState.lrtHtml = '<div class="favempty">' + esc(T('couldNotLoadArrivals')) + '</div>';
+  }
+  const board = document.getElementById('lrtboard');
+  if (board) board.innerHTML = mtrState.lrtHtml;
 }
 
 function railStationsNear(lat, lng, limit) {
@@ -7364,6 +7477,26 @@ async function loadNextBus(pick) {
     // alone; Citybus and NLB want stop AND route. Green minibus uses a
     // separate service altogether, which we do not have wired up — so rather
     // than show a wrong time, we say plainly that live times are unavailable.
+    if (leg.co === 'nlb') {
+      // NLB answers per route AND per stop, on its own endpoint — so it is
+      // fetched here rather than through the shared URL below.
+      const rows = await fetchNlbRows(leg.on, new Set([leg.route])).catch(() => []);
+      const soon = etaEntries(rows, null, null).slice(0, 3);
+      const tile = document.getElementById('ceta-' + pick.number);
+      if (!soon.length) {
+        line.className = 'jnext waiting';
+        line.textContent = T('noBusDue');
+        if (tile) tile.textContent = '—';
+        return;
+      }
+      line.className = 'jnext';
+      line.innerHTML = T('next') + ' ' + esc(leg.route) + ' ' + T('inTime') +
+        ' <span class="mins">' + (soon[0].m === 0 ? T('dueNow') : soon[0].m + T('min')) + '</span>' +
+        (soon[0].last ? lastBusTag() : '');
+      if (tile) tile.textContent = leg.route + ' ' +
+        (soon[0].m === 0 ? T('dueNow') : soon[0].m + T('min'));
+      return;
+    }
     if (leg.co === 'gmb') {
       line.className = 'jnext waiting';
       line.textContent = T('noLiveMinibus');
@@ -9479,6 +9612,115 @@ function gmbKeyFor(stopId, code, stopSeq) {
                    return parts[3] === 'gmb' && parts[0] === code; });
   return keys.find(k => k.seq === stopSeq) || keys[0] || null;
 }
+// ============================================================
+// NEW LANTAU BUS — live arrivals
+// ============================================================
+// NLB was the last operator on the network with no live times at all: a stop
+// on Lantau said 「沒有實時班次」 where a KMB stop two islands away showed a
+// countdown. It publishes them, on its own endpoint, in its own shape.
+//
+// The lucky part: hk-bus-lite already stores NLB stops under NLB'S OWN stop
+// ids ("1", "2", "3"…), which is exactly what this API wants. The awkward
+// part: it is keyed by routeId, a number of NLB's own that has nothing to do
+// with the route NUMBER — route 1 is routeId 1 one way and routeId 2 the
+// other. So the two have to be matched up, once, and the match must not be
+// guessed from a name.
+const NLB_BASE = 'https://rt.data.gov.hk/v2/transport/nlb';
+let nlbRoutes = null;                    // the operator's own route list
+const nlbRouteIdCache = new Map();       // "route|bound" -> routeId or null
+
+async function loadNlbRoutes() {
+  if (nlbRoutes) return nlbRoutes;
+  const response = await fetch(NLB_BASE + '/route.php?action=list',
+                               { signal: AbortSignal.timeout(10000) });
+  if (!response.ok) throw new Error('server said ' + response.status);
+  nlbRoutes = ((await response.json()).routes || []);
+  return nlbRoutes;
+}
+
+// WHICH routeId IS OUR DIRECTION?
+// Not by reading the name. NLB writes its routes as "梅窩碼頭 > 大澳", and
+// matching that against our own terminus would break the first time either
+// side renamed a pier. The stop LIST is the fact: ask NLB for each candidate
+// routeId's stops and keep the one whose first stop is our first stop. Two
+// calls per route at worst, once per session.
+async function nlbRouteIdFor(routeNo, bound, serviceType) {
+  const key = routeNo + '|' + bound;
+  if (nlbRouteIdCache.has(key)) return nlbRouteIdCache.get(key);
+  let found = null;
+  try {
+    const all = await loadNlbRoutes();
+    const mine = all.filter(r => String(r.routeNo).toUpperCase() === String(routeNo).toUpperCase());
+    const ourKey = routeNo + '|' + bound + '|' + (serviceType || '1') + '|nlb';
+    const ourStops = (routeIndex && routeIndex.get(ourKey)) || [];
+    const ourFirst = ourStops.length ? String(ourStops[0].stopId) : null;
+    if (mine.length === 1) found = mine[0].routeId;
+    else if (ourFirst) {
+      for (const candidate of mine) {
+        const response = await fetch(NLB_BASE + '/stop.php?action=list&routeId=' +
+                                     encodeURIComponent(candidate.routeId),
+                                     { signal: AbortSignal.timeout(10000) });
+        if (!response.ok) continue;
+        const stops = ((await response.json()).stops || []);
+        if (stops.length && String(stops[0].stopId) === ourFirst) { found = candidate.routeId; break; }
+      }
+    }
+  } catch (error) {
+    console.warn('NLB route list unavailable:', error.message);
+    return null;                          // NOT cached: a dropped call is not an answer
+  }
+  nlbRouteIdCache.set(key, found);
+  return found;
+}
+
+async function fetchNlbRows(stop, wantRoutes) {
+  let routes = routesAtStop(stop.stop).filter(r => r.co === 'NLB');
+  if (wantRoutes && wantRoutes.size) routes = routes.filter(r => wantRoutes.has(r.route));
+  routes = routes.slice(0, 8);
+  const lists = await Promise.all(routes.map(async r => {
+    try {
+      const routeId = await nlbRouteIdFor(r.route, r.bound, r.type);
+      if (!routeId) return [];
+      const response = await fetch(NLB_BASE + '/stop.php?action=estimatedArrivals&routeId=' +
+        encodeURIComponent(routeId) + '&stopId=' + encodeURIComponent(stop.stop) +
+        '&language=' + (lang === 'zh' ? 'zh' : 'en'),
+        { signal: AbortSignal.timeout(10000) });
+      if (!response.ok) return [];
+      const arrivals = ((await response.json()).estimatedArrivals || []);
+      return arrivals
+        // "departed" means this bus has already left THIS stop. Showing it
+        // would be the one thing this app refuses to do.
+        .filter(a => String(a.departed) !== '1' && a.estimatedArrivalTime)
+        .map(a => ({
+          co: 'NLB', route: r.route, dir: r.bound, service_type: r.type || '1',
+          seq: r.seq,
+          // "2026-09-11 11:30:00" with no zone. The phone is in Hong Kong and
+          // so is the bus, but an implied zone is a bug waiting for a
+          // traveller, so it is stated.
+          eta: String(a.estimatedArrivalTime).replace(' ', 'T') + '+08:00',
+          // noGPS is NLB saying "this is the timetable, not a bus I can see"
+          // — the same fact KMB writes as 原定班次. Said in the same words so
+          // the 約 marking already in the app picks it up unchanged.
+          rmk_tc: String(a.noGPS) === '1' ? '原定班次' : '',
+          rmk_en: String(a.noGPS) === '1' ? 'Scheduled Bus' : '',
+          dest_tc: nlbDestOf(r.route, r.bound, 'c'),
+          dest_en: nlbDestOf(r.route, r.bound, 'e')
+        }));
+    } catch (error) { return []; }
+  }));
+  return lists.flat();
+}
+
+// The far end of the route, as NLB writes it: "梅窩碼頭 > 大澳".
+function nlbDestOf(routeNo, bound, which) {
+  const id = nlbRouteIdCache.get(routeNo + '|' + bound);
+  const row = (nlbRoutes || []).find(r => String(r.routeId) === String(id));
+  if (!row) return '';
+  const name = which === 'c' ? (row.routeName_c || '') : (row.routeName_e || '');
+  const parts = name.split('>');
+  return (parts.length > 1 ? parts[parts.length - 1] : name).trim();
+}
+
 async function fetchGmbRows(stop) {
   await loadGmbRoutes();
   const response = await fetch(GMB_ETA_URL + encodeURIComponent(stop.stop),
@@ -9532,6 +9774,8 @@ async function fetchPoleRows(stop, wantRoutes) {
     rows = lists.flat();
   } else if (co === 'GMB') {
     rows = await fetchGmbRows(stop);
+  } else if (co === 'NLB') {
+    rows = await fetchNlbRows(stop, wantRoutes);
   }
   return rows === null ? null : rows.map(row => Object.assign({}, row,
     { stop: stop.stop, stopName_en: stop.name_en, stopName_tc: stop.name_tc, co: row.co || co }));
@@ -10421,6 +10665,7 @@ const MTR_CACHE_MS = 30000;    // the feed itself is refreshed about this often
 let mtrState = freshMtrState();
 function freshMtrState() {
   return { station:null, line:null, dir:null, dest:null,
+           lrt:null, lrtHtml:'',
            blocks:{}, alerts:{}, blocksFor:null, fetchedAt:0,
            loading:false, locating:false, locateTried:false, noneNear:false };
 }
@@ -10486,6 +10731,10 @@ async function loadTrainFavEta(t, index) {
 }
 
 function openMtrView() {
+  // The Light Rail file is small and only useful to somebody standing near
+  // it, so it is fetched when this tab opens and never before.
+  loadLrt().then(() => { if (activeMode === 'mtr') renderMtrView(); })
+           .catch(error => console.warn('Light Rail unavailable:', error.message));
   const panel = document.getElementById('panel');
   const view  = document.getElementById('mtrview');
   panel.classList.remove('favmode', 'setmode', 'routemode', 'stopmode');
@@ -10694,6 +10943,21 @@ function renderMtrView() {
   const view = document.getElementById('mtrview');
   if (!view || !mtrData) return;
   const st = mtrState;
+
+  // ---- A LIGHT RAIL STOP, if one is chosen ----
+  // Its own small screen rather than a fourth thing crammed into the station
+  // view: the Light Rail has platforms, not lines and directions, and
+  // pretending otherwise would mean inventing a shape its data has not got.
+  if (st.lrt) {
+    view.innerHTML = '<div class="favhead">🚈 ' + T('lrtTitle') + '</div>' +
+      '<div class="mtrsta"><div class="mtrname">🚈 ' + esc(lrtName(st.lrt)) + '</div>' +
+      '<button class="refreshbtn" data-mtr-act="lrt-refresh">' + T('refresh') + '</button></div>' +
+      '<div id="lrtboard">' + (st.lrtHtml || '<div class="favempty">' + T('lrtLoading') + '</div>') + '</div>' +
+      '<button class="btn" data-mtr-act="lrt-back" style="width:100%;margin-top:12px">' +
+      T('lrtBack') + '</button>';
+    return;
+  }
+
   let html = '<div class="favhead">🚇 ' + T('mtrTitle') + '</div>';
 
   // ---- 1. WHICH STATION ----
@@ -10717,6 +10981,15 @@ function renderMtrView() {
               '<span class="mtrdist">' + Math.round(n.metres) + ' m</span></button>').join('') + '</div>';
         } else {
           html += '<div class="favempty">' + T('mtrNoneNear') + '</div>';
+        }
+        // The Light Rail, when the rider is actually near it. Nothing is
+        // shown in Sha Tin, and nothing is downloaded there either.
+        const lrtNear = lrtStopsNear(herePoint.lat, herePoint.lng, LRT_NEAR_M);
+        if (lrtNear.length) {
+          html += '<div class="mtrsub">' + T('lrtNearby') + '</div><div class="mtrpick">' +
+            lrtNear.slice(0, 3).map(n => '<button data-mtr-lrt="' + esc(n.id) + '">🚈 ' +
+              esc(lrtName(n.id)) + '<span class="mtrdist">' + Math.round(n.metres) + ' m</span></button>').join('') +
+            '</div>';
         }
       }
       const saved = savedStations();
@@ -10878,14 +11151,17 @@ function showRailResults() {
 // One listener for the whole screen: it is redrawn from scratch on every
 // change, so per-button handlers would be lost on each redraw.
 document.getElementById('mtrview').addEventListener('click', event => {
-  const el = event.target.closest('[data-mtr-station],[data-mtr-dir],[data-mtr-dest],[data-mtr-jump],[data-mtr-act]');
+  const el = event.target.closest('[data-mtr-station],[data-mtr-dir],[data-mtr-dest],[data-mtr-jump],[data-mtr-act],[data-mtr-lrt]');
   if (!el) return;
   const d = el.dataset;
+  if (d.mtrLrt) { lrtOpen(d.mtrLrt); return; }
   if (d.mtrJump) { mtrJumpTo(d.mtrJump, d.line); return; }   // a station on a strip: stand there
   if (d.mtrStation) return mtrSetStation(d.mtrStation);
   if (d.mtrDir)     return mtrSetDir(d.mtrDir, d.line);
   if (d.mtrDest)    return mtrSetDest(d.mtrDest);
   switch (d.mtrAct) {
+    case 'lrt-back':    mtrState.lrt = null; mtrState.lrtHtml = ''; renderMtrView(); break;
+    case 'lrt-refresh': lrtOpen(mtrState.lrt); break;
     case 'change':  mtrState = Object.assign(freshMtrState(), { locateTried: true }); renderMtrView(); break;
     case 'refresh': mtrLoadBlocks(true); break;
     case 'geo-yes': rememberGeoChoice('yes'); mtrLocate(); break;
@@ -12077,7 +12353,21 @@ async function loadStopEta(row) {
 
   try {
     let entries = [];
-    if (context.co === 'CTB') {
+    if (String(context.co).toUpperCase() === 'NLB') {
+      const routeId = await nlbRouteIdFor(context.routeNo, context.dir, context.serviceType);
+      if (routeId) {
+        const response = await fetch(NLB_BASE + '/stop.php?action=estimatedArrivals&routeId=' +
+          encodeURIComponent(routeId) + '&stopId=' + encodeURIComponent(stop.stop) +
+          '&language=' + (lang === 'zh' ? 'zh' : 'en'),
+          { signal: AbortSignal.timeout(10000) });
+        if (!response.ok) throw new Error(response.status);
+        entries = etaEntries(((await response.json()).estimatedArrivals || [])
+          .filter(a => String(a.departed) !== '1' && a.estimatedArrivalTime)
+          .map(a => ({ eta: String(a.estimatedArrivalTime).replace(' ', 'T') + '+08:00',
+                       rmk_tc: String(a.noGPS) === '1' ? '原定班次' : '',
+                       rmk_en: String(a.noGPS) === '1' ? 'Scheduled Bus' : '' })), null, null);
+      }
+    } else if (context.co === 'CTB') {
       const response = await fetch(CTB_BASE + '/eta/CTB/' + stop.stop + '/' +
         encodeURIComponent(context.routeNo), { signal: AbortSignal.timeout(10000) });
       if (!response.ok) throw new Error(response.status);
