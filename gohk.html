@@ -3171,8 +3171,11 @@ function showChosen(elementId, point) {
   }
 
   element.classList.remove('empty');
-  element.innerHTML = '<b>' + point.label + '</b>' +
-    (point.stop ? '<br><small>' + T('nearestStop') + ': ' + stopName(point.stop) + '</small>' : '');
+  // Both of these are feed text — the label is whatever the gazetteer called
+  // the place, the stop name comes from the operator. This was the site that
+  // actually fired the test payload after the two map labels were escaped.
+  element.innerHTML = '<b>' + esc(point.label || '') + '</b>' +
+    (point.stop ? '<br><small>' + esc(T('nearestStop')) + ': ' + esc(stopName(point.stop)) + '</small>' : '');
 
   // The moment a point is set, offer to save it. Waiting until after a
   // journey search made people type the same place over and over.
@@ -3193,7 +3196,11 @@ function drawPoint(point, colour, letter, text) {
     icon: L.divIcon({ className:'', iconSize:null, iconAnchor:[22,22],
       html: '<div class="endwrap' + (letter === 'B' ? ' finish' : '') + '">' +
             '<div class="enddot">' + letter + '</div>' +
-            '<div class="endtext">' + text + '<br>' + point.label + '</div></div>' })
+            // point.label is whatever the gazetteer called the place the
+            // rider searched for — feed text, going into innerHTML. Escaped
+            // like every other feed string in this file; these two map
+            // labels were the only ones that were not.
+            '<div class="endtext">' + esc(text) + '<br>' + esc(point.label || '') + '</div></div>' })
   }).addTo(journeyLayer);
 
   if (!point.stop) return;
@@ -7317,8 +7324,10 @@ function drawOneOption(chosenPick) {
 function addStopLabel(latlng, dotText, title, name, finish, side, z, onClick) {
   const wrap = '<div class="endwrap' + (finish ? ' finish' : '') +
                (side === 'left' ? ' flip' : '') + '">' +
-               '<div class="enddot">' + dotText + '</div>' +
-               '<div class="endtext">' + title + '<br>' + name + '</div></div>';
+               '<div class="enddot">' + esc(String(dotText)) + '</div>' +
+               // `title` carries a route number and `name` a stop name, both
+               // straight from the operator's feed.
+               '<div class="endtext">' + esc(title) + '<br>' + esc(name || '') + '</div></div>';
 
   const marker = L.marker(latlng, { zIndexOffset: z,
     icon: L.divIcon({ className: '', iconSize: null,
