@@ -1681,6 +1681,7 @@
   .spotway b { display:block; font-size:1.12rem; line-height:1.3; }
   .spotway small { display:block; font-size:0.92rem; font-weight:700; color:var(--ink-3); margin-top:2px; }
   .spotway.rail { border-left:8px solid var(--blue); }
+  .spotway.rail.lrt { border-left-color:#b45309; }
   .spotway.bus { border-left:8px solid var(--red); }
   .wayeta { display:block; margin-top:5px; font-size:1.02rem; font-weight:800; color:var(--green); }
   .wayeta .r { color:var(--blue); }
@@ -2033,6 +2034,7 @@ const TEXT = {
     stopCrossOver:'→ cross over', stopWholePlace:'all {n} bays',
     stopArriveBy:'{r} in {w} — there by {t}', stopArriveDue:'{r} due now — there by {t}',
     stopRanking:'Finding the soonest way there…', stopRoadSlow:'{s} moving at {k} km/h',
+    journeyRoadSlow:'Traffic counted: {s} is moving at {k} km/h, so {n} min have been added to this ride.',
     stopNoFeedEta:'{r} · about {n} stops — no live times for this company', alertSourceRoad:'Transport Department road detectors',
     stopHeldTitle:'Traffic notice on route {r}', stopHeldGo:'Use this stop anyway', stopHeldBack:'Choose another stop',
     rsNearestStop:'Nearest stop', rsNearestFound:'Nearest on this route: {s} ({m} m)',
@@ -2322,6 +2324,7 @@ const TEXT = {
     stopCrossOver:'→ 過對面', stopWholePlace:'全部 {n} 個站位',
     stopArriveBy:'{r} {w}後開 — {t} 到', stopArriveDue:'{r} 即將開 — {t} 到',
     stopRanking:'搵緊最快到嘅路線…', stopRoadSlow:'{s} 現時只有 {k} 公里/小時',
+    journeyRoadSlow:'已計入路面實況：{s} 現時只有 {k} 公里/小時，車程已加 {n} 分鐘。',
     stopNoFeedEta:'{r} · 約 {n} 個站 — 此公司沒有實時班次', alertSourceRoad:'運輸署道路探測器',
     stopHeldTitle:'{r} 有交通消息', stopHeldGo:'照用呢個站', stopHeldBack:'揀第二個站',
     rsNearestStop:'最近車站', rsNearestFound:'此路線最近的站：{s}（{m} 米）',
@@ -5662,6 +5665,11 @@ async function findBuses() {
 
     const extras = loadTdBusFile();
 
+    // THE ROAD, STARTED NOW, WAITED FOR LATER.
+    // Both halves are wanted before the times are worked out, but neither is
+    // allowed to hold up a search: see the short race further down.
+    const traffic = Promise.all([loadTdDetectors(), loadRoadSpeeds()]).catch(() => null);
+
     // Those downloads take time. The user may have pressed "Clear everything"
     // while we waited. Re-check rather than trusting what was true before.
     if (!startPoint || !endPoint) {
@@ -5811,6 +5819,15 @@ async function findBuses() {
       const twoChange = findTwoChange(boardable, alightable, showNotRunning);
       for (const j of twoChange) journeys.push(j);
     }
+
+    // ---- WHAT THE ROAD IS ACTUALLY DOING ----
+    // Waited for here, at the last possible moment and with a cap on it: the
+    // Transport Department's feed is 34 KB and usually already in hand by
+    // now, but a rider standing at a stop must never wait on it. Past
+    // ROAD_WAIT_MS the search goes on with timetable times, which is what it
+    // did for the whole of the project until today.
+    await Promise.race([traffic, new Promise(done => setTimeout(done, ROAD_WAIT_MS))]);
+    applyRoadDrag(journeys);
 
     // ---- BY TRAIN ----
     // Trains are worked out here but kept in their own list, never mixed into
@@ -6315,6 +6332,18 @@ function makeCard(pick) {
   if (journey.legs.some(leg => leg.co === 'gmb')) {
     inner += '<div class="jwarn" style="background:#faf5ff;color:#6b21a8">' +
              T('minibusNote') + '</div>';
+  }
+  // THE ROAD, WHEN IT IS THE REASON THIS NUMBER LOOKS BAD.
+  // Named and measured — which road, how fast it is moving, how many minutes
+  // it added — so the rider can judge it rather than take it on trust. The
+  // time above already INCLUDES those minutes; this says where they came from.
+  if (journey.road && journey.road.worst) {
+    const w = journey.road.worst;
+    const where = String((lang === 'zh' ? w.det.road_tc : w.det.road_en) || '').split(/\s*-\s*/)[0];
+    inner += '<div class="jwarn" style="background:#fff7ed;color:#9a3412">🐌 ' +
+             esc(T('journeyRoadSlow').replace('{s}', where)
+                   .replace('{k}', Math.round(w.kmh))
+                   .replace('{n}', journey.road.added)) + '</div>';
   }
   if (walkTotal >= 12) {
     inner += '<div class="jwarn">' + T('lotsWalking').replace('{n}', walkTotal) + '</div>';
@@ -9984,9 +10013,18 @@ function dragAt(lat, lng, heading) {
 const roadDragMemo = new Map();
 function roadDrag(routeKey, fromSeq, toSeq) {
   if (!tdDetGrid || !roadSpeeds || !roadSpeeds.size) return null;
-  const key = routeKey + '|' + fromSeq + '|' + toSeq + '|' + roadSpeedsAt;
+  return pathDrag(pathBetween(routeKey, fromSeq, toSeq));
+}
+
+// The same measurement taken straight off a list of stops. The 車站 tab has a
+// route key and two sequence numbers; the journey planner is already holding
+// the path itself, and rebuilding it from the key to throw it away again
+// would be the expensive half of this done twice.
+function pathDrag(path) {
+  if (!tdDetGrid || !roadSpeeds || !roadSpeeds.size || !path || !path.length) return null;
+  const key = (path[0] || {}).stop + '>' + (path[path.length - 1] || {}).stop +
+              '|' + path.length + '|' + roadSpeedsAt;
   if (roadDragMemo.has(key)) return roadDragMemo.get(key);
-  const path = pathBetween(routeKey, fromSeq, toSeq);
   let sum = 0, n = 0, worst = null;
   for (let i = 0; i < path.length; i++) {
     const a = path[i], b = path[i + 1] || path[i - 1];
@@ -10007,6 +10045,43 @@ function roadDrag(routeKey, fromSeq, toSeq) {
   if (roadDragMemo.size > 400) roadDragMemo.clear();
   roadDragMemo.set(key, out);
   return out;
+}
+
+// THE JOURNEY TIMES ARE THE TIMETABLE'S UNTIL THIS RUNS.
+// The Transport Department measures 807 points of the strategic road network
+// every minute, and this app has been reading that feed for days — but only
+// the 車站 tab ever used it. A journey card could say 62 分鐘 across a road
+// the government was reporting at 15 km/h.
+//
+// THREE RULES, and they are all about not overclaiming:
+//  * Only RIDING minutes are stretched. Walking does not get slower because
+//    the road is full, and a train is not on the road at all.
+//  * A leg no detector can see is NOT stretched. There are 807 of them and
+//    they sit on the strategic roads; most of a trip through Mong Kok is
+//    invisible to them. A jam we cannot measure is not a jam we may invent.
+//  * It runs BEFORE the ranking, so the journey labelled 最快 is the fastest
+//    by the numbers actually printed on the cards. Adjusting afterwards
+//    would put 最快 above a bigger number than the card beside it.
+const ROAD_WAIT_MS = 2500;      // how long a search may wait on the traffic feed
+function applyRoadDrag(journeys) {
+  if (!tdDetGrid || !roadSpeeds || !roadSpeeds.size) return 0;
+  let touched = 0;
+  for (const journey of journeys) {
+    let added = 0, worst = null;
+    for (const leg of journey.legs) {
+      if (leg.co === 'mtr' || leg.co === 'lrt') continue;
+      const road = pathDrag(leg.path);
+      if (!road) continue;
+      added += rideMinutesForPath(leg.path) * road.drag * ROAD_DRAG;
+      if (road.worst && (!worst || road.worst.drag > worst.drag)) worst = road.worst;
+    }
+    // Under half a minute is not a delay, it is rounding.
+    if (added < 0.5 || !worst) continue;
+    journey.road = { added: Math.round(added), worst };
+    journey.total = Math.round(journey.total + added);
+    touched++;
+  }
+  return touched;
 }
 
 // ROUTES THE TRANSPORT DEPARTMENT HAS A NOTICE OUT ON.
@@ -14221,6 +14296,13 @@ function spotCardHtml(s) {
 // addOperatorsToIndexes is idempotent and folds those routes into an index
 // that may already have been built KMB-only. The stop grid and the id map
 // both rebuild themselves off dataStamp, which counts ctbStops.
+// How much network we are holding, as one number. Used to tell "the load
+// worked" from "the load ran and brought nothing back" — the difference
+// between redrawing once and redrawing for ever.
+function spotNetworkSize() {
+  return (stopIndex ? stopIndex.size : 0) + ctbStops.length;
+}
+
 async function ensureSpotNetwork() {
   await Promise.all([
     loadFareData().catch(error => console.warn('Citybus stops unavailable:', error)),
@@ -14247,14 +14329,48 @@ function stopGroupsNear(lat, lng, howMany, radius) {
 }
 
 // One rail button.
+// BOTH RAILWAYS, because they are one network now.
+// This list was stations only, so a place card in Tin Shui Wai or Tuen Mun
+// offered buses and nothing else — while the journey planner would happily
+// route the same rider along the Light Rail. The two halves of the app were
+// disagreeing about what counts as a railway.
+function railWaysNear(lat, lng, limit) {
+  const reach = limit || SPOT_RAIL_M;
+  const out = railStationsNear(lat, lng, reach)
+    .map(n => ({ kind: 'mtr', id: n.code, metres: n.metres }));
+  if (lrtData) {
+    for (const id of Object.keys(lrtData.stops)) {
+      const row = lrtData.stops[id];
+      const metres = metresBetween(lat, lng, row[2], row[3]);
+      if (metres <= reach) out.push({ kind: 'lrt', id, metres });
+    }
+  }
+  out.sort((a, b) => a.metres - b.metres);
+
+  // ONE OF EACH RAILWAY FIRST, when both are in range. The card shows two,
+  // and in Tin Shui Wai the four nearest things are all Light Rail stops —
+  // straight distance order would push the West Rail station, which is the
+  // way OUT of the district, off a card whose whole job is "how do I leave
+  // from here". In town, where there is no Light Rail, nothing changes.
+  const first = [];
+  for (const kind of ['mtr', 'lrt']) {
+    const nearest = out.find(entry => entry.kind === kind);
+    if (nearest) first.push(nearest);
+  }
+  first.sort((a, b) => a.metres - b.metres);
+  return first.concat(out.filter(entry => !first.includes(entry)));
+}
+
 function railWayHtml(entry) {
-  const st = railStop(entry.code);
-  if (!st) return '';
+  const lrt = entry.kind === 'lrt';
+  const name = lrt ? lrtName(entry.id) : stationName(entry.id);
+  if (!name || name === entry.id) return '';
   const walk = walkingEstimate(entry.metres);
-  return '<button class="spotway rail" data-act="spot-rail" data-code="' + esc(entry.code) + '">' +
-           '<b>🚇 ' + esc(stopName(st)) + '</b><small>' +
+  return '<button class="spotway rail' + (lrt ? ' lrt' : '') + '" data-act="spot-rail"' +
+           (lrt ? ' data-lrt="' + esc(entry.id) + '"' : ' data-code="' + esc(entry.id) + '"') + '>' +
+           '<b>' + (lrt ? '\u{1F688}' : '\u{1F687}') + ' ' + esc(name) + '</b><small>' +
            T('spotWalkFrom').replace('{m}', walk.minutes).replace('{d}', walk.metres) +
-           ' · ' + T('spotOpenRail') + '</small></button>';
+           ' · ' + T(lrt ? 'lrtTitle' : 'spotOpenRail') + '</small></button>';
 }
 
 // One bus-stop button. `eta` is undefined while we are still asking, null when
@@ -14302,11 +14418,21 @@ async function loadSpotTransport(s) {
   // and the Citybus list is what puts half of Hong Kong Island on the map at
   // all. The map tab may never have needed either, so load them now — both
   // are cached after the first time, and the sheet paints without waiting.
+  // REPAINT ONLY IF SOMETHING ACTUALLY ARRIVED.
+  // This used to be "load the network, then draw again", with nothing
+  // checking whether the load had worked. When hk-bus-lite.json cannot be
+  // fetched — a bad connection, a phone on the edge of signal — ctbStops
+  // stays empty, the condition above is true again, and the card loads the
+  // network, redraws, loads the network, redraws, for ever. 168,000 console
+  // lines in one sitting while testing, and on a phone that is the battery.
+  // One attempt per open, and the redraw happens only when the attempt
+  // brought something back.
   if (!spotIndexing && (!stopIndex || !ctbStops.length)) {
     spotIndexing = true;
+    const had = spotNetworkSize();
     ensureSpotNetwork().then(() => {
       spotIndexing = false;
-      if (spotSheetFor === s) loadSpotTransport(s);
+      if (spotNetworkSize() > had && spotSheetFor === s) loadSpotTransport(s);
     });
   }
 
@@ -14315,7 +14441,7 @@ async function loadSpotTransport(s) {
 
   // A station is worth a longer walk than a bus stop: it runs every few
   // minutes and a visitor can read the line map without knowing any Chinese.
-  const rails = railStationsNear(s.y, s.x, SPOT_RAIL_M);
+  const rails = railWaysNear(s.y, s.x, SPOT_RAIL_M);
   let groups = stopGroupsNear(s.y, s.x, 3);
   let far = false;
   if (!groups.length && !rails.length) {
@@ -14435,15 +14561,16 @@ function openHereSheet(point) {
 async function loadHereTransport(point) {
   if (!spotIndexing && (!stopIndex || !ctbStops.length)) {
     spotIndexing = true;
+    const had = spotNetworkSize();          // see loadSpotTransport above
     ensureSpotNetwork().then(() => {
       spotIndexing = false;
-      if (document.getElementById('herego')) loadHereTransport(point);
+      if (spotNetworkSize() > had && document.getElementById('herego')) loadHereTransport(point);
     });
   }
   const box = () => document.getElementById('herego');
   if (!box()) return;
 
-  const rails = railStationsNear(point.lat, point.lng, SPOT_RAIL_M);
+  const rails = railWaysNear(point.lat, point.lng, SPOT_RAIL_M);
   const groups = stopGroupsNear(point.lat, point.lng, 3);
   const nearSpots = (spots || [])
     .map(s => ({ s, metres: metresBetween(point.lat, point.lng, s.y, s.x) }))
@@ -14621,7 +14748,12 @@ document.addEventListener('click', event => {
   if (what === 'spot-close') { closeSpotSheet(); return; }
   if (what === 'spot-route') { planFromHere(act.dataset.y, act.dataset.x, act.dataset.label); return; }
   if (what === 'spot-open')  { closeSpotSheet(); goToSpot(spotById(act.dataset.spot)); return; }
-  if (what === 'spot-rail')  { closeSpotSheet(); mtrSetStation(act.dataset.code); showMode('mtr'); return; }
+  if (what === 'spot-rail')  {
+    closeSpotSheet();
+    if (act.dataset.lrt) { mtrState = freshMtrState(); showMode('mtr'); lrtOpen(act.dataset.lrt); }
+    else { mtrSetStation(act.dataset.code); showMode('mtr'); }
+    return;
+  }
   if (what === 'spot-stop') {
     const stop = findStopById(act.dataset.id);
     closeSpotSheet();
