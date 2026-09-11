@@ -409,6 +409,9 @@
   .mtrsta .mtrname { flex:1; min-width:0; font-size:1.18rem; font-weight:800; color:var(--ink);
                      overflow-wrap:anywhere; }
   .mtrsta small { display:block; font-size:0.94rem; font-weight:700; color:var(--ink-3); margin-top:2px; }
+  .closebtn { flex:0 0 auto; min-width:48px; min-height:48px; border:2px solid var(--line);
+              border-radius:10px; background:white; font-size:1.18rem; font-weight:800;
+              color:var(--ink-2); cursor:pointer; }
   .mtrpick { display:flex; flex-direction:column; gap:6px; }
   .mtrpick button { min-height:52px; border:2px solid var(--line); border-radius:10px; background:white;
                     font-size:1rem; font-weight:700; color:var(--ink); cursor:pointer; text-align:left;
@@ -1968,7 +1971,7 @@ const TEXT = {
     mtrClear:'Clear what you typed', railMapTitle:'The whole railway',
     railMapHint:'Or tap a line below to see its stations.', rmStations:'{n} stations',
     railNetAria:'Map of every station and Light Rail stop',
-    railNetDrag:'Drag the map with your finger. Tap a station for its trains, or tap a line to open it below.',
+    railNetDrag:'Drag with one finger, pinch to zoom. Tap a station for its trains, or a line to open it below.',
     railNetSeeAll:'See it all', railNetIn:'Zoom in', railNetOut:'Zoom out',
     railNetZoom:'size {n} of {m}',
     lrtCheckBoard:'Read the platform board for the next {n}',
@@ -2267,7 +2270,7 @@ const TEXT = {
     mtrClear:'清除輸入', railMapTitle:'全綫路綫圖',
     railMapHint:'或按下面的路綫展開車站。', rmStations:'{n} 個站',
     railNetAria:'全港車站及輕鐵站地圖',
-    railNetDrag:'用手指拖動地圖。按車站睇班次，按路綫就會在下面展開。',
+    railNetDrag:'單指拖動，兩指開合放大縮細。按車站睇班次，按路綫就會在下面展開。',
     railNetSeeAll:'睇晒全部', railNetIn:'放大', railNetOut:'縮細',
     railNetZoom:'第 {n} / {m} 級',
     lrtCheckBoard:'請看月台顯示屏的下班 {n}',
@@ -11930,7 +11933,7 @@ const RM_LABELS = ['none', 'cross', 'ends', 'all', 'lrt'];
 // which station was last opened from it. NOT part of mtrState: opening a
 // station rebuilds that from scratch, and coming back to find the map reset
 // to Lantau at the default zoom is the app forgetting what you just did.
-let railMapView = { zoom: 2, at: null, line: null, pick: null };
+let railMapView = { zoom: 2, at: null, line: null, pick: null, focus: null };
 let railNetCache = { key: '', html: '' };
 
 function railNetworkHtml() {
@@ -12031,11 +12034,8 @@ function railNetworkHtml() {
               '" cy="' + Y(row[2]) + '" r="' + (on ? lrtR + 4 : lrtR) + '" fill="' +
               (on ? '#1e3a8a' : '#b45309') + '" stroke="white" stroke-width="2"><title>' +
               esc(lrtName(id)) + '</title></circle>';
-      if (labels === 'lrt')
-        names += rmLabel(X(row[3]), Y(row[2]) - lrtR - 6, lrtName(id));
     }
   }
-  const anchors = rmAnchorSet();
   for (const code of Object.keys(mtrData.stations)) {
     const st = mtrData.stations[code];
     const on = railMapView.pick === code;
@@ -12046,11 +12046,18 @@ function railNetworkHtml() {
             (on ? '#1e3a8a' : 'white') + '" stroke="' + (on ? 'white' : '#0f172a') +
             '" stroke-width="' + (on ? 3 : 2.5) + '"><title>' + esc(stationName(code)) +
             '</title></circle>';
-    const show = labels === 'all' || labels === 'lrt' ||
-                 (labels === 'ends' && anchors.has(code)) ||
-                 (labels === 'cross' && whichLinesServe(code).length > 1);
-    if (show) names += rmLabel(X(st[3]), Y(st[2]) - dotR - 6, stationName(code));
   }
+
+  // ---- the names, as many as will fit without touching ----
+  // Tying the label set to the zoom level was a guess and the phone proved it
+  // wrong: at 20 px/km even interchanges-only piled 太子, 旺角, 油麻地, 何文田,
+  // 紅磡 and 九龍 on top of each other. So no set is chosen at all. Every
+  // station is a CANDIDATE, in order of how much it helps somebody orient —
+  // the busiest interchanges, then the ends of lines, then everything else —
+  // and each is drawn only if its box touches nothing already on the map.
+  // The rule then works at any size: a few names when zoomed out, all of
+  // them when zoomed in, and never a collision at either.
+  names += rmPlaceLabels(X, Y, dotR, lrtR, labels === 'lrt');
 
   const html =
     '<div class="rmnetbox" id="rmnet">' +
@@ -12081,17 +12088,55 @@ function rmLabel(x, y, text) {
          'paint-order="stroke" pointer-events="none">' + esc(text) + '</text>';
 }
 
-// The ends of every line and every place two lines meet — the landmarks you
-// orient by when there is not room to name everything.
-let rmAnchors = null;
-function rmAnchorSet() {
-  if (rmAnchors) return rmAnchors;
-  rmAnchors = new Set();
+// AS MANY NAMES AS FIT, BEST FIRST.
+// Candidates are ranked by how much a name helps somebody work out where they
+// are looking: an interchange of three lines beats one of two, which beats
+// the end of a line, which beats an ordinary station. Each is drawn only if
+// its box clears every box already placed AND every station dot — a name
+// sitting on top of another station's dot hides the thing it is next to.
+function rmPlaceLabels(X, Y, dotR, lrtR, withLrt) {
+  const taken = [];
+  const hits = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+
+  const candidates = [];
+  const ends = new Set();
   for (const variants of Object.values(mtrData.lines))
-    for (const stops of variants) { rmAnchors.add(stops[0]); rmAnchors.add(stops[stops.length - 1]); }
-  for (const code of Object.keys(mtrData.stations))
-    if (whichLinesServe(code).length > 1) rmAnchors.add(code);
-  return rmAnchors;
+    for (const stops of variants) { ends.add(stops[0]); ends.add(stops[stops.length - 1]); }
+
+  for (const code of Object.keys(mtrData.stations)) {
+    const st = mtrData.stations[code];
+    const lines = whichLinesServe(code).length;
+    // Dots are obstacles whatever happens to their own name.
+    taken.push([X(st[3]) - dotR, Y(st[2]) - dotR, X(st[3]) + dotR, Y(st[2]) + dotR]);
+    candidates.push({ rank: lines > 1 ? 100 + lines : (ends.has(code) ? 50 : 10),
+                      x: X(st[3]), y: Y(st[2]) - dotR - 6, text: stationName(code) });
+  }
+  if (withLrt && lrtData) {
+    for (const id of Object.keys(lrtData.stops)) {
+      const row = lrtData.stops[id];
+      taken.push([X(row[3]) - lrtR, Y(row[2]) - lrtR, X(row[3]) + lrtR, Y(row[2]) + lrtR]);
+      candidates.push({ rank: 5, x: X(row[3]), y: Y(row[2]) - lrtR - 6, text: lrtName(id) });
+    }
+  }
+  candidates.sort((a, b) => b.rank - a.rank);
+
+  let out = '';
+  for (const c of candidates) {
+    const half = rmTextWidth(c.text) / 2;
+    const box = [c.x - half - 2, c.y - 15, c.x + half + 2, c.y + 4];
+    if (taken.some(t => hits(box, t))) continue;
+    taken.push(box);
+    out += rmLabel(c.x, c.y, c.text);
+  }
+  return out;
+}
+
+// How wide a name will be at 16px. A Chinese character is square, a Latin one
+// is roughly half — near enough to keep names apart, and it costs nothing.
+function rmTextWidth(text) {
+  let w = 0;
+  for (const ch of String(text)) w += (ch.charCodeAt(0) > 0x2e7f ? 16 : 8.6);
+  return w;
 }
 
 // Which Light Rail route to open for a stop: the first one that calls there.
@@ -12110,12 +12155,101 @@ function keepRailNetAt() {
   if (box) railMapView.at = [box.scrollLeft, box.scrollTop, box.scrollWidth, box.scrollHeight];
 }
 
+// PINCH TO ZOOM, the way every map on a phone does it.
+// Two paths, because the two phone browsers disagree: iOS Safari fires its
+// own gesturestart/gesturechange with a ready-made `scale`, and everything
+// else gives raw touches to measure. Both feed the same three steps.
+//
+// DURING the pinch the SVG is scaled with a CSS transform — instant, smooth,
+// and the type goes with it, which for half a second is fine. On RELEASE it
+// snaps to the nearest of the five sizes and is redrawn properly, so the
+// names land back at 16px and the dots back at a finger's width. The point
+// under the fingers stays under the fingers across the redraw.
+let rmPinch = null;
+
+function wireRailNetGestures() {
+  const box = document.getElementById('rmnet');
+  if (!box || box.dataset.wired) return;      // the view is rebuilt often; the flag is on the new node
+  box.dataset.wired = '1';
+  const svg = box.querySelector('svg');
+  if (!svg) return;
+
+  const begin = (cx, cy) => {
+    const r = box.getBoundingClientRect();
+    const mx = cx - r.left, my = cy - r.top;
+    rmPinch = { scale: 1, mx, my,
+                fx: box.scrollWidth  ? (box.scrollLeft + mx) / box.scrollWidth  : 0.5,
+                fy: box.scrollHeight ? (box.scrollTop  + my) / box.scrollHeight : 0.5 };
+    svg.style.transformOrigin = (box.scrollLeft + mx) + 'px ' + (box.scrollTop + my) + 'px';
+  };
+  const update = k => {
+    if (!rmPinch) return;
+    rmPinch.scale = Math.max(0.35, Math.min(3, k));
+    svg.style.transform = 'scale(' + rmPinch.scale + ')';
+  };
+  const settle = () => {
+    if (!rmPinch) return;
+    const { scale, fx, fy, mx, my } = rmPinch;
+    rmPinch = null;
+    svg.style.transform = '';
+    // The sizes step by about 1.5x, so that is what one "step" of pinch is.
+    const steps = Math.round(Math.log(scale) / Math.log(1.5));
+    if (!steps) return;
+    const next = Math.max(0, Math.min(RM_ZOOMS.length - 1, railMapView.zoom + steps));
+    if (next === railMapView.zoom) return;
+    railMapView.zoom = next;
+    railMapView.at = null;
+    railMapView.focus = { fx, fy, mx, my };    // keep what was under the fingers there
+    const panel = document.getElementById('panel');
+    const was = panel ? panel.scrollTop : 0;
+    renderMtrView();
+    if (panel) panel.scrollTop = was;
+  };
+
+  // iOS Safari.
+  box.addEventListener('gesturestart', e => {
+    e.preventDefault();
+    begin(e.clientX !== undefined ? e.clientX : 0, e.clientY !== undefined ? e.clientY : 0);
+  });
+  box.addEventListener('gesturechange', e => { e.preventDefault(); update(e.scale); });
+  box.addEventListener('gestureend', e => { e.preventDefault(); settle(); });
+
+  // Everything else.
+  const gap = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  let startGap = 0;
+  box.addEventListener('touchstart', e => {
+    if (e.touches.length !== 2 || rmPinch) return;
+    startGap = gap(e.touches) || 1;
+    begin((e.touches[0].clientX + e.touches[1].clientX) / 2,
+          (e.touches[0].clientY + e.touches[1].clientY) / 2);
+  }, { passive: true });
+  box.addEventListener('touchmove', e => {
+    if (!rmPinch || e.touches.length !== 2) return;
+    e.preventDefault();                       // or the page pans under the pinch
+    update(gap(e.touches) / startGap);
+  }, { passive: false });
+  box.addEventListener('touchend', e => { if (e.touches.length === 0) settle(); });
+  box.addEventListener('touchcancel', () => {
+    if (!rmPinch) return;
+    rmPinch = null; svg.style.transform = '';
+  });
+}
+
 // Put the map back where it was, keeping the same point in the middle when
 // the zoom has changed the drawing's size underneath it. Failing that, on the
 // rider, or on the station they last opened.
 function centreRailNet() {
   const box = document.getElementById('rmnet');
   if (!box) return;
+  // A pinch says exactly which point must stay under the fingers.
+  if (railMapView.focus) {
+    const f = railMapView.focus;
+    railMapView.focus = null;
+    box.scrollLeft = Math.max(0, f.fx * box.scrollWidth  - f.mx);
+    box.scrollTop  = Math.max(0, f.fy * box.scrollHeight - f.my);
+    railMapView.at = [box.scrollLeft, box.scrollTop, box.scrollWidth, box.scrollHeight];
+    return;
+  }
   const at = railMapView.at;
   if (at) {
     // Same fraction of the map, so zooming keeps the middle of the screen on
@@ -12252,7 +12386,14 @@ function renderMtrView() {
     view.innerHTML = '<div class="favhead">🚇 ' + T('mtrTitle') + '</div>' +
       '<div class="mtrsta"><div class="mtrname">🚈 ' + esc(lrtName(st.lrt)) +
         ' <small>' + esc(T('lrtTitle')) + '</small></div>' +
-      '<button class="refreshbtn" data-mtr-act="lrt-refresh">' + T('refresh') + '</button></div>' +
+      '<button class="refreshbtn" data-mtr-act="lrt-refresh">' + T('refresh') + '</button>' +
+      // THE WAY OUT IS AT THE TOP. It was one full-width button at the foot
+      // of a board that can run to thirty rows, so leaving meant scrolling
+      // past every train first. The labelled button stays down there for
+      // anyone who reads to the end; this is the same thing within reach.
+      '<button class="closebtn" data-mtr-act="lrt-back" aria-label="' +
+        esc(st.station ? T('lrtBackTo').replace('{s}', stationName(st.station)) : T('lrtBack')) +
+        '">\u2715</button></div>' +
       // The other railway, from here. 屯門 and 元朗 are one place to a rider
       // even though they are two networks to the data, so the way across is
       // on the screen rather than four taps back through the picker.
@@ -12363,6 +12504,7 @@ function renderMtrView() {
     // sitting in the box above an empty list.
     if (st.query) mtrRenderSearch(st.query);
     centreRailNet();
+    wireRailNetGestures();
     return;
   }
 
