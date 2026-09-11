@@ -528,7 +528,26 @@
   .rmnetbox { overflow:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
               touch-action:pan-x pan-y; height:340px; border:2px solid var(--line-soft);
               border-radius:12px; background:#f1f5f9; }
-  .rmnetbox svg { display:block; }
+  /* WHILE TWO FINGERS ARE DOWN, THE BOX ITSELF MUST NOT MOVE. A two-finger drag
+     inside a `pan-x pan-y` region is a scroll as far as the browser is
+     concerned, so without this the box scrolled underneath the pinch and the
+     map juddered. This is the belt; the preventDefault on the second finger is
+     the braces, because touch-action is only read when a gesture BEGINS and by
+     then the gesture has begun. */
+  .rmnetbox.pinching { touch-action:none; }
+  /* The drawing sits inside a wrapper of its own fixed size. A CSS transform
+     does not change layout, but it DOES change a scroll box's scrollable area:
+     a pinched-down SVG on its own shrinks scrollWidth, the browser clamps
+     scrollLeft to the new maximum, and the map jumps sideways in the middle of
+     the gesture. The wrapper never scales, so the floor holds. */
+  .rmnetpan { position:relative; }
+  .rmnetbox svg { display:block; transform-origin:0 0; }
+  /* Given its own layer for the length of the pinch, so the phone scales a
+     picture it has already drawn instead of re-drawing 165 circles, 68 lines
+     and every outlined name on every frame. It goes slightly soft while the
+     fingers are moving and comes back sharp the moment they lift — which is
+     what every map on a phone does, and the reason they feel smooth. */
+  .rmnetbox.pinching svg { will-change:transform; }
   /* The line itself is a tap target: an invisible fat stroke runs under each
      coloured one, because a 5px line is not something a finger can hit. */
   .rmnetbox .rmhit { cursor:pointer; }
@@ -11997,31 +12016,78 @@ function facesSameWay(variant, order) {
 // dragging, near enough that nobody gets lost. At that scale the median gap
 // between neighbouring stations is 25 px, so the dots are separable and a
 // finger can pick one.
-// FIVE FIXED SIZES, IN KILOMETRES PER 100 PIXELS OF SCREEN.
-// The map is REBUILT at each one rather than scaled with CSS, because the
-// two things that must not scale are the type and the tap targets: a name at
-// 16px has to stay 16px at every zoom (this app has a floor and it applies
-// here too), and a station dot has to stay big enough for a finger.
-// Rebuilding is 165 circles and a dozen polylines — far cheaper than the
+// THE FIVE NAMED SIZES, IN PIXELS PER KILOMETRE.
+// The map is REBUILT at a size rather than scaled with CSS, because the two
+// things that must not scale are the type and the tap targets: a name at 16px
+// has to stay 16px at every zoom (this app has a floor and it applies here
+// too), and a station dot has to stay big enough for a finger. Rebuilding is
+// 165 circles and a dozen polylines and costs 1-2 ms — far cheaper than the
 // compromise would be.
+//
+// A PINCH IS NO LONGER LIMITED TO THESE FIVE, and that was the whole reason
+// the gesture felt broken. Measured, before: a pinch to 1.2x rounded to no
+// change at all and the map snapped straight back to where it started; a pinch
+// to 1.25x jumped a full 1.53x step, further than the fingers had asked for;
+// and at either end of the range the drawing ballooned to three times its size
+// under the fingers and then whipped back to nothing, because the size could
+// not actually change. Three of five ordinary pinches did nothing whatsoever.
+// The size is now a plain number anywhere between the smallest and the
+// largest, so the map lands where the fingers put it. The five names survive
+// for the - and + buttons and for telling the rider roughly where they are.
 const RM_ZOOMS = [12, 20, 30, 46, 70];    // px per km
+const RM_MIN = RM_ZOOMS[0];
+const RM_MAX = RM_ZOOMS[RM_ZOOMS.length - 1];
 const RM_PAD = 26;
 
-// HOW MANY NAMES EACH SIZE CAN HOLD WITHOUT THEM LANDING ON EACH OTHER.
-// Measured against the real spacing: the median gap between neighbouring
-// stations is 0.83 km, so at 30 px/km two names are 25 px apart and a
-// three-character name is 48 px wide. That is why the whole-network views
-// name only the interchanges, and why every station is named only at 70.
-//   0  none            1  interchanges
-//   2  + line ends     3  every station    4  + every Light Rail stop
-const RM_LABELS = ['none', 'cross', 'ends', 'all', 'lrt'];
+// LIGHT RAIL STOPS ARE NAMED ONLY AT THE LARGEST SIZE. There are 68 of them
+// packed into Tuen Mun and Yuen Long; below this they sit on top of each other
+// and the collision test drops most of them, which reads as a map that cannot
+// make up its mind. Written as the midpoint between the fourth and fifth named
+// sizes rather than as a number, because that is exactly where rmLevel below
+// changes its answer: the names appear on the same pinch that makes the
+// readout say 5 of 5, and the two cannot drift apart if the sizes ever change.
+const RM_LRT_NAMES_AT = Math.sqrt(RM_ZOOMS[3] * RM_ZOOMS[4]);   // 56.7 px/km
 
-// The map's own view — zoom, where it is dragged to, which line is open,
-// which station was last opened from it. NOT part of mtrState: opening a
-// station rebuilds that from scratch, and coming back to find the map reset
-// to Lantau at the default zoom is the app forgetting what you just did.
-let railMapView = { zoom: 2, at: null, line: null, pick: null, focus: null };
+// The map's own view — how big it is, which line is open, which station was
+// last opened from it, and what has to stay put when it is redrawn. NOT part
+// of mtrState: opening a station rebuilds that from scratch, and coming back
+// to find the map reset to Lantau at the default size is the app forgetting
+// what you just did.
+//
+// `focus` is the one thing that stops a zoom throwing the rider across the
+// territory: the point on the MAP (px, py) that has to come back under the
+// same spot on the GLASS (mx, my), remembered together with the size it was
+// measured at. Because the drawing is a straight multiplication of the size,
+// that point can be put back exactly rather than approximately.
+let railMapView = { perKm: RM_ZOOMS[2], line: null, pick: null, focus: null };
 let railNetCache = { key: '', html: '' };
+
+function rmPerKm() {
+  return Math.max(RM_MIN, Math.min(RM_MAX, railMapView.perKm || RM_ZOOMS[2]));
+}
+
+// Which of the five named sizes this one is nearest, compared as a RATIO and
+// not a difference, because the sizes step by ratio. Only the readout and the
+// buttons use it; nothing that gets drawn depends on it.
+function rmLevel(perKm) {
+  let best = 0, gap = Infinity;
+  for (let i = 0; i < RM_ZOOMS.length; i++) {
+    const d = Math.abs(Math.log(perKm / RM_ZOOMS[i]));
+    if (d < gap) { gap = d; best = i; }
+  }
+  return best;
+}
+
+// The next named size above or below, so - and + always do something visible
+// even when a pinch has left the map sitting between two of them.
+function rmStep(perKm, dir) {
+  if (dir > 0) {
+    for (const z of RM_ZOOMS) if (z > perKm * 1.02) return z;
+    return RM_MAX;
+  }
+  for (let i = RM_ZOOMS.length - 1; i >= 0; i--) if (RM_ZOOMS[i] < perKm / 1.02) return RM_ZOOMS[i];
+  return RM_MIN;
+}
 
 // EVERY SAVED PLACE, AS A POINT ON THE MAP.
 // The two lists of saved chips are gone from this screen: a saved station is
@@ -12048,19 +12114,24 @@ function savedRailMarks() {
   return marks;
 }
 
+// The saved places, as one string, for the cache keys of both the map and the
+// screen that wraps it.
+function savedRailKey() {
+  return [...savedRailMarks().keys()].sort().join(',');
+}
+
 function railNetworkHtml() {
   if (!mtrData) return '';
-  const zoom = Math.max(0, Math.min(RM_ZOOMS.length - 1, railMapView.zoom));
+  const perKm = rmPerKm();
   // The saved places are part of the drawing, so a star added or removed has
   // to invalidate it — the cache key holds them the same way it holds the
-  // zoom and the open line.
-  const savedKey = [...savedRailMarks().keys()].sort().join(',');
-  const key = lang + (lrtData ? '+lrt' : '') + '|' + zoom +
-              '|' + (railMapView.line || '') + '|' + (railMapView.pick || '') + '|' + savedKey;
+  // size and the open line. The size goes in to one decimal place: a pinch can
+  // now land anywhere, and two sizes a tenth of a pixel apart draw the same
+  // picture, so rounding here is what keeps the cache worth having.
+  const key = lang + (lrtData ? '+lrt' : '') + '|' + perKm.toFixed(1) + '|' +
+              (railMapView.line || '') + '|' + (railMapView.pick || '') + '|' + savedRailKey();
   if (railNetCache.key === key) return railNetCache.html;
 
-  const perKm = RM_ZOOMS[zoom];
-  const labels = RM_LABELS[zoom];
   const openLine = railMapView.line;
   const marks = savedRailMarks();
 
@@ -12086,9 +12157,16 @@ function railNetworkHtml() {
   const width  = Math.round((maxLng - minLng) * kx + RM_PAD * 2);
   const height = Math.round((maxLat - minLat) * ky + RM_PAD * 2);
 
-  // Everything that is drawn grows with the zoom except the type.
-  const track = Math.max(3, Math.round(perKm / 6));
-  const dotR  = Math.max(3.5, Math.round(perKm / 5.5) * 10 / 10);
+  // Everything that is drawn grows with the size except the type. These used
+  // to be rounded to whole pixels, which was harmless when there were five
+  // sizes and is not now: a rebuild after a gentle pinch would leave the lines
+  // and dots a whole pixel bigger or smaller than the picture that was on the
+  // glass a frame earlier, and that pop is exactly what a pinch must not do.
+  // A tenth of a pixel is below anything anyone can see and keeps the drawing
+  // a straight multiple of the size, which is what makes the swap invisible.
+  const round1 = v => Math.round(v * 10) / 10;
+  const track = Math.max(3, round1(perKm / 6));
+  const dotR  = Math.max(3.5, round1(perKm / 5.5));
   const lrtR  = Math.max(2.5, dotR - 2);
 
   const pathOf = (codes, pick) => codes.map(c => {
@@ -12143,7 +12221,7 @@ function railNetworkHtml() {
   }
 
   // ---- the stops ----
-  const starR = Math.max(11, Math.round(dotR * 1.9));
+  const starR = Math.max(11, round1(dotR * 1.9));
   const star = (x, y, node, mark) =>
     '<circle class="rmpt" data-mtr-net="' + esc(node) + '"' +
       (mark.fav >= 0 ? ' data-mtr-fav="' + mark.fav + '"' : '') +
@@ -12188,24 +12266,36 @@ function railNetworkHtml() {
   // and each is drawn only if its box touches nothing already on the map.
   // The rule then works at any size: a few names when zoomed out, all of
   // them when zoomed in, and never a collision at either.
-  names += rmPlaceLabels(X, Y, dotR, lrtR, labels === 'lrt', marks, starR);
+  names += rmPlaceLabels(X, Y, dotR, lrtR, perKm >= RM_LRT_NAMES_AT, marks, starR);
 
+  // The map, its buttons and its note are ONE block with one id, so releasing
+  // a pinch can put a new map on the screen without rebuilding the whole 港鐵
+  // tab around it — see redrawRailNet. The SVG sits inside a wrapper of its
+  // own fixed size so that scaling it during a pinch cannot shrink the box's
+  // scrollable area out from under the gesture.
   const html =
+    '<div class="rmwrap" id="rmwrap">' +
     '<div class="rmnetbox" id="rmnet">' +
+      '<div class="rmnetpan" style="width:' + width + 'px;height:' + height + 'px">' +
       '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height +
         '" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' +
         esc(T('railNetAria')) + '">' + hits + lines + dots + names + '</svg>' +
+      '</div>' +
     '</div>' +
     '<div class="rmnetbar">' +
       '<button class="rmnetbtn" data-mtr-act="net-out" aria-label="' + esc(T('railNetOut')) +
-        '"' + (zoom === 0 ? ' disabled' : '') + '>\u2212</button>' +
+        '"' + (perKm <= RM_MIN + 0.01 ? ' disabled' : '') + '>\u2212</button>' +
       '<button class="rmnetbtn" data-mtr-act="net-in" aria-label="' + esc(T('railNetIn')) +
-        '"' + (zoom === RM_ZOOMS.length - 1 ? ' disabled' : '') + '>+</button>' +
+        '"' + (perKm >= RM_MAX - 0.01 ? ' disabled' : '') + '>+</button>' +
       '<button class="rmnetbtn wide" data-mtr-act="net-fit">' + T('railNetSeeAll') + '</button>' +
-      '<span class="rmzoom">' + T('railNetZoom').replace('{n}', zoom + 1)
+      // A pinch can leave the map between two named sizes, and the readout then
+      // names the one it is nearest. It describes the picture, not the railway:
+      // no rider decides anything on it.
+      '<span class="rmzoom">' + T('railNetZoom').replace('{n}', rmLevel(perKm) + 1)
         .replace('{m}', RM_ZOOMS.length) + '</span>' +
     '</div>' +
-    '<div class="rmnetnote">' + T('railNetDrag') + '</div>';
+    '<div class="rmnetnote">' + T('railNetDrag') + '</div>' +
+    '</div>';
 
   railNetCache = { key, html };
   return html;
@@ -12257,25 +12347,46 @@ function rmPlaceLabels(X, Y, dotR, lrtR, withLrt, marks, starR) {
     taken.push([X(st[3]) - dotR, Y(st[2]) - dotR, X(st[3]) + dotR, Y(st[2]) + dotR]);
     if (marks && marks.has(code)) continue;          // already named beside its star
     candidates.push({ rank: lines > 1 ? 100 + lines : (ends.has(code) ? 50 : 10),
-                      x: X(st[3]), y: Y(st[2]) - dotR - 6, text: stationName(code) });
+                      x: X(st[3]), ys: [Y(st[2]) - dotR - 6, Y(st[2]) + dotR + 21],
+                      text: stationName(code) });
   }
+  // LIGHT RAIL STOPS ARE OBSTACLES ONLY WHERE THEY ARE NAMED, and that is
+  // deliberate. Making them obstacles at every size looks more correct — they
+  // are drawn at every size — and it was tried: it walled 屯門 off the map
+  // completely. 屯門 station stands in the middle of THIRTY-THREE Light Rail
+  // stops; 河田 is 12 px from it, 市中心 21 px, 何福堂 23 px, and between them
+  // they cover every position its name could take, at every size. 天水圍 went
+  // the same way. Losing the name of a terminus to keep a rule tidy is the
+  // wrong trade, and at the size where the stops ARE obstacles the stop named
+  // 屯門 is labelled anyway, so the place still reads 屯門 on the map.
   if (withLrt && lrtData) {
     for (const id of Object.keys(lrtData.stops)) {
       const row = lrtData.stops[id];
       taken.push([X(row[3]) - lrtR, Y(row[2]) - lrtR, X(row[3]) + lrtR, Y(row[2]) + lrtR]);
       if (marks && marks.has(LR_NODE + id)) continue;
-      candidates.push({ rank: 5, x: X(row[3]), y: Y(row[2]) - lrtR - 6, text: lrtName(id) });
+      candidates.push({ rank: 5, x: X(row[3]),
+                        ys: [Y(row[2]) - lrtR - 6, Y(row[2]) + lrtR + 21], text: lrtName(id) });
     }
   }
   candidates.sort((a, b) => b.rank - a.rank);
 
+  // ABOVE THE DOT IF IT FITS, BELOW IT IF IT DOES NOT.
+  // One position per name was the reason 屯門 and 天水圍 had no name at ANY size:
+  // each stands within 250 m of a Light Rail stop of the same name, so the one
+  // spot they were allowed — directly above the dot — was always taken, and
+  // they were simply dropped. Every metro map in the world puts a name on the
+  // other side when that happens. Measured after: both are named from the
+  // smallest size up, and 8 to 10 more names fit at every size.
   let out = saved;
   for (const c of candidates) {
     const half = rmTextWidth(c.text) / 2;
-    const box = [c.x - half - 2, c.y - 15, c.x + half + 2, c.y + 4];
-    if (taken.some(t => hits(box, t))) continue;
-    taken.push(box);
-    out += rmLabel(c.x, c.y, c.text);
+    for (const y of c.ys) {
+      const box = [c.x - half - 2, y - 15, c.x + half + 2, y + 4];
+      if (taken.some(t => hits(box, t))) continue;
+      taken.push(box);
+      out += rmLabel(c.x, y, c.text);
+      break;
+    }
   }
   return out;
 }
@@ -12296,118 +12407,280 @@ function lrtLineOf(stopId) {
   return null;
 }
 
-// The view is rebuilt from scratch on every change, so where the rider had
-// dragged the map to has to be written down before that happens or it snaps
-// back under their finger.
-function keepRailNetAt() {
+// WHERE THE MAP HAS TO STAY WHEN IT IS REDRAWN.
+// The drawing is rebuilt from scratch on every change, so the place the rider
+// was looking at has to be written down first or it lands somewhere else under
+// their finger. What is remembered is a point on the MAP and the spot on the
+// GLASS it must come back to — by default the middle of the box, and for a
+// pinch the point between the fingers.
+function keepRailNetAt(mx, my) {
   const box = document.getElementById('rmnet');
-  if (box) railMapView.at = [box.scrollLeft, box.scrollTop, box.scrollWidth, box.scrollHeight];
+  if (!box) return;
+  const ax = mx === undefined ? box.clientWidth  / 2 : mx;
+  const ay = my === undefined ? box.clientHeight / 2 : my;
+  railMapView.focus = { px: box.scrollLeft + ax, py: box.scrollTop + ay,
+                        mx: ax, my: ay, perKm: rmPerKm() };
+}
+
+// REDRAW THE MAP AND NOTHING ELSE.
+// A zoom used to call renderMtrView(), which rebuilds the entire 港鐵 tab
+// through innerHTML — the stations near you, every line row, the search
+// results — at the exact moment the rider's fingers leave the glass. Measured
+// at 5-6 ms on this desktop, which is several times that on a phone, and it
+// landed as a hitch on the one frame that most needs to be clean. The map is
+// the only thing that changed, so the map is the only thing rebuilt: 1-2 ms.
+function redrawRailNet() {
+  const wrap = document.getElementById('rmwrap');
+  if (!wrap) { renderMtrView(); return; }       // the map is not on screen at all
+  wrap.outerHTML = railNetworkHtml();
+  centreRailNet();
+  wireRailNetGestures();
 }
 
 // PINCH TO ZOOM, the way every map on a phone does it.
-// Two paths, because the two phone browsers disagree: iOS Safari fires its
-// own gesturestart/gesturechange with a ready-made `scale`, and everything
-// else gives raw touches to measure. Both feed the same three steps.
 //
-// DURING the pinch the SVG is scaled with a CSS transform — instant, smooth,
-// and the type goes with it, which for half a second is fine. On RELEASE it
-// snaps to the nearest of the five sizes and is redrawn properly, so the
-// names land back at 16px and the dots back at a finger's width. The point
-// under the fingers stays under the fingers across the redraw.
+// DURING the pinch nothing is redrawn. The drawing is moved and scaled by one
+// CSS transform, on its own compositing layer, once per animation frame — so
+// the phone scales a picture it has already drawn instead of re-drawing 165
+// circles, 68 lines and every outlined name sixty times a second. It goes
+// slightly soft while the fingers are moving and comes back sharp the moment
+// they lift. That is not a shortcut: it is what makes a map feel smooth, and
+// it is what the map on the first tab has been doing all along.
+//
+// ON RELEASE the map is rebuilt at exactly the size the fingers asked for.
+// Everything drawn except the type is a straight multiple of that size — the
+// lines, the dots, the stars all are — so the rebuilt picture IS the picture
+// that was on the glass, and the swap cannot be seen. Only the names snap back
+// to 16px and the dots back to a finger's width, which is the whole reason for
+// rebuilding at all.
+//
+// The point between the fingers stays between the fingers throughout: during
+// the pinch because the transform says so, and across the rebuild because the
+// drawing is a plain multiplication and the point can be put back exactly.
+//
+// AND THE FINGERS DRAG AS WELL AS SPREAD. A pinch that drifts across the glass
+// carries the map with it, which is what a phone map does and what this one
+// did not do at all — the old one pinned the map at wherever the fingers first
+// landed and ignored every bit of movement after that.
+const RM_GIVE = 1.18;        // how far past either end the map will stretch
 let rmPinch = null;
+
+// THE EASE-BACK IN FLIGHT, so whatever comes next can call it off. It holds
+// two timers, and without a way to stop them both kept firing into the gesture
+// that had replaced it: the frame put a 200 ms transition over a pinch that has
+// to be instant, and the clean-up wiped the transform outright a quarter of a
+// second in — the map jumped back to unscaled with the fingers still moving.
+let rmEase = null;
+function rmStopEase() {
+  if (!rmEase) return;
+  cancelAnimationFrame(rmEase.frame);
+  clearTimeout(rmEase.timer);
+  rmEase = null;
+}
+
+// PAST EITHER END, RESISTANCE INSTEAD OF A RUNAWAY. Before this, pinching in
+// at the largest size scaled the drawing to three times its size under the
+// fingers and then whipped it back to exactly where it started, because the
+// size could not actually change — the app's answer to "you have reached the
+// end" was to pretend the gesture had never happened. Now it gives a little,
+// hard-damped so it gives no more however far the fingers go, and eases back.
+function rmResist(perKm0, k) {
+  let want = perKm0 * k;
+  if (want > RM_MAX)      want = Math.min(RM_MAX * RM_GIVE, RM_MAX * Math.pow(want / RM_MAX, 0.3));
+  else if (want < RM_MIN) want = Math.max(RM_MIN / RM_GIVE, RM_MIN * Math.pow(want / RM_MIN, 0.3));
+  return want / perKm0;
+}
 
 function wireRailNetGestures() {
   const box = document.getElementById('rmnet');
-  if (!box || box.dataset.wired) return;      // the view is rebuilt often; the flag is on the new node
+  if (!box || box.dataset.wired) return;    // the view is rebuilt often; the flag is on the new node
   box.dataset.wired = '1';
   const svg = box.querySelector('svg');
   if (!svg) return;
 
-  const begin = (cx, cy) => {
-    const r = box.getBoundingClientRect();
-    const mx = cx - r.left, my = cy - r.top;
-    rmPinch = { scale: 1, mx, my,
-                fx: box.scrollWidth  ? (box.scrollLeft + mx) / box.scrollWidth  : 0.5,
-                fy: box.scrollHeight ? (box.scrollTop  + my) / box.scrollHeight : 0.5 };
-    svg.style.transformOrigin = (box.scrollLeft + mx) + 'px ' + (box.scrollTop + my) + 'px';
-  };
-  const update = k => {
+  const spread = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const midX   = t => (t[0].clientX + t[1].clientX) / 2;
+  const midY   = t => (t[0].clientY + t[1].clientY) / 2;
+
+  // ONE STYLE WRITE PER ANIMATION FRAME. A finger on a 120 Hz screen delivers
+  // touchmove far faster than the screen can show it, and the old code wrote
+  // the transform on every single one.
+  const paint = () => {
     if (!rmPinch) return;
-    rmPinch.scale = Math.max(0.35, Math.min(3, k));
-    svg.style.transform = 'scale(' + rmPinch.scale + ')';
+    const p = rmPinch;
+    p.frame = 0;
+    // Nothing but this gesture may move the box while it is running.
+    if (box.scrollLeft !== p.sx) box.scrollLeft = p.sx;
+    if (box.scrollTop  !== p.sy) box.scrollTop  = p.sy;
+    svg.style.transform =
+      'translate3d(' + (p.mx + p.sx - p.k * p.px).toFixed(2) + 'px,' +
+                       (p.my + p.sy - p.k * p.py).toFixed(2) + 'px,0) scale(' + p.k.toFixed(4) + ')';
   };
+
+  // scrollLeft is measured from the PADDING box; getBoundingClientRect gives
+  // the BORDER box, and this one has a 2px border. clientLeft is the width of
+  // that border — without it every anchor carries two pixels of error.
+  const glass = (cx, cy) => {
+    const r = box.getBoundingClientRect();
+    return [cx - r.left - box.clientLeft, cy - r.top - box.clientTop];
+  };
+
+  const begin = (cx, cy, gap) => {
+    const [mx, my] = glass(cx, cy);
+    // A pinch started inside the two-tenths of a second an over-stretch takes
+    // to ease back would otherwise inherit that animation — every frame of the
+    // new gesture played out over 200 ms behind the fingers — and then have its
+    // transform wiped from under it by the bounce's clean-up.
+    rmStopEase();
+    svg.style.transition = 'none';
+    rmPinch = { box, perKm0: rmPerKm(), gap0: gap || 1, k: 1, mx, my,
+                sx: box.scrollLeft, sy: box.scrollTop,
+                px: box.scrollLeft + mx, py: box.scrollTop + my, frame: 0 };
+    box.classList.add('pinching');
+  };
+
+  const move = (cx, cy, k) => {
+    if (!rmPinch) return;
+    const at = glass(cx, cy);
+    rmPinch.mx = at[0];
+    rmPinch.my = at[1];
+    rmPinch.k  = rmResist(rmPinch.perKm0, k);
+    if (!rmPinch.frame) rmPinch.frame = requestAnimationFrame(paint);
+  };
+
   const settle = () => {
     if (!rmPinch) return;
-    const { scale, fx, fy, mx, my } = rmPinch;
+    const p = rmPinch;
     rmPinch = null;
+    if (p.frame) cancelAnimationFrame(p.frame);
+    box.classList.remove('pinching');
     svg.style.transform = '';
-    // The sizes step by about 1.5x, so that is what one "step" of pinch is.
-    const steps = Math.round(Math.log(scale) / Math.log(1.5));
-    if (!steps) return;
-    const next = Math.max(0, Math.min(RM_ZOOMS.length - 1, railMapView.zoom + steps));
-    if (next === railMapView.zoom) return;
-    railMapView.zoom = next;
-    railMapView.at = null;
-    railMapView.focus = { fx, fy, mx, my };    // keep what was under the fingers there
-    const panel = document.getElementById('panel');
-    const was = panel ? panel.scrollTop : 0;
-    renderMtrView();
-    if (panel) panel.scrollTop = was;
+    const shown = p.perKm0 * p.k;                                   // what is on the glass
+    // Rounded to the tenth the cache keys on, so the number kept is the number
+    // the map is drawn at. Keeping more precision than the drawing has meant a
+    // near-still pinch could move the stored size without changing the picture,
+    // and the map then scrolled as though it had resized when it had not.
+    const perKm = +Math.max(RM_MIN, Math.min(RM_MAX, shown)).toFixed(1);
+    railMapView.perKm = perKm;
+    railMapView.focus = { px: p.px, py: p.py, mx: p.mx, my: p.my, perKm: p.perKm0 };
+    redrawRailNet();
+    if (Math.abs(Math.log(shown / perKm)) > 0.01) rmEaseBack(shown / perKm, p.mx, p.my);
   };
 
-  // iOS Safari.
-  box.addEventListener('gesturestart', e => {
-    e.preventDefault();
-    begin(e.clientX !== undefined ? e.clientX : 0, e.clientY !== undefined ? e.clientY : 0);
-  });
-  box.addEventListener('gesturechange', e => { e.preventDefault(); update(e.scale); });
-  box.addEventListener('gestureend', e => { e.preventDefault(); settle(); });
+  // A REPLACED BOX MUST NOT GO ON DRIVING THE GESTURE.
+  // A touch's target is fixed when the finger lands and does not follow that
+  // element out of the document, so after a rebuild — this gesture's own on
+  // release, or one triggered from elsewhere when the Light Rail file lands —
+  // a finger still on the glass keeps delivering events to the OLD box's
+  // listeners, which hold that old box in a closure. A detached box measures
+  // as a zero-sized rectangle at the origin, so those listeners would write
+  // raw screen coordinates into the shared pinch and paint a drawing nobody
+  // can see. Reproduced before this guard, on the commonest gesture there is:
+  // lift one finger and put it back, and the re-gripped pinch showed NOTHING,
+  // because the dead box claimed the animation frame every single time.
+  const alive = () => {
+    if (box.isConnected) return true;
+    if (rmPinch && rmPinch.box === box) rmPinch = null;   // and it takes its pinch with it
+    return false;
+  };
 
-  // Everything else.
-  const gap = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-  let startGap = 0;
+  // iOS Safari fires its own gesturestart/gesturechange alongside the raw
+  // touches. BOTH used to drive the zoom, with two scale numbers measured from
+  // two different moments, and the map shook between them frame by frame. The
+  // touches are the single source of truth now; these three handlers exist
+  // only to stop Safari zooming the whole page instead of the map.
+  box.addEventListener('gesturestart',  e => e.preventDefault());
+  box.addEventListener('gesturechange', e => e.preventDefault());
+  box.addEventListener('gestureend',    e => e.preventDefault());
+
+  // NOT passive: the second finger landing has to cancel the scroll the box
+  // would otherwise start, and a passive listener is forbidden from doing
+  // that. This was the old code's worst jitter — the box scrolled under the
+  // pinch for the whole first frame and sometimes well beyond it.
   box.addEventListener('touchstart', e => {
-    if (e.touches.length !== 2 || rmPinch) return;
-    startGap = gap(e.touches) || 1;
-    begin((e.touches[0].clientX + e.touches[1].clientX) / 2,
-          (e.touches[0].clientY + e.touches[1].clientY) / 2);
-  }, { passive: true });
-  box.addEventListener('touchmove', e => {
-    if (!rmPinch || e.touches.length !== 2) return;
-    e.preventDefault();                       // or the page pans under the pinch
-    update(gap(e.touches) / startGap);
+    if (!alive() || e.touches.length !== 2) return;   // one finger still drags, natively
+    e.preventDefault();
+    begin(midX(e.touches), midY(e.touches), spread(e.touches));
   }, { passive: false });
-  box.addEventListener('touchend', e => { if (e.touches.length === 0) settle(); });
-  box.addEventListener('touchcancel', () => {
-    if (!rmPinch) return;
-    rmPinch = null; svg.style.transform = '';
+
+  box.addEventListener('touchmove', e => {
+    if (!alive() || !rmPinch) return;
+    // A THIRD FINGER ENDS THE PINCH INSTEAD OF FREEZING IT. There is no
+    // sensible spread to read from three points, and simply ignoring them left
+    // the map stuck mid-stretch with nothing preventing the page from
+    // scrolling underneath it until every finger came off.
+    if (e.touches.length !== 2) { settle(); return; }
+    e.preventDefault();                       // or the page pans under the pinch
+    move(midX(e.touches), midY(e.touches), spread(e.touches) / rmPinch.gap0);
+  }, { passive: false });
+
+  box.addEventListener('touchend', e => {
+    if (!alive()) return;
+    // Fewer than two fingers ends it — waiting for the last one to lift left
+    // the map frozen mid-stretch under a single finger.
+    if (e.touches.length < 2) { settle(); return; }
+    // Back DOWN to two starts a fresh one from where the last left off, so a
+    // stray third finger brushing the glass does not kill pinching for as long
+    // as the hand stays down. touchstart cannot do this: no finger has landed.
+    if (e.touches.length === 2 && !rmPinch)
+      begin(midX(e.touches), midY(e.touches), spread(e.touches));
+  });
+
+  // A cancelled touch is the system taking the gesture away — a call arriving,
+  // a notification pulled down. Settle it rather than throw it away: the rider
+  // did zoom, and coming back to find the map where they left it is better
+  // than coming back to find their gesture undone.
+  box.addEventListener('touchcancel', () => { if (alive()) settle(); });
+}
+
+// THE STRETCH PAST THE END, RUN OFF. The map has already been redrawn at the
+// size it is allowed to be; this starts that new drawing at the size the
+// fingers had stretched it to and lets it settle back over a fifth of a
+// second. A bounce reads as "that is as far as it goes". A jump reads as a
+// fault, and an instant snap back to the start — which is what happened
+// before — reads as the app ignoring you.
+function rmEaseBack(k, mx, my) {
+  rmStopEase();
+  const box = document.getElementById('rmnet');
+  const svg = box && box.querySelector('svg');
+  if (!svg) return;
+  const px = box.scrollLeft + mx, py = box.scrollTop + my;
+  svg.style.transition = 'none';
+  svg.style.transform = 'translate3d(' + (mx + box.scrollLeft - k * px).toFixed(2) + 'px,' +
+                        (my + box.scrollTop - k * py).toFixed(2) + 'px,0) scale(' + k.toFixed(4) + ')';
+  // Both callbacks check that they are still the bounce anybody wants. The
+  // token, not the timer id, is what makes that safe: a cancelled frame that
+  // has already been queued for this tick still runs.
+  const mine = rmEase = { svg, frame: 0, timer: 0 };
+  mine.frame = requestAnimationFrame(() => {
+    if (rmEase !== mine) return;
+    svg.style.transition = 'transform .2s cubic-bezier(.22,.61,.36,1)';
+    svg.style.transform  = 'translate3d(0,0,0) scale(1)';
+    mine.timer = setTimeout(() => {
+      if (rmEase !== mine) return;
+      svg.style.transition = ''; svg.style.transform = '';
+      rmEase = null;
+    }, 260);
   });
 }
 
-// Put the map back where it was, keeping the same point in the middle when
-// the zoom has changed the drawing's size underneath it. Failing that, on the
-// rider, or on the station they last opened.
+// PUT THE MAP BACK WHERE IT WAS.
+// The drawing is a straight multiplication of the size, so a point on it moves
+// from one size to another exactly: the part past the margin scales, the
+// margin does not. That is what lets a zoom keep the station you were looking
+// at under the same spot on the glass rather than somewhere near it — the old
+// code kept the same FRACTION of the whole map, which quietly ignored the
+// margin and drifted a little further every time you zoomed. Failing a
+// remembered point: on the rider, or on the station they last opened.
 function centreRailNet() {
   const box = document.getElementById('rmnet');
   if (!box) return;
-  // A pinch says exactly which point must stay under the fingers.
-  if (railMapView.focus) {
-    const f = railMapView.focus;
-    railMapView.focus = null;
-    box.scrollLeft = Math.max(0, f.fx * box.scrollWidth  - f.mx);
-    box.scrollTop  = Math.max(0, f.fy * box.scrollHeight - f.my);
-    railMapView.at = [box.scrollLeft, box.scrollTop, box.scrollWidth, box.scrollHeight];
-    return;
-  }
-  const at = railMapView.at;
-  if (at) {
-    // Same fraction of the map, so zooming keeps the middle of the screen on
-    // the same place instead of throwing the rider back to Lantau.
-    const fx = at[2] ? (at[0] + box.clientWidth / 2) / at[2] : 0.5;
-    const fy = at[3] ? (at[1] + box.clientHeight / 2) / at[3] : 0.5;
-    box.scrollLeft = Math.max(0, fx * box.scrollWidth - box.clientWidth / 2);
-    box.scrollTop  = Math.max(0, fy * box.scrollHeight - box.clientHeight / 2);
-    railMapView.at = [box.scrollLeft, box.scrollTop, box.scrollWidth, box.scrollHeight];
+  const f = railMapView.focus;
+  if (f) {
+    const ratio = rmPerKm() / (f.perKm || rmPerKm());
+    box.scrollLeft = Math.max(0, (f.px - RM_PAD) * ratio + RM_PAD - f.mx);
+    box.scrollTop  = Math.max(0, (f.py - RM_PAD) * ratio + RM_PAD - f.my);
+    keepRailNetAt();                    // read it back at the size it is now
     return;
   }
   let dot = railMapView.pick
@@ -12418,7 +12691,7 @@ function centreRailNet() {
   }
   if (!dot) dot = box.querySelector('.rmpt[data-mtr-net="CEN"]');
   if (!dot) return;
-  box.scrollLeft = Math.max(0, Number(dot.getAttribute('cx')) - box.clientWidth / 2);
+  box.scrollLeft = Math.max(0, Number(dot.getAttribute('cx')) - box.clientWidth  / 2);
   box.scrollTop  = Math.max(0, Number(dot.getAttribute('cy')) - box.clientHeight / 2);
 }
 
@@ -12429,10 +12702,17 @@ function railMapHtml() {
   const open = railMapView.line || '';
   // EVERYTHING THE DRAWING DEPENDS ON GOES IN THE KEY. It held only the
   // language and the open line, so the network map it wraps — which also
-  // changes with the zoom and with the station tapped — came back stale:
-  // the zoom button flipped the state and redrew the cached picture.
-  const key = lang + (lrtData ? '+lrt' : '') + '|' + open +
-              '|' + railMapView.zoom + '|' + (railMapView.pick || '');
+  // changes with the size and with the station tapped — came back stale: the
+  // zoom button flipped the state and redrew the cached picture.
+  //
+  // The saved places are in it for the same reason, and this one had bitten:
+  // the inner map's key listed them, but THIS cache is checked first, so
+  // saving a station put no ★ on the map until something unrelated happened to
+  // change the key. Measured before the fix — save a train at 銅鑼灣, come back
+  // to the tab, no star; clear this key by hand, star appears. Two caches over
+  // one picture means both keys have to name everything the picture shows.
+  const key = lang + (lrtData ? '+lrt' : '') + '|' + open + '|' +
+              rmPerKm().toFixed(1) + '|' + (railMapView.pick || '') + '|' + savedRailKey();
   if (railMapCache.key === key) return railMapCache.html;
 
   const strip = chips =>
@@ -12874,19 +13154,17 @@ document.getElementById('mtrview').addEventListener('click', event => {
     // ✕ empties the box and the list under it. Deliberately does NOT put
     // the keyboard back up: somebody who has just cleared a search usually
     // wants to see the screen they cleared it off.
-    // − / + / 全圖. Buttons rather than a pinch: a pinch inside a scrolling
-    // panel fights the page for every gesture, and a labelled button is a
-    // thing an older rider can find again tomorrow. Zooming keeps whatever
-    // was in the middle of the map in the middle — see centreRailNet.
+    // − / + / 睇晒全部. The buttons are not a fallback for the pinch: they are
+    // the thing an older rider can find again tomorrow, and they step through
+    // the five named sizes even when a pinch has left the map between two of
+    // them. Zooming keeps whatever was in the middle of the map in the middle
+    // — see centreRailNet. Only the map is rebuilt now, so the page underneath
+    // cannot jump and there is no scroll position to carry over by hand.
     case 'net-in': case 'net-out': case 'net-fit': {
-      const panel = document.getElementById('panel');
-      const was = panel ? panel.scrollTop : 0;
       keepRailNetAt();
-      if (d.mtrAct === 'net-fit') { railMapView.zoom = 0; railMapView.at = null; }
-      else railMapView.zoom = Math.max(0, Math.min(RM_ZOOMS.length - 1,
-             railMapView.zoom + (d.mtrAct === 'net-in' ? 1 : -1)));
-      renderMtrView();
-      if (panel) panel.scrollTop = was;
+      if (d.mtrAct === 'net-fit') { railMapView.perKm = RM_MIN; railMapView.focus = null; }
+      else railMapView.perKm = rmStep(rmPerKm(), d.mtrAct === 'net-in' ? 1 : -1);
+      redrawRailNet();
       break;
     }
     case 'clear-search': {
