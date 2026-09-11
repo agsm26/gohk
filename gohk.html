@@ -6745,19 +6745,17 @@ async function loadDepartureEta(dep, index) {
       { signal: AbortSignal.timeout(10000) });
     if (!response.ok) throw new Error('server said ' + response.status);
 
-    const now = Date.now();
-    const minutes = ((await response.json()).data || [])
+    const mine = ((await response.json()).data || [])
       .filter(row => String(row.route).toUpperCase() === String(dep.route).toUpperCase()
-                  && (!dep.dir || row.dir === dep.dir) && row.eta)
-      .map(row => Math.round((new Date(row.eta).getTime() - now) / 60000))
-      .filter(n => n >= 0)
-      .slice(0, 3);
+                  && (!dep.dir || row.dir === dep.dir));
+    const entries = etaEntries(mine, dep.dir, null).slice(0, 3);
 
     if (!document.getElementById('depeta-' + index)) return;   // screen changed
-    cell.textContent = minutes.length
-      ? minutes.map(n => n === 0 ? T('due') : n + T('min')).join(', ')
-      : T('noneDue');
-    cell.classList.toggle('quiet', minutes.length === 0);
+    cell.innerHTML = entries.length
+      ? entries.map(e => (e.m === 0 ? T('due') : e.m + T('min')) +
+                         (e.last ? lastBusTag() : '')).join(', ')
+      : esc(T('noneDue'));
+    cell.classList.toggle('quiet', entries.length === 0);
   } catch (error) {
     cell.textContent = T('etaOffline');
     cell.classList.add('quiet');
@@ -7209,8 +7207,12 @@ async function fillStationExit(stop, dest, lineId) {
   if (stationExitCache.has(key)) { paint(stationExitCache.get(key)); return; }
 
   const stationLat = Number(stop.lat), stationLng = Number(stop.long);
-  const asked = [stop.name_en, stop.name_tc].filter(Boolean);
-  let best = null, bestMetres = Infinity;
+  // The reader's own language first. The gazetteer answers in whichever it
+  // was asked in, and a Chinese-reading rider is likelier to be served by the
+  // Chinese index — asking English first every time threw that away.
+  const asked = (lang === 'zh' ? [stop.name_tc, stop.name_en] : [stop.name_en, stop.name_tc])
+                  .filter(Boolean);
+  let best = null, bestMetres = Infinity, failed = false;
   try {
     for (const name of asked) {
       const query = /[A-Za-z]/.test(name) ? name + ' Station Exit' : name + '站 出口';
@@ -7232,9 +7234,16 @@ async function fillStationExit(stop, dest, lineId) {
   } catch (error) {
     // No connection, or the gazetteer is down. The direction line already on
     // screen is the answer in that case; it needs no apology.
+    failed = true;
     console.warn('Station exits unavailable:', error.message);
   }
-  stationExitCache.set(key, best);
+  // A FAILURE IS NOT AN ANSWER, SO IT IS NOT REMEMBERED AS ONE.
+  // Caching null on a dropped connection meant one bad moment in a lift
+  // lobby disabled the exit for that station for the rest of the session,
+  // and the rider would never see it again however good the signal got.
+  // Only a completed lookup is cached — including one that completed and
+  // found nothing, which IS an answer about this station.
+  if (!failed) stationExitCache.set(key, best);
   paint(best);
 }
 
@@ -7386,7 +7395,8 @@ async function loadNextBus(pick) {
       .filter(entry => usefulRoutes.has(entry.route) && entry.eta)
       .map(entry => ({
         route: entry.route,
-        minutes: Math.round((new Date(entry.eta).getTime() - now) / 60000)
+        minutes: Math.round((new Date(entry.eta).getTime() - now) / 60000),
+        last: isLastBusRmk(entry)
       }))
       .filter(arrival => arrival.minutes >= 0)
       .sort((a, b) => a.minutes - b.minutes)
@@ -7422,6 +7432,7 @@ async function loadNextBus(pick) {
       T('next') + ' ' + soonest.route + ' ' + T('inTime') +
       ' <span class="mins">' +
       (soonest.minutes === 0 ? T('dueNow') : soonest.minutes + T('min')) + '</span>' +
+      (soonest.last ? lastBusTag() : '') +
       (arrivals.length > 1
         ? '<div style="font-size:1rem;font-weight:600;margin-top:5px">' + T('then') + ' ' +
           arrivals.slice(1).map(a => a.route + ' ' + a.minutes + T('min')).join(' · ') + '</div>'
@@ -7557,7 +7568,7 @@ function formatArrivals(entries, opts) {
     // never do. Marked per TIME, not per row: a route usually has some of
     // each, which is the commonest case of the three.
     const rmk = (entry.rmk_tc || '') + ' ' + (entry.rmk_en || '');
-    const sched = /原定班次|Scheduled/i.test(rmk);
+    const sched = isScheduledRmk(entry);
     // THE LAST BUS OF THE NIGHT, WHICH THIS APP USED TO THROW AWAY.
     // KMB marks the final departure 最後班次 / "Last Bus" in the same remark
     // field 原定班次 comes from, and only the second was ever read. So at
@@ -7565,7 +7576,7 @@ function formatArrivals(entries, opts) {
     // fact that nothing comes after it. A rider who reads that and decides to
     // finish their tea is stranded. It is the exact failure this app exists
     // to prevent, and it was one regex away the whole time.
-    const last = /最後班次|Last Bus/i.test(rmk);
+    const last = isLastBusRmk(entry);
     if (!byRoute.has(label)) byRoute.set(label, { minutes: [], sample: entry });
     const bucket = byRoute.get(label).minutes;
     const seen = bucket.find(x => x.m === minutes);
@@ -12065,24 +12076,24 @@ async function loadStopEta(row) {
   if (!stop || !cell) return;
 
   try {
-    let minutes = [];
+    let entries = [];
     if (context.co === 'CTB') {
       const response = await fetch(CTB_BASE + '/eta/CTB/' + stop.stop + '/' +
         encodeURIComponent(context.routeNo), { signal: AbortSignal.timeout(10000) });
       if (!response.ok) throw new Error(response.status);
-      minutes = etaMinutes((await response.json()).data, context.dir, null);
+      entries = etaEntries((await response.json()).data, context.dir, null);
     } else {
       const response = await fetch('https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/' +
         stop.stop, { signal: AbortSignal.timeout(10000) });
       if (!response.ok) throw new Error(response.status);
       const rows = ((await response.json()).data || [])
         .filter(r => String(r.route).toUpperCase() === String(context.routeNo).toUpperCase());
-      minutes = etaMinutes(rows, context.dir, context.serviceType);
+      entries = etaEntries(rows, context.dir, context.serviceType);
     }
 
     if (routeStopsState !== mine) return;          // closed, or another route
     mine.etaAsked++;
-    if (minutes.length === 0) {
+    if (entries.length === 0) {
       cell.className = 'rseta quiet';
       cell.textContent = T('rsNoEta');
       noteRouteQuiet();
@@ -12091,8 +12102,10 @@ async function loadStopEta(row) {
     mine.etaWithBus++;
     clearRouteOff();
     cell.className = 'rseta';
-    cell.textContent = minutes.slice(0, 3)
-      .map(m => (m <= 0 ? T('due') : m + T('min'))).join(' · ');
+    cell.innerHTML = entries.slice(0, 3)
+      .map(e => (e.sched ? '<span class="sched">' + esc(T('etaAbout')) + '</span>' : '') +
+                (e.m <= 0 ? T('due') : e.m + T('min')) +
+                (e.last ? lastBusTag() : '')).join(' · ');
   } catch (error) {
     if (routeStopsState !== mine) return;
     // A failed request is not an absent bus, so it is NOT counted towards
@@ -12103,6 +12116,39 @@ async function loadStopEta(row) {
 }
 
 // Minutes from now, for this direction only, soonest first.
+// WHAT THE REMARK FIELD MEANS, IN ONE PLACE.
+// These two tests used to live inline inside formatArrivals, which is ONE of
+// the four screens that turn a feed row into a time — the stop screen. The
+// route stop list, the saved departures on 收藏, the map's place card and the
+// journey card's next-bus line all built their own minutes and threw the
+// remark away, so 尾班車 was marked on one screen out of four. A rider
+// checking a route's stops at 23:40 — which is exactly what was happening —
+// got no warning at all.
+function isScheduledRmk(row) {
+  return /原定班次|Scheduled/i.test((row.rmk_tc || '') + ' ' + (row.rmk_en || ''));
+}
+function isLastBusRmk(row) {
+  return /最後班次|Last Bus/i.test((row.rmk_tc || '') + ' ' + (row.rmk_en || ''));
+}
+// The badge itself, so every screen spells it the same way.
+function lastBusTag() {
+  return ' <span class="lastbus">' + esc(T('etaLastBus')) + '</span>';
+}
+
+// Minutes AND what the operator said about them. etaMinutes stays as it was
+// for anything that only wants numbers.
+function etaEntries(rows, dir, serviceType) {
+  const now = Date.now();
+  return (rows || [])
+    .filter(r => r.eta)
+    .filter(r => !dir || !r.dir || r.dir === dir)
+    .filter(r => !serviceType || String(r.service_type) === String(serviceType))
+    .map(r => ({ m: Math.round((new Date(r.eta).getTime() - now) / 60000),
+                 last: isLastBusRmk(r), sched: isScheduledRmk(r) }))
+    .filter(e => e.m >= 0)
+    .sort((a, b) => a.m - b.m);
+}
+
 function etaMinutes(rows, dir, serviceType) {
   const now = Date.now();
   return (rows || [])
@@ -13054,12 +13100,17 @@ function spotEtaLine(rows) {
     if (!isFinite(wait) || wait < 0 || wait > 90) continue;
     const route = String(row.route || '').trim();
     if (!route) continue;
-    if (!soonest.has(route) || soonest.get(route) > wait) soonest.set(route, wait);
+    const seen = soonest.get(route);
+    // The soonest bus per route — and whether THAT one is the last of the
+    // night. A visitor reading a hotel's card at 23:40 needs it as much as
+    // anybody standing at the stop.
+    if (!seen || seen.m > wait) soonest.set(route, { m: wait, last: isLastBusRmk(row) });
   }
   if (!soonest.size) return null;
-  return [...soonest.entries()].sort((a, b) => a[1] - b[1]).slice(0, 3)
-    .map(pair => '<span class="r">' + esc(pair[0]) + '</span> ' +
-                 (pair[1] <= 0 ? T('due') : pair[1] + T('min')))
+  return [...soonest.entries()].sort((a, b) => a[1].m - b[1].m).slice(0, 3)
+    .map(([route, e]) => '<span class="r">' + esc(route) + '</span> ' +
+                 (e.m <= 0 ? T('due') : e.m + T('min')) +
+                 (e.last ? lastBusTag() : ''))
     .join(' · ');
 }
 
