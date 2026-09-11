@@ -454,6 +454,11 @@
   .mtrchip .cname { font-size:1rem; line-height:1.2; overflow-wrap:break-word;
                     display:-webkit-box; -webkit-line-clamp:2;
                     -webkit-box-orient:vertical; overflow:hidden; }
+  /* WHICH RAILWAY, IN THE META LINE. 屯門 is a station AND a Light Rail stop
+     300 m apart, so the nearest list shows 「屯門」 twice — and an amber top
+     edge is the kind of thing this project has a rule against relying on by
+     itself. 🚇/🚈 sits beside the distance, where it costs no line: in the
+     NAME it cost Kennedy Town a whole one at 特大 in English. */
   .mtrchip .cmeta { font-size:0.94rem; font-weight:700; color:var(--ink-3); line-height:1.15;
                     max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   /* A saved train is a line as much as a station, so it wears the line's
@@ -477,10 +482,34 @@
      特大, and would go stale the day a station opens. */
   .railmap { margin-top:20px; padding-top:14px; border-top:2px solid var(--line-soft); }
   .rmhint { font-size:0.94rem; font-weight:700; color:var(--ink-3); margin:-4px 0 10px; }
-  .rmline { margin:0 0 12px; }
+  .rmsec { font-size:1rem; font-weight:800; color:var(--ink-3); margin:16px 0 8px; }
+  .rmline { margin:0 0 6px; }
   .rmname { display:flex; align-items:center; gap:8px; font-size:1rem; font-weight:800;
-            color:var(--ink-2); margin-bottom:2px; }
-  .rmdot { flex:0 0 auto; width:18px; height:18px; border-radius:9px; background:var(--line); }
+            color:var(--ink-2); margin:8px 0 2px; }
+  /* CLOSED UNTIL TAPPED. Ten lines and eleven Light Rail routes drawn open
+     was 325 station buttons and most of a phone screen's worth of scrolling
+     each — on a tab whose own design note says the rider may not scroll. One
+     row per line, the colour down its left edge because "the green line" is
+     how a rider names it, and the stations appear under the one they ask
+     for. Only ONE opens at a time: two open lines and the page is long
+     again, which is the thing being fixed. */
+  .rmhead { display:flex; align-items:center; gap:10px; width:100%; min-height:54px;
+            padding:8px 12px; border:2px solid var(--line); border-left:12px solid var(--line);
+            border-radius:12px; background:white; color:var(--ink);
+            font-size:1rem; font-weight:800; text-align:left; cursor:pointer; }
+  .rmhead .rmnm { flex:1 1 auto; min-width:0; overflow-wrap:break-word; }
+  .rmhead .rmcount { flex:0 0 auto; font-size:0.94rem; font-weight:700; color:var(--ink-3); }
+  .rmhead .rmcar { flex:0 0 auto; font-size:0.94rem; color:var(--ink-3); }
+  .rmhead.open { background:var(--navy-tint); }
+  /* The Light Rail has no colour per route — MTR publishes none — so its
+     routes are told apart by the number on the front of the train, four to a
+     row instead of eleven rows that would all look the same. */
+  .rmroutes { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr));
+              gap:6px; margin-bottom:6px; }
+  .rmroute { min-height:54px; padding:4px; border:2px solid var(--line);
+             border-top:8px solid #b45309; border-radius:12px; background:white;
+             font-size:1.06rem; font-weight:800; color:var(--ink); cursor:pointer; }
+  .rmroute.open { background:var(--navy-tint); border-color:var(--navy); border-top-color:#b45309; }
   .rmstrip { display:flex; align-items:center; overflow-x:auto; padding:4px 0 8px;
              -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
   .rmstop { flex:0 0 auto; min-height:48px; padding:0 10px; border:2px solid var(--line);
@@ -1905,7 +1934,7 @@ const TEXT = {
     lrtBack:'Choose another stop', lrtBackTo:'Back to {s}', lrtLoading:'Checking the Light Rail\u2026',
     lrtRoute:'Light Rail {n}', railChangeHere:'Change railway here',
     mtrClear:'Clear what you typed', railMapTitle:'The whole railway',
-    railMapHint:'Slide a line sideways. Tap any station to open it.',
+    railMapHint:'Tap a line to see its stations.', rmStations:'{n} stations',
     lrtCheckBoard:'Read the platform board for the next {n}',
     lrtOutDir:'Leave the platform and walk {d}',
     railFareSplit:'\u2139 MTR does not publish one price for Light Rail and train together, so no total is shown. Each part shows its own fare.',
@@ -2200,7 +2229,7 @@ const TEXT = {
     lrtBack:'選擇其他車站', lrtBackTo:'返回 {s}', lrtLoading:'正在查詢輕鐵…',
     lrtRoute:'輕鐵 {n}', railChangeHere:'在此轉乘另一鐵路',
     mtrClear:'清除輸入', railMapTitle:'全綫路綫圖',
-    railMapHint:'左右滑動每條綫，按車站即可查看。',
+    railMapHint:'按一下路綫即可展開車站。', rmStations:'{n} 個站',
     lrtCheckBoard:'請看月台顯示屏的下班 {n}',
     lrtOutDir:'落車後往{d}行',
     railFareSplit:'ℹ 港鐵沒有公佈輕鐵連港鐵的合併車費，所以不顯示總數。每程分別顯示該程車費。',
@@ -11496,7 +11525,7 @@ const MTR_CACHE_MS = 30000;    // the feed itself is refreshed about this often
 
 let mtrState = freshMtrState();
 function freshMtrState() {
-  return { station:null, line:null, dir:null, dest:null, query:'',
+  return { station:null, line:null, dir:null, dest:null, query:'', mapLine:null,
            lrt:null, lrtHtml:'',
            blocks:{}, alerts:{}, blocksFor:null, fetchedAt:0,
            loading:false, locating:false, locateTried:false, noneNear:false };
@@ -11822,30 +11851,53 @@ function facesSameWay(variant, order) {
 
 function railMapHtml() {
   if (!mtrData) return '';
-  const key = lang + (lrtData ? '+lrt' : '');
+  // The open line is part of the key: only ONE line's stations are built at a
+  // time now, so the cache is cheap and the page is short.
+  const open = mtrState.mapLine || '';
+  const key = lang + (lrtData ? '+lrt' : '') + '|' + open;
   if (railMapCache.key === key) return railMapCache.html;
 
-  const strip = chips => '<div class="rmstrip">' + chips.join('<span class="rmjoin"></span>') + '</div>';
-  const row = (name, colour, chips) =>
-    '<div class="rmline"><div class="rmname">' +
-      '<span class="rmdot" style="background:' + colour + '"></span>' + esc(name) + '</div>' +
-      strip(chips) + '</div>';
+  const strip = chips =>
+    '<div class="rmstrip">' + chips.join('<span class="rmjoin"></span>') + '</div>';
+
+  // One collapsed line: its colour down the left edge, its name, how many
+  // stations, and a ▾ that turns ▴ when it is open.
+  const lineRow = (code, name, colour, count, stripHtml) => {
+    const on = open === code;
+    return '<div class="rmline">' +
+      '<button class="rmhead' + (on ? ' open' : '') + '" data-mtr-map="' + esc(code) + '"' +
+        ' style="border-left-color:' + colour + '" aria-expanded="' + (on ? 'true' : 'false') + '">' +
+        '<span class="rmnm">' + esc(name) + '</span>' +
+        '<span class="rmcount">' + T('rmStations').replace('{n}', count) + '</span>' +
+        '<span class="rmcar">' + (on ? '\u25B4' : '\u25BE') + '</span>' +
+      '</button>' +
+      (on ? stripHtml : '') + '</div>';
+  };
 
   let html = '<div class="railmap"><div class="mtrsub">🗺 ' + T('railMapTitle') + '</div>' +
              '<div class="rmhint">' + T('railMapHint') + '</div>';
 
+  // ---- 港鐵, one row per line, closed until tapped ----
+  html += '<div class="rmsec">🚇 ' + T('mtrTitle') + '</div>';
   for (const [line, variants] of Object.entries(mtrData.lines)) {
     const order = mergedRailOrder(variants);
     const colour = MTR_LINE_COLOURS[line] || '#999';
-    html += row(railLineName(line), colour, order.map(code =>
-      '<button class="rmstop" data-mtr-station="' + esc(code) +
-      '" style="border-top:6px solid ' + colour + '">' + esc(stationName(code)) + '</button>'));
+    html += lineRow(line, railLineName(line), colour, order.length,
+      open === line
+        ? strip(order.map(code =>
+            '<button class="rmstop" data-mtr-station="' + esc(code) +
+            '" style="border-top:6px solid ' + colour + '">' + esc(stationName(code)) + '</button>'))
+        : '');
   }
 
+  // ---- 輕鐵, its own section ----
   if (lrtData && lrtData.routes) {
     // ONE colour for the whole Light Rail, not one per route. MTR publishes
     // no colour per Light Rail route and this app does not invent data —
-    // twelve made-up colours would read as twelve facts.
+    // eleven made-up colours would read as eleven facts. So the routes are
+    // told apart by their NUMBER, which is what is painted on the train and
+    // what a rider actually looks for, and they are laid out as a grid of
+    // numbers rather than eleven near-identical coloured rows.
     const LRT_COLOUR = '#b45309';
     // A route's two directions are merged the same way a train line's
     // branches are. It matters most on the 705/706, where the "directions"
@@ -11860,12 +11912,22 @@ function railMapHtml() {
     const numbers = [...byNumber.keys()].sort((a, b) =>
       (parseInt(a, 10) - parseInt(b, 10)) || a.localeCompare(b));
 
-    html += '<div class="mtrsub">🚈 ' + T('lrtTitle') + '</div>';
-    for (const number of numbers) {
-      html += row(T('lrtRoute').replace('{n}', number), LRT_COLOUR,
-        mergedRailOrder(byNumber.get(number)).map(id =>
+    html += '<div class="rmsec">🚈 ' + T('lrtTitle') + '</div><div class="rmroutes">' +
+      numbers.map(number => {
+        const code = LR_LINE + number;
+        return '<button class="rmroute' + (open === code ? ' open' : '') +
+          '" data-mtr-map="' + esc(code) + '" aria-expanded="' +
+          (open === code ? 'true' : 'false') + '">' + esc(number) + '</button>';
+      }).join('') + '</div>';
+
+    const openNumber = isLrtLine(open) ? open.slice(LR_LINE.length) : null;
+    if (openNumber && byNumber.has(openNumber)) {
+      html += '<div class="rmline"><div class="rmname">🚈 ' +
+        esc(T('lrtRoute').replace('{n}', openNumber)) + '</div>' +
+        strip(mergedRailOrder(byNumber.get(openNumber)).map(id =>
           '<button class="rmstop" data-mtr-lrt="' + esc(id) +
-          '" style="border-top:6px solid ' + LRT_COLOUR + '">' + esc(lrtName(id)) + '</button>'));
+          '" style="border-top:6px solid ' + LRT_COLOUR + '">' + esc(lrtName(id)) + '</button>')) +
+        '</div>';
     }
   }
 
@@ -11960,7 +12022,8 @@ function renderMtrView() {
           near.map(n => '<button class="mtrchip' + (n.kind === 'lrt' ? ' lrt' : '') +
             '" data-mtr-' + (n.kind === 'lrt' ? 'lrt' : 'station') + '="' + esc(n.id) + '">' +
             '<span class="cname">' + esc(n.name) + '</span>' +
-            '<span class="cmeta">' + Math.round(n.metres) + ' m</span></button>').join('') + '</div>';
+            '<span class="cmeta">' + (n.kind === 'lrt' ? '\u{1F688}' : '\u{1F687}') + ' ' +
+            Math.round(n.metres) + ' m</span></button>').join('') + '</div>';
       } else {
         html += '<div class="favempty">' + T('mtrNoneNear') + '</div>';
       }
@@ -11974,7 +12037,9 @@ function renderMtrView() {
       html += '<div class="mtrsub">' + T('mtrSaved') + '</div><div class="mtrgrid">' +
         saved.map(sv => '<button class="mtrchip' + (sv.kind === 'lrt' ? ' lrt' : '') +
           '" data-mtr-' + (sv.kind === 'lrt' ? 'lrt' : 'station') + '="' + esc(sv.id) + '">' +
-          '<span class="cname">' + esc(sv.name) + '</span></button>').join('') +
+          '<span class="cname">' + esc(sv.name) + '</span>' +
+          '<span class="cmeta">' + (sv.kind === 'lrt' ? '\u{1F688}' : '\u{1F687}') +
+          '</span></button>').join('') +
         '</div>';
     }
     if (trainFavs.length) {
@@ -12177,9 +12242,23 @@ function showRailResults() {
 // One listener for the whole screen: it is redrawn from scratch on every
 // change, so per-button handlers would be lost on each redraw.
 document.getElementById('mtrview').addEventListener('click', event => {
-  const el = event.target.closest('[data-mtr-station],[data-mtr-dir],[data-mtr-dest],[data-mtr-jump],[data-mtr-act],[data-mtr-lrt]');
+  const el = event.target.closest('[data-mtr-station],[data-mtr-dir],[data-mtr-dest],[data-mtr-jump],[data-mtr-act],[data-mtr-lrt],[data-mtr-map]');
   if (!el) return;
   const d = el.dataset;
+  // OPEN ONE LINE ON THE MAP, and keep the page where the rider left it.
+  // The whole view is rebuilt from scratch on every change, so the scroll
+  // position has to be carried over by hand — otherwise tapping a line near
+  // the bottom throws you back to the search box at the top.
+  if (d.mtrMap) {
+    const panel = document.getElementById('panel');
+    const was = panel ? panel.scrollTop : 0;
+    mtrState.mapLine = (mtrState.mapLine === d.mtrMap) ? null : d.mtrMap;
+    renderMtrView();
+    if (panel) panel.scrollTop = was;
+    const head = document.querySelector('#mtrview [data-mtr-map="' + CSS.escape(d.mtrMap) + '"]');
+    if (head) head.scrollIntoView({ block: 'nearest' });
+    return;
+  }
   if (d.mtrLrt) { lrtOpen(d.mtrLrt); return; }
   if (d.mtrJump) { mtrJumpTo(d.mtrJump, d.line); return; }   // a station on a strip: stand there
   if (d.mtrStation) return mtrSetStation(d.mtrStation);
