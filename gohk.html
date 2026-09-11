@@ -523,17 +523,22 @@
      cannot drift apart. `overscroll-behavior:contain` stops a drag that
      reaches the edge of the map from carrying on and scrolling the page. */
   .rmnetbox { overflow:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
-              touch-action:pan-x pan-y; height:320px; border:2px solid var(--line-soft);
+              touch-action:pan-x pan-y; height:340px; border:2px solid var(--line-soft);
               border-radius:12px; background:#f1f5f9; }
-  .rmnetbox.fit { overflow:hidden; height:auto; }
   .rmnetbox svg { display:block; }
-  .rmnetbox.fit svg { width:100%; height:auto; }
-  .rmnetbar { display:flex; align-items:center; gap:8px; margin:8px 0 12px; }
-  .rmnetnote { flex:1 1 auto; min-width:0; font-size:0.94rem; font-weight:700;
-               color:var(--ink-3); }
-  .rmnetbtn { flex:0 0 auto; min-height:46px; padding:0 14px; border:2px solid var(--line);
-              border-radius:10px; background:white; font-size:0.94rem; font-weight:800;
-              color:var(--ink-2); cursor:pointer; }
+  /* The line itself is a tap target: an invisible fat stroke runs under each
+     coloured one, because a 5px line is not something a finger can hit. */
+  .rmnetbox .rmhit { cursor:pointer; }
+  .rmnetbox .rmpt  { cursor:pointer; }
+  .rmnetbar { display:flex; align-items:center; gap:6px; margin:8px 0 4px; }
+  .rmnetbtn { flex:0 0 auto; min-width:52px; min-height:48px; padding:0 12px;
+              border:2px solid var(--line); border-radius:10px; background:white;
+              font-size:1.18rem; font-weight:800; color:var(--ink); cursor:pointer; }
+  .rmnetbtn.wide { min-width:0; font-size:0.94rem; color:var(--ink-2); }
+  .rmnetbtn[disabled] { color:var(--ink-3); background:var(--surface-2); border-style:dashed; }
+  .rmzoom { flex:1 1 auto; min-width:0; text-align:right; font-size:0.94rem;
+            font-weight:700; color:var(--ink-3); white-space:nowrap; }
+  .rmnetnote { font-size:0.94rem; font-weight:700; color:var(--ink-3); margin:0 0 12px; }
   /* The station you tapped, kept marked in the line below so you can see
      where on it you are. */
   .rmstop.pick { background:var(--navy); border-color:var(--navy) !important; color:white; }
@@ -1963,9 +1968,9 @@ const TEXT = {
     mtrClear:'Clear what you typed', railMapTitle:'The whole railway',
     railMapHint:'Or tap a line below to see its stations.', rmStations:'{n} stations',
     railNetAria:'Map of every station and Light Rail stop',
-    railNetDrag:'Drag the map with your finger, then tap a station.',
-    railNetWhole:'The whole railway. Tap ENLARGE to pick a station.',
-    railNetSeeAll:'See it all', railNetBigger:'Enlarge',
+    railNetDrag:'Drag the map with your finger. Tap a station for its trains, or tap a line to open it below.',
+    railNetSeeAll:'See it all', railNetIn:'Zoom in', railNetOut:'Zoom out',
+    railNetZoom:'size {n} of {m}',
     lrtCheckBoard:'Read the platform board for the next {n}',
     lrtOutDir:'Leave the platform and walk {d}',
     railFareSplit:'\u2139 MTR does not publish one price for Light Rail and train together, so no total is shown. Each part shows its own fare.',
@@ -2262,9 +2267,9 @@ const TEXT = {
     mtrClear:'清除輸入', railMapTitle:'全綫路綫圖',
     railMapHint:'或按下面的路綫展開車站。', rmStations:'{n} 個站',
     railNetAria:'全港車站及輕鐵站地圖',
-    railNetDrag:'用手指拖動地圖，按一下車站即可。',
-    railNetWhole:'全個鐵路網。按「放大」就可以揀車站。',
-    railNetSeeAll:'睇晒全部', railNetBigger:'放大',
+    railNetDrag:'用手指拖動地圖。按車站睇班次，按路綫就會在下面展開。',
+    railNetSeeAll:'睇晒全部', railNetIn:'放大', railNetOut:'縮細',
+    railNetZoom:'第 {n} / {m} 級',
     lrtCheckBoard:'請看月台顯示屏的下班 {n}',
     lrtOutDir:'落車後往{d}行',
     railFareSplit:'ℹ 港鐵沒有公佈輕鐵連港鐵的合併車費，所以不顯示總數。每程分別顯示該程車費。',
@@ -11561,7 +11566,6 @@ const MTR_CACHE_MS = 30000;    // the feed itself is refreshed about this often
 let mtrState = freshMtrState();
 function freshMtrState() {
   return { station:null, line:null, dir:null, dest:null, query:'',
-           mapLine:null, mapPick:null, mapWide:true, mapAt:null,
            lrt:null, lrtHtml:'',
            blocks:{}, alerts:{}, blocksFor:null, fetchedAt:0,
            loading:false, locating:false, locateTried:false, noneNear:false };
@@ -11903,16 +11907,42 @@ function facesSameWay(variant, order) {
 // dragging, near enough that nobody gets lost. At that scale the median gap
 // between neighbouring stations is 25 px, so the dots are separable and a
 // finger can pick one.
-const RM_PX_PER_KM = 30;
+// FIVE FIXED SIZES, IN KILOMETRES PER 100 PIXELS OF SCREEN.
+// The map is REBUILT at each one rather than scaled with CSS, because the
+// two things that must not scale are the type and the tap targets: a name at
+// 16px has to stay 16px at every zoom (this app has a floor and it applies
+// here too), and a station dot has to stay big enough for a finger.
+// Rebuilding is 165 circles and a dozen polylines — far cheaper than the
+// compromise would be.
+const RM_ZOOMS = [12, 20, 30, 46, 70];    // px per km
 const RM_PAD = 26;
 
+// HOW MANY NAMES EACH SIZE CAN HOLD WITHOUT THEM LANDING ON EACH OTHER.
+// Measured against the real spacing: the median gap between neighbouring
+// stations is 0.83 km, so at 30 px/km two names are 25 px apart and a
+// three-character name is 48 px wide. That is why the whole-network views
+// name only the interchanges, and why every station is named only at 70.
+//   0  none            1  interchanges
+//   2  + line ends     3  every station    4  + every Light Rail stop
+const RM_LABELS = ['none', 'cross', 'ends', 'all', 'lrt'];
+
+// The map's own view — zoom, where it is dragged to, which line is open,
+// which station was last opened from it. NOT part of mtrState: opening a
+// station rebuilds that from scratch, and coming back to find the map reset
+// to Lantau at the default zoom is the app forgetting what you just did.
+let railMapView = { zoom: 2, at: null, line: null, pick: null };
 let railNetCache = { key: '', html: '' };
 
 function railNetworkHtml() {
   if (!mtrData) return '';
-  const key = lang + (lrtData ? '+lrt' : '') + '|' + (mtrState.mapWide ? 'w' : 'f') +
-              '|' + (mtrState.mapPick || '');
+  const zoom = Math.max(0, Math.min(RM_ZOOMS.length - 1, railMapView.zoom));
+  const key = lang + (lrtData ? '+lrt' : '') + '|' + zoom +
+              '|' + (railMapView.line || '') + '|' + (railMapView.pick || '');
   if (railNetCache.key === key) return railNetCache.html;
+
+  const perKm = RM_ZOOMS[zoom];
+  const labels = RM_LABELS[zoom];
+  const openLine = railMapView.line;
 
   const points = [];
   for (const code of Object.keys(mtrData.stations)) {
@@ -11929,28 +11959,43 @@ function railNetworkHtml() {
   // Equirectangular. Over 34 km the error is far below the width of a dot,
   // and it keeps the projection to two multiplications.
   const midLat = (minLat + maxLat) / 2;
-  const kx = 111.32 * Math.cos(midLat * Math.PI / 180) * RM_PX_PER_KM;
-  const ky = 110.57 * RM_PX_PER_KM;
+  const kx = 111.32 * Math.cos(midLat * Math.PI / 180) * perKm;
+  const ky = 110.57 * perKm;
   const X = lng => +((lng - minLng) * kx + RM_PAD).toFixed(1);
   const Y = lat => +((maxLat - lat) * ky + RM_PAD).toFixed(1);
   const width  = Math.round((maxLng - minLng) * kx + RM_PAD * 2);
   const height = Math.round((maxLat - minLat) * ky + RM_PAD * 2);
 
-  let svg = '';
+  // Everything that is drawn grows with the zoom except the type.
+  const track = Math.max(3, Math.round(perKm / 6));
+  const dotR  = Math.max(3.5, Math.round(perKm / 5.5) * 10 / 10);
+  const lrtR  = Math.max(2.5, dotR - 2);
 
-  // ---- the Light Rail first, underneath ----
-  // Its routes lie on top of each other along the same tracks, so they are
-  // drawn thin and pale: what should read is ONE network, not eleven.
+  const pathOf = (codes, pick) => codes.map(c => {
+    const p = pick(c);
+    return p ? X(p[1]) + ',' + Y(p[0]) : null;
+  }).filter(Boolean);
+
+  let hits = '', lines = '', dots = '', names = '';
+
+  // ---- the Light Rail, underneath ----
+  // Its eleven routes lie on the same tracks, so they are drawn thin and pale:
+  // what should read is ONE network, not eleven.
   if (lrtData && lrtData.routes) {
     for (const routeKey of Object.keys(lrtData.routes)) {
-      const stops = lrtRouteStops(routeKey);
-      const pts = stops.map(id => {
+      const code = LR_LINE + routeKey.split('|')[0];
+      const dim = openLine && openLine !== code;
+      const pts = pathOf(lrtRouteStops(routeKey), id => {
         const row = lrtData.stops[id];
-        return row ? X(row[3]) + ',' + Y(row[2]) : null;
-      }).filter(Boolean);
-      if (pts.length > 1)
-        svg += '<polyline points="' + pts.join(' ') + '" fill="none" stroke="#b45309" ' +
-               'stroke-width="3" stroke-opacity="0.5" stroke-linejoin="round"/>';
+        return row ? [row[2], row[3]] : null;
+      });
+      if (pts.length < 2) continue;
+      const d = pts.join(' ');
+      hits  += '<polyline class="rmhit" data-mtr-line="' + esc(code) + '" points="' + d +
+               '" fill="none" stroke="transparent" stroke-width="' + (track + 14) + '"/>';
+      lines += '<polyline points="' + d + '" fill="none" stroke="#b45309" stroke-width="' +
+               (openLine === code ? track + 2 : track - 1) + '" stroke-opacity="' +
+               (dim ? 0.18 : 0.55) + '" stroke-linejoin="round" pointer-events="none"/>';
     }
   }
 
@@ -11960,14 +12005,20 @@ function railNetworkHtml() {
   // goes. A variant is a service that really runs.
   for (const [line, variants] of Object.entries(mtrData.lines)) {
     const colour = MTR_LINE_COLOURS[line] || '#999';
+    const dim = openLine && openLine !== line;
     for (const stops of variants) {
-      const pts = stops.map(code => {
+      const pts = pathOf(stops, code => {
         const st = mtrData.stations[code];
-        return st ? X(st[3]) + ',' + Y(st[2]) : null;
-      }).filter(Boolean);
-      if (pts.length > 1)
-        svg += '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + colour +
-               '" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>';
+        return st ? [st[2], st[3]] : null;
+      });
+      if (pts.length < 2) continue;
+      const d = pts.join(' ');
+      hits  += '<polyline class="rmhit" data-mtr-line="' + esc(line) + '" points="' + d +
+               '" fill="none" stroke="transparent" stroke-width="' + (track + 14) + '"/>';
+      lines += '<polyline points="' + d + '" fill="none" stroke="' + colour +
+               '" stroke-width="' + (openLine === line ? track + 3 : track) +
+               '" stroke-opacity="' + (dim ? 0.2 : 1) +
+               '" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>';
     }
   }
 
@@ -11975,56 +12026,72 @@ function railNetworkHtml() {
   if (lrtData) {
     for (const id of Object.keys(lrtData.stops)) {
       const row = lrtData.stops[id];
-      const on = mtrState.mapPick === LR_NODE + id;
-      svg += '<circle class="rmpt" data-mtr-net="' + esc(LR_NODE + id) + '" cx="' + X(row[3]) +
-             '" cy="' + Y(row[2]) + '" r="' + (on ? 8 : 4) + '" fill="' + (on ? '#1e3a8a' : '#b45309') +
-             '" stroke="white" stroke-width="2"><title>' + esc(lrtName(id)) + '</title></circle>';
+      const on = railMapView.pick === LR_NODE + id;
+      dots += '<circle class="rmpt" data-mtr-net="' + esc(LR_NODE + id) + '" cx="' + X(row[3]) +
+              '" cy="' + Y(row[2]) + '" r="' + (on ? lrtR + 4 : lrtR) + '" fill="' +
+              (on ? '#1e3a8a' : '#b45309') + '" stroke="white" stroke-width="2"><title>' +
+              esc(lrtName(id)) + '</title></circle>';
+      if (labels === 'lrt')
+        names += rmLabel(X(row[3]), Y(row[2]) - lrtR - 6, lrtName(id));
     }
   }
+  const anchors = rmAnchorSet();
   for (const code of Object.keys(mtrData.stations)) {
     const st = mtrData.stations[code];
-    const on = mtrState.mapPick === code;
+    const on = railMapView.pick === code;
     // White-filled, like every metro map: an interchange belongs to more than
     // one line and cannot honestly be painted a single colour.
-    svg += '<circle class="rmpt" data-mtr-net="' + esc(code) + '" cx="' + X(st[3]) +
-           '" cy="' + Y(st[2]) + '" r="' + (on ? 10 : 6) + '" fill="' + (on ? '#1e3a8a' : 'white') +
-           '" stroke="' + (on ? 'white' : '#0f172a') + '" stroke-width="' + (on ? 3 : 2.5) +
-           '"><title>' + esc(stationName(code)) + '</title></circle>';
+    dots += '<circle class="rmpt" data-mtr-net="' + esc(code) + '" cx="' + X(st[3]) +
+            '" cy="' + Y(st[2]) + '" r="' + (on ? dotR + 4 : dotR) + '" fill="' +
+            (on ? '#1e3a8a' : 'white') + '" stroke="' + (on ? 'white' : '#0f172a') +
+            '" stroke-width="' + (on ? 3 : 2.5) + '"><title>' + esc(stationName(code)) +
+            '</title></circle>';
+    const show = labels === 'all' || labels === 'lrt' ||
+                 (labels === 'ends' && anchors.has(code)) ||
+                 (labels === 'cross' && whichLinesServe(code).length > 1);
+    if (show) names += rmLabel(X(st[3]), Y(st[2]) - dotR - 6, stationName(code));
   }
 
-  // ---- a few names, as landmarks ----
-  // Only the ends of the lines and the places two lines meet: about thirty,
-  // spread out, which is enough to orient by. Every station labelled would be
-  // 165 names on top of each other, and shrinking the type to fit them is not
-  // available in an app with a 16px floor.
-  const anchors = new Set();
-  for (const variants of Object.values(mtrData.lines))
-    for (const stops of variants) { anchors.add(stops[0]); anchors.add(stops[stops.length - 1]); }
-  for (const code of Object.keys(mtrData.stations))
-    if (whichLinesServe(code).length > 1) anchors.add(code);
-  for (const code of anchors) {
-    const st = mtrData.stations[code];
-    if (!st) continue;
-    svg += '<text x="' + X(st[3]) + '" y="' + (Y(st[2]) - 11) + '" text-anchor="middle" ' +
-           'font-size="16" font-weight="700" fill="#0f172a" stroke="white" stroke-width="4" ' +
-           'paint-order="stroke" pointer-events="none">' + esc(stationName(code)) + '</text>';
-  }
-
-  const wide = mtrState.mapWide !== false;
   const html =
-    '<div class="rmnetbox' + (wide ? '' : ' fit') + '" id="rmnet">' +
+    '<div class="rmnetbox" id="rmnet">' +
       '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height +
         '" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' +
-        esc(T('railNetAria')) + '">' + svg + '</svg>' +
+        esc(T('railNetAria')) + '">' + hits + lines + dots + names + '</svg>' +
     '</div>' +
     '<div class="rmnetbar">' +
-      '<span class="rmnetnote">' + T(wide ? 'railNetDrag' : 'railNetWhole') + '</span>' +
-      '<button class="rmnetbtn" data-mtr-act="net-zoom">' +
-        T(wide ? 'railNetSeeAll' : 'railNetBigger') + '</button>' +
-    '</div>';
+      '<button class="rmnetbtn" data-mtr-act="net-out" aria-label="' + esc(T('railNetOut')) +
+        '"' + (zoom === 0 ? ' disabled' : '') + '>\u2212</button>' +
+      '<button class="rmnetbtn" data-mtr-act="net-in" aria-label="' + esc(T('railNetIn')) +
+        '"' + (zoom === RM_ZOOMS.length - 1 ? ' disabled' : '') + '>+</button>' +
+      '<button class="rmnetbtn wide" data-mtr-act="net-fit">' + T('railNetSeeAll') + '</button>' +
+      '<span class="rmzoom">' + T('railNetZoom').replace('{n}', zoom + 1)
+        .replace('{m}', RM_ZOOMS.length) + '</span>' +
+    '</div>' +
+    '<div class="rmnetnote">' + T('railNetDrag') + '</div>';
 
   railNetCache = { key, html };
   return html;
+}
+
+// A name on the map. The white outline under it is what lets it sit on top of
+// a coloured line and still be read.
+function rmLabel(x, y, text) {
+  return '<text x="' + x + '" y="' + y + '" text-anchor="middle" font-size="16" ' +
+         'font-weight="700" fill="#0f172a" stroke="white" stroke-width="4" ' +
+         'paint-order="stroke" pointer-events="none">' + esc(text) + '</text>';
+}
+
+// The ends of every line and every place two lines meet — the landmarks you
+// orient by when there is not room to name everything.
+let rmAnchors = null;
+function rmAnchorSet() {
+  if (rmAnchors) return rmAnchors;
+  rmAnchors = new Set();
+  for (const variants of Object.values(mtrData.lines))
+    for (const stops of variants) { rmAnchors.add(stops[0]); rmAnchors.add(stops[stops.length - 1]); }
+  for (const code of Object.keys(mtrData.stations))
+    if (whichLinesServe(code).length > 1) rmAnchors.add(code);
+  return rmAnchors;
 }
 
 // Which Light Rail route to open for a stop: the first one that calls there.
@@ -12037,42 +12104,52 @@ function lrtLineOf(stopId) {
 
 // The view is rebuilt from scratch on every change, so where the rider had
 // dragged the map to has to be written down before that happens or it snaps
-// back to Lantau under their finger.
+// back under their finger.
 function keepRailNetAt() {
   const box = document.getElementById('rmnet');
-  if (box && !box.classList.contains('fit')) mtrState.mapAt = [box.scrollLeft, box.scrollTop];
+  if (box) railMapView.at = [box.scrollLeft, box.scrollTop, box.scrollWidth, box.scrollHeight];
 }
 
-// Put the map where the rider is, or on the station they last tapped, rather
-// than in the corner of Lantau the scroll happens to start in.
+// Put the map back where it was, keeping the same point in the middle when
+// the zoom has changed the drawing's size underneath it. Failing that, on the
+// rider, or on the station they last opened.
 function centreRailNet() {
   const box = document.getElementById('rmnet');
-  if (!box || box.classList.contains('fit')) return;
-  if (mtrState.mapAt) { box.scrollLeft = mtrState.mapAt[0]; box.scrollTop = mtrState.mapAt[1]; return; }
-  const pick = box.querySelector('.rmpt[data-mtr-net="' + CSS.escape(mtrState.mapPick || '') + '"]');
-  let dot = pick;
+  if (!box) return;
+  const at = railMapView.at;
+  if (at) {
+    // Same fraction of the map, so zooming keeps the middle of the screen on
+    // the same place instead of throwing the rider back to Lantau.
+    const fx = at[2] ? (at[0] + box.clientWidth / 2) / at[2] : 0.5;
+    const fy = at[3] ? (at[1] + box.clientHeight / 2) / at[3] : 0.5;
+    box.scrollLeft = Math.max(0, fx * box.scrollWidth - box.clientWidth / 2);
+    box.scrollTop  = Math.max(0, fy * box.scrollHeight - box.clientHeight / 2);
+    railMapView.at = [box.scrollLeft, box.scrollTop, box.scrollWidth, box.scrollHeight];
+    return;
+  }
+  let dot = railMapView.pick
+    ? box.querySelector('.rmpt[data-mtr-net="' + CSS.escape(railMapView.pick) + '"]') : null;
   if (!dot && herePoint) {
     const near = railStationsNear(herePoint.lat, herePoint.lng, 4000)[0];
     if (near) dot = box.querySelector('.rmpt[data-mtr-net="' + CSS.escape(near.code) + '"]');
   }
   if (!dot) dot = box.querySelector('.rmpt[data-mtr-net="CEN"]');
   if (!dot) return;
-  const cx = Number(dot.getAttribute('cx')), cy = Number(dot.getAttribute('cy'));
-  box.scrollLeft = Math.max(0, cx - box.clientWidth / 2);
-  box.scrollTop  = Math.max(0, cy - box.clientHeight / 2);
+  box.scrollLeft = Math.max(0, Number(dot.getAttribute('cx')) - box.clientWidth / 2);
+  box.scrollTop  = Math.max(0, Number(dot.getAttribute('cy')) - box.clientHeight / 2);
 }
 
 function railMapHtml() {
   if (!mtrData) return '';
   // The open line is part of the key: only ONE line's stations are built at a
   // time now, so the cache is cheap and the page is short.
-  const open = mtrState.mapLine || '';
+  const open = railMapView.line || '';
   // EVERYTHING THE DRAWING DEPENDS ON GOES IN THE KEY. It held only the
   // language and the open line, so the network map it wraps — which also
   // changes with the zoom and with the station tapped — came back stale:
-  // 睇晒全部 flipped the state and redrew the cached picture.
+  // the zoom button flipped the state and redrew the cached picture.
   const key = lang + (lrtData ? '+lrt' : '') + '|' + open +
-              '|' + (mtrState.mapWide ? 'w' : 'f') + '|' + (mtrState.mapPick || '');
+              '|' + railMapView.zoom + '|' + (railMapView.pick || '');
   if (railMapCache.key === key) return railMapCache.html;
 
   const strip = chips =>
@@ -12104,7 +12181,7 @@ function railMapHtml() {
     html += lineRow(line, railLineName(line), colour, order.length,
       open === line
         ? strip(order.map(code =>
-            '<button class="rmstop' + (mtrState.mapPick === code ? ' pick' : '') +
+            '<button class="rmstop' + (railMapView.pick === code ? ' pick' : '') +
             '" data-mtr-station="' + esc(code) +
             '" style="border-top:6px solid ' + colour + '">' + esc(stationName(code)) + '</button>'))
         : '');
@@ -12145,7 +12222,7 @@ function railMapHtml() {
       html += '<div class="rmline"><div class="rmname">🚈 ' +
         esc(T('lrtRoute').replace('{n}', openNumber)) + '</div>' +
         strip(mergedRailOrder(byNumber.get(openNumber)).map(id =>
-          '<button class="rmstop' + (mtrState.mapPick === LR_NODE + id ? ' pick' : '') +
+          '<button class="rmstop' + (railMapView.pick === LR_NODE + id ? ' pick' : '') +
           '" data-mtr-lrt="' + esc(id) +
           '" style="border-top:6px solid ' + LRT_COLOUR + '">' + esc(lrtName(id)) + '</button>')) +
         '</div>';
@@ -12469,32 +12546,34 @@ function showRailResults() {
 // One listener for the whole screen: it is redrawn from scratch on every
 // change, so per-button handlers would be lost on each redraw.
 document.getElementById('mtrview').addEventListener('click', event => {
-  const el = event.target.closest('[data-mtr-station],[data-mtr-dir],[data-mtr-dest],[data-mtr-jump],[data-mtr-act],[data-mtr-lrt],[data-mtr-map],[data-mtr-net]');
+  const el = event.target.closest('[data-mtr-station],[data-mtr-dir],[data-mtr-dest],[data-mtr-jump],[data-mtr-act],[data-mtr-lrt],[data-mtr-map],[data-mtr-net],[data-mtr-line]');
   if (!el) return;
   const d = el.dataset;
-  // A STATION TAPPED ON THE NETWORK MAP.
-  // It opens the line that station is on and marks the station inside it, so
-  // the next thing the rider can do is slide along their own line. An
-  // interchange belongs to more than one line; the first is opened, and the
-  // other is one tap away in the list underneath.
+  // A STATION TAPPED ON THE MAP OPENS THE STATION — every line through it,
+  // both directions, and the next trains. That screen already answers "which
+  // way" and "how long", which is what somebody pointing at their station on
+  // a map is asking. The map remembers which one, so coming back marks it.
   if (d.mtrNet) {
-    const panel = document.getElementById('panel');
-    const was = panel ? panel.scrollTop : 0;
     keepRailNetAt();
-    const id = d.mtrNet;
-    mtrState.mapPick = id;
-    mtrState.mapLine = isLrtNode(id) ? lrtLineOf(lrtIdOf(id)) : (whichLinesServe(id)[0] || null);
-    renderMtrView();
-    if (panel) panel.scrollTop = was;
-    // The line opened below is no use unless the station is in view in it.
-    const chip = document.querySelector('#mtrview .rmstop.pick');
-    const strip = chip && chip.closest('.rmstrip');
-    if (chip && strip)
-      strip.scrollLeft = Math.max(0, chip.offsetLeft - strip.clientWidth / 2 + chip.offsetWidth / 2);
+    railMapView.pick = d.mtrNet;
+    if (isLrtNode(d.mtrNet)) { mtrState = freshMtrState(); lrtOpen(lrtIdOf(d.mtrNet)); }
+    else mtrSetStation(d.mtrNet);
     return;
   }
 
-  // OPEN ONE LINE ON THE MAP, and keep the page where the rider left it.
+  // A LINE TAPPED ON THE MAP. The stroke is invisible and fat so a finger can
+  // land on it; it lights that line up on the map and opens it in the list,
+  // which is then scrolled to so the rider sees what their tap did.
+  if (d.mtrLine) {
+    keepRailNetAt();
+    railMapView.line = (railMapView.line === d.mtrLine) ? null : d.mtrLine;
+    renderMtrView();
+    const head = document.querySelector('#mtrview [data-mtr-map="' + CSS.escape(d.mtrLine) + '"]');
+    if (head) head.scrollIntoView({ block: 'nearest' });
+    return;
+  }
+
+  // OPEN ONE LINE FROM THE LIST, and keep the page where the rider left it.
   // The whole view is rebuilt from scratch on every change, so the scroll
   // position has to be carried over by hand — otherwise tapping a line near
   // the bottom throws you back to the search box at the top.
@@ -12502,7 +12581,7 @@ document.getElementById('mtrview').addEventListener('click', event => {
     const panel = document.getElementById('panel');
     const was = panel ? panel.scrollTop : 0;
     keepRailNetAt();
-    mtrState.mapLine = (mtrState.mapLine === d.mtrMap) ? null : d.mtrMap;
+    railMapView.line = (railMapView.line === d.mtrMap) ? null : d.mtrMap;
     renderMtrView();
     if (panel) panel.scrollTop = was;
     const head = document.querySelector('#mtrview [data-mtr-map="' + CSS.escape(d.mtrMap) + '"]');
@@ -12518,14 +12597,17 @@ document.getElementById('mtrview').addEventListener('click', event => {
     // ✕ empties the box and the list under it. Deliberately does NOT put
     // the keyboard back up: somebody who has just cleared a search usually
     // wants to see the screen they cleared it off.
-    // 全圖 / 放大. Two fixed sizes rather than a pinch: a pinch inside a
-    // scrolling panel fights the page, and two named buttons are a thing an
-    // older rider can find again tomorrow.
-    case 'net-zoom': {
+    // − / + / 全圖. Buttons rather than a pinch: a pinch inside a scrolling
+    // panel fights the page for every gesture, and a labelled button is a
+    // thing an older rider can find again tomorrow. Zooming keeps whatever
+    // was in the middle of the map in the middle — see centreRailNet.
+    case 'net-in': case 'net-out': case 'net-fit': {
       const panel = document.getElementById('panel');
       const was = panel ? panel.scrollTop : 0;
-      mtrState.mapWide = !mtrState.mapWide;
-      mtrState.mapAt = null;                 // a new size needs a new centre
+      keepRailNetAt();
+      if (d.mtrAct === 'net-fit') { railMapView.zoom = 0; railMapView.at = null; }
+      else railMapView.zoom = Math.max(0, Math.min(RM_ZOOMS.length - 1,
+             railMapView.zoom + (d.mtrAct === 'net-in' ? 1 : -1)));
       renderMtrView();
       if (panel) panel.scrollTop = was;
       break;
