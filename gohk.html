@@ -442,16 +442,21 @@
      four-character name AND its distance at 特大; saved trains carry a
      station and a destination, so they get two to a row instead. */
   .mtrgrid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr));
-             gap:6px; margin-bottom:4px; }
+             gap:5px; margin-bottom:4px; }
+  .mtrgrid.four  { grid-template-columns:repeat(4, minmax(0, 1fr)); }
   .mtrgrid.pairs { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  /* TIGHTER, NOT SMALLER TYPE. Nothing here drops below 0.94rem — that is
+     16px at 標準 and the floor this whole app is built to. What came out was
+     the padding, the gap and the rounding: a saved station was 64px tall to
+     hold two lines of 21px text, most of it air. */
   .mtrchip { display:flex; flex-direction:column; align-items:center; justify-content:center;
-             gap:2px; min-height:64px; padding:6px 4px; border:2px solid var(--line);
-             border-radius:14px; background:white; color:var(--ink); font-weight:800;
+             gap:0; min-height:52px; padding:4px 3px; border:2px solid var(--line);
+             border-radius:12px; background:white; color:var(--ink); font-weight:800;
              text-align:center; overflow:hidden; cursor:pointer; }
   /* break-word, NOT anywhere: "anywhere" lets the browser break mid-word
      even when a hyphen is sitting right there, and turned AsiaWorld-Expo
      into "AsiaWorl / d-Expo". */
-  .mtrchip .cname { font-size:1rem; line-height:1.2; overflow-wrap:break-word;
+  .mtrchip .cname { font-size:0.94rem; line-height:1.15; overflow-wrap:break-word;
                     display:-webkit-box; -webkit-line-clamp:2;
                     -webkit-box-orient:vertical; overflow:hidden; }
   /* WHICH RAILWAY, IN THE META LINE. 屯門 is a station AND a Light Rail stop
@@ -459,7 +464,7 @@
      edge is the kind of thing this project has a rule against relying on by
      itself. 🚇/🚈 sits beside the distance, where it costs no line: in the
      NAME it cost Kennedy Town a whole one at 特大 in English. */
-  .mtrchip .cmeta { font-size:0.94rem; font-weight:700; color:var(--ink-3); line-height:1.15;
+  .mtrchip .cmeta { font-size:0.94rem; font-weight:700; color:var(--ink-3); line-height:1.1;
                     max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   /* A saved train is a line as much as a station, so it wears the line's
      colour along its top edge — the same stripe the line sections use.
@@ -467,7 +472,7 @@
      uses for it: an emoji in the NAME cost a whole line at 特大 in English
      (「🚇」 then 「Kenne…」 then the distance) and pushed Kennedy Town out of
      its own chip. Colour costs nothing. */
-  .mtrchip.train { border-top-width:8px; }
+  .mtrchip.train { border-top-width:7px; min-height:56px; }
   .mtrchip.lrt { border-top:8px solid #b45309; }
   /* 「Going towards Lo Wu」 is the whole point of a saved train and it does
      not fit on one line at 特大. It is the one meta line allowed to wrap. */
@@ -510,6 +515,28 @@
              border-top:8px solid #b45309; border-radius:12px; background:white;
              font-size:1.06rem; font-weight:800; color:var(--ink); cursor:pointer; }
   .rmroute.open { background:var(--navy-tint); border-color:var(--navy); border-top-color:#b45309; }
+  /* THE NETWORK, DRAWN WHERE IT REALLY IS.
+     A box you drag with a finger, holding every station and every Light Rail
+     stop at their true positions. Not a picture of MTR's diagram — those are
+     someone else's artwork and cannot be tapped — but the same coordinates
+     the journey planner routes on, so what you see and what the app will do
+     cannot drift apart. `overscroll-behavior:contain` stops a drag that
+     reaches the edge of the map from carrying on and scrolling the page. */
+  .rmnetbox { overflow:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;
+              touch-action:pan-x pan-y; height:320px; border:2px solid var(--line-soft);
+              border-radius:12px; background:#f1f5f9; }
+  .rmnetbox.fit { overflow:hidden; height:auto; }
+  .rmnetbox svg { display:block; }
+  .rmnetbox.fit svg { width:100%; height:auto; }
+  .rmnetbar { display:flex; align-items:center; gap:8px; margin:8px 0 12px; }
+  .rmnetnote { flex:1 1 auto; min-width:0; font-size:0.94rem; font-weight:700;
+               color:var(--ink-3); }
+  .rmnetbtn { flex:0 0 auto; min-height:46px; padding:0 14px; border:2px solid var(--line);
+              border-radius:10px; background:white; font-size:0.94rem; font-weight:800;
+              color:var(--ink-2); cursor:pointer; }
+  /* The station you tapped, kept marked in the line below so you can see
+     where on it you are. */
+  .rmstop.pick { background:var(--navy); border-color:var(--navy) !important; color:white; }
   .rmstrip { display:flex; align-items:center; overflow-x:auto; padding:4px 0 8px;
              -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
   .rmstop { flex:0 0 auto; min-height:48px; padding:0 10px; border:2px solid var(--line);
@@ -1934,7 +1961,11 @@ const TEXT = {
     lrtBack:'Choose another stop', lrtBackTo:'Back to {s}', lrtLoading:'Checking the Light Rail\u2026',
     lrtRoute:'Light Rail {n}', railChangeHere:'Change railway here',
     mtrClear:'Clear what you typed', railMapTitle:'The whole railway',
-    railMapHint:'Tap a line to see its stations.', rmStations:'{n} stations',
+    railMapHint:'Or tap a line below to see its stations.', rmStations:'{n} stations',
+    railNetAria:'Map of every station and Light Rail stop',
+    railNetDrag:'Drag the map with your finger, then tap a station.',
+    railNetWhole:'The whole railway. Tap ENLARGE to pick a station.',
+    railNetSeeAll:'See it all', railNetBigger:'Enlarge',
     lrtCheckBoard:'Read the platform board for the next {n}',
     lrtOutDir:'Leave the platform and walk {d}',
     railFareSplit:'\u2139 MTR does not publish one price for Light Rail and train together, so no total is shown. Each part shows its own fare.',
@@ -2229,7 +2260,11 @@ const TEXT = {
     lrtBack:'選擇其他車站', lrtBackTo:'返回 {s}', lrtLoading:'正在查詢輕鐵…',
     lrtRoute:'輕鐵 {n}', railChangeHere:'在此轉乘另一鐵路',
     mtrClear:'清除輸入', railMapTitle:'全綫路綫圖',
-    railMapHint:'按一下路綫即可展開車站。', rmStations:'{n} 個站',
+    railMapHint:'或按下面的路綫展開車站。', rmStations:'{n} 個站',
+    railNetAria:'全港車站及輕鐵站地圖',
+    railNetDrag:'用手指拖動地圖，按一下車站即可。',
+    railNetWhole:'全個鐵路網。按「放大」就可以揀車站。',
+    railNetSeeAll:'睇晒全部', railNetBigger:'放大',
     lrtCheckBoard:'請看月台顯示屏的下班 {n}',
     lrtOutDir:'落車後往{d}行',
     railFareSplit:'ℹ 港鐵沒有公佈輕鐵連港鐵的合併車費，所以不顯示總數。每程分別顯示該程車費。',
@@ -11525,7 +11560,8 @@ const MTR_CACHE_MS = 30000;    // the feed itself is refreshed about this often
 
 let mtrState = freshMtrState();
 function freshMtrState() {
-  return { station:null, line:null, dir:null, dest:null, query:'', mapLine:null,
+  return { station:null, line:null, dir:null, dest:null, query:'',
+           mapLine:null, mapPick:null, mapWide:true, mapAt:null,
            lrt:null, lrtHtml:'',
            blocks:{}, alerts:{}, blocksFor:null, fetchedAt:0,
            loading:false, locating:false, locateTried:false, noneNear:false };
@@ -11849,12 +11885,194 @@ function facesSameWay(variant, order) {
   return first < 0 || second < 0 || second > first;
 }
 
+// ============================================================
+// THE NETWORK MAP — drag it, tap a station
+// ============================================================
+// Every station and every Light Rail stop at its real position, drawn from
+// the same two files the planner routes on. A rider who knows where they live
+// can find their station by looking, which is the one way of finding it that
+// needs neither the name nor the GPS.
+//
+// WHY NOT LEAFLET, which this app already has? Because this needs to be 320
+// pixels tall inside a scrolling panel, hold still, and cost nothing — a
+// second live map with its own tile downloads, gesture handling and teardown
+// would be all three of those wrong.
+//
+// 30 px per kilometre puts the whole network in 1025 × 948, which is about
+// three screens across and three down on a phone: far enough to be worth
+// dragging, near enough that nobody gets lost. At that scale the median gap
+// between neighbouring stations is 25 px, so the dots are separable and a
+// finger can pick one.
+const RM_PX_PER_KM = 30;
+const RM_PAD = 26;
+
+let railNetCache = { key: '', html: '' };
+
+function railNetworkHtml() {
+  if (!mtrData) return '';
+  const key = lang + (lrtData ? '+lrt' : '') + '|' + (mtrState.mapWide ? 'w' : 'f') +
+              '|' + (mtrState.mapPick || '');
+  if (railNetCache.key === key) return railNetCache.html;
+
+  const points = [];
+  for (const code of Object.keys(mtrData.stations)) {
+    const st = mtrData.stations[code];
+    points.push([st[2], st[3]]);
+  }
+  if (lrtData) for (const id of Object.keys(lrtData.stops)) {
+    const row = lrtData.stops[id];
+    points.push([row[2], row[3]]);
+  }
+  const lats = points.map(p => p[0]), lngs = points.map(p => p[1]);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+  // Equirectangular. Over 34 km the error is far below the width of a dot,
+  // and it keeps the projection to two multiplications.
+  const midLat = (minLat + maxLat) / 2;
+  const kx = 111.32 * Math.cos(midLat * Math.PI / 180) * RM_PX_PER_KM;
+  const ky = 110.57 * RM_PX_PER_KM;
+  const X = lng => +((lng - minLng) * kx + RM_PAD).toFixed(1);
+  const Y = lat => +((maxLat - lat) * ky + RM_PAD).toFixed(1);
+  const width  = Math.round((maxLng - minLng) * kx + RM_PAD * 2);
+  const height = Math.round((maxLat - minLat) * ky + RM_PAD * 2);
+
+  let svg = '';
+
+  // ---- the Light Rail first, underneath ----
+  // Its routes lie on top of each other along the same tracks, so they are
+  // drawn thin and pale: what should read is ONE network, not eleven.
+  if (lrtData && lrtData.routes) {
+    for (const routeKey of Object.keys(lrtData.routes)) {
+      const stops = lrtRouteStops(routeKey);
+      const pts = stops.map(id => {
+        const row = lrtData.stops[id];
+        return row ? X(row[3]) + ',' + Y(row[2]) : null;
+      }).filter(Boolean);
+      if (pts.length > 1)
+        svg += '<polyline points="' + pts.join(' ') + '" fill="none" stroke="#b45309" ' +
+               'stroke-width="3" stroke-opacity="0.5" stroke-linejoin="round"/>';
+    }
+  }
+
+  // ---- the train lines ----
+  // Drawn per VARIANT, not merged: the merged order exists to make a readable
+  // list, and drawing it would put a line from 落馬洲 to 羅湖 where no track
+  // goes. A variant is a service that really runs.
+  for (const [line, variants] of Object.entries(mtrData.lines)) {
+    const colour = MTR_LINE_COLOURS[line] || '#999';
+    for (const stops of variants) {
+      const pts = stops.map(code => {
+        const st = mtrData.stations[code];
+        return st ? X(st[3]) + ',' + Y(st[2]) : null;
+      }).filter(Boolean);
+      if (pts.length > 1)
+        svg += '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + colour +
+               '" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>';
+    }
+  }
+
+  // ---- the stops ----
+  if (lrtData) {
+    for (const id of Object.keys(lrtData.stops)) {
+      const row = lrtData.stops[id];
+      const on = mtrState.mapPick === LR_NODE + id;
+      svg += '<circle class="rmpt" data-mtr-net="' + esc(LR_NODE + id) + '" cx="' + X(row[3]) +
+             '" cy="' + Y(row[2]) + '" r="' + (on ? 8 : 4) + '" fill="' + (on ? '#1e3a8a' : '#b45309') +
+             '" stroke="white" stroke-width="2"><title>' + esc(lrtName(id)) + '</title></circle>';
+    }
+  }
+  for (const code of Object.keys(mtrData.stations)) {
+    const st = mtrData.stations[code];
+    const on = mtrState.mapPick === code;
+    // White-filled, like every metro map: an interchange belongs to more than
+    // one line and cannot honestly be painted a single colour.
+    svg += '<circle class="rmpt" data-mtr-net="' + esc(code) + '" cx="' + X(st[3]) +
+           '" cy="' + Y(st[2]) + '" r="' + (on ? 10 : 6) + '" fill="' + (on ? '#1e3a8a' : 'white') +
+           '" stroke="' + (on ? 'white' : '#0f172a') + '" stroke-width="' + (on ? 3 : 2.5) +
+           '"><title>' + esc(stationName(code)) + '</title></circle>';
+  }
+
+  // ---- a few names, as landmarks ----
+  // Only the ends of the lines and the places two lines meet: about thirty,
+  // spread out, which is enough to orient by. Every station labelled would be
+  // 165 names on top of each other, and shrinking the type to fit them is not
+  // available in an app with a 16px floor.
+  const anchors = new Set();
+  for (const variants of Object.values(mtrData.lines))
+    for (const stops of variants) { anchors.add(stops[0]); anchors.add(stops[stops.length - 1]); }
+  for (const code of Object.keys(mtrData.stations))
+    if (whichLinesServe(code).length > 1) anchors.add(code);
+  for (const code of anchors) {
+    const st = mtrData.stations[code];
+    if (!st) continue;
+    svg += '<text x="' + X(st[3]) + '" y="' + (Y(st[2]) - 11) + '" text-anchor="middle" ' +
+           'font-size="16" font-weight="700" fill="#0f172a" stroke="white" stroke-width="4" ' +
+           'paint-order="stroke" pointer-events="none">' + esc(stationName(code)) + '</text>';
+  }
+
+  const wide = mtrState.mapWide !== false;
+  const html =
+    '<div class="rmnetbox' + (wide ? '' : ' fit') + '" id="rmnet">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height +
+        '" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-label="' +
+        esc(T('railNetAria')) + '">' + svg + '</svg>' +
+    '</div>' +
+    '<div class="rmnetbar">' +
+      '<span class="rmnetnote">' + T(wide ? 'railNetDrag' : 'railNetWhole') + '</span>' +
+      '<button class="rmnetbtn" data-mtr-act="net-zoom">' +
+        T(wide ? 'railNetSeeAll' : 'railNetBigger') + '</button>' +
+    '</div>';
+
+  railNetCache = { key, html };
+  return html;
+}
+
+// Which Light Rail route to open for a stop: the first one that calls there.
+function lrtLineOf(stopId) {
+  if (!lrtData || !lrtData.routes) return null;
+  for (const routeKey of Object.keys(lrtData.routes))
+    if (lrtRouteStops(routeKey).includes(stopId)) return LR_LINE + routeKey.split('|')[0];
+  return null;
+}
+
+// The view is rebuilt from scratch on every change, so where the rider had
+// dragged the map to has to be written down before that happens or it snaps
+// back to Lantau under their finger.
+function keepRailNetAt() {
+  const box = document.getElementById('rmnet');
+  if (box && !box.classList.contains('fit')) mtrState.mapAt = [box.scrollLeft, box.scrollTop];
+}
+
+// Put the map where the rider is, or on the station they last tapped, rather
+// than in the corner of Lantau the scroll happens to start in.
+function centreRailNet() {
+  const box = document.getElementById('rmnet');
+  if (!box || box.classList.contains('fit')) return;
+  if (mtrState.mapAt) { box.scrollLeft = mtrState.mapAt[0]; box.scrollTop = mtrState.mapAt[1]; return; }
+  const pick = box.querySelector('.rmpt[data-mtr-net="' + CSS.escape(mtrState.mapPick || '') + '"]');
+  let dot = pick;
+  if (!dot && herePoint) {
+    const near = railStationsNear(herePoint.lat, herePoint.lng, 4000)[0];
+    if (near) dot = box.querySelector('.rmpt[data-mtr-net="' + CSS.escape(near.code) + '"]');
+  }
+  if (!dot) dot = box.querySelector('.rmpt[data-mtr-net="CEN"]');
+  if (!dot) return;
+  const cx = Number(dot.getAttribute('cx')), cy = Number(dot.getAttribute('cy'));
+  box.scrollLeft = Math.max(0, cx - box.clientWidth / 2);
+  box.scrollTop  = Math.max(0, cy - box.clientHeight / 2);
+}
+
 function railMapHtml() {
   if (!mtrData) return '';
   // The open line is part of the key: only ONE line's stations are built at a
   // time now, so the cache is cheap and the page is short.
   const open = mtrState.mapLine || '';
-  const key = lang + (lrtData ? '+lrt' : '') + '|' + open;
+  // EVERYTHING THE DRAWING DEPENDS ON GOES IN THE KEY. It held only the
+  // language and the open line, so the network map it wraps — which also
+  // changes with the zoom and with the station tapped — came back stale:
+  // 睇晒全部 flipped the state and redrew the cached picture.
+  const key = lang + (lrtData ? '+lrt' : '') + '|' + open +
+              '|' + (mtrState.mapWide ? 'w' : 'f') + '|' + (mtrState.mapPick || '');
   if (railMapCache.key === key) return railMapCache.html;
 
   const strip = chips =>
@@ -11875,6 +12093,7 @@ function railMapHtml() {
   };
 
   let html = '<div class="railmap"><div class="mtrsub">🗺 ' + T('railMapTitle') + '</div>' +
+             railNetworkHtml() +
              '<div class="rmhint">' + T('railMapHint') + '</div>';
 
   // ---- 港鐵, one row per line, closed until tapped ----
@@ -11885,7 +12104,8 @@ function railMapHtml() {
     html += lineRow(line, railLineName(line), colour, order.length,
       open === line
         ? strip(order.map(code =>
-            '<button class="rmstop" data-mtr-station="' + esc(code) +
+            '<button class="rmstop' + (mtrState.mapPick === code ? ' pick' : '') +
+            '" data-mtr-station="' + esc(code) +
             '" style="border-top:6px solid ' + colour + '">' + esc(stationName(code)) + '</button>'))
         : '');
   }
@@ -11925,7 +12145,8 @@ function railMapHtml() {
       html += '<div class="rmline"><div class="rmname">🚈 ' +
         esc(T('lrtRoute').replace('{n}', openNumber)) + '</div>' +
         strip(mergedRailOrder(byNumber.get(openNumber)).map(id =>
-          '<button class="rmstop" data-mtr-lrt="' + esc(id) +
+          '<button class="rmstop' + (mtrState.mapPick === LR_NODE + id ? ' pick' : '') +
+          '" data-mtr-lrt="' + esc(id) +
           '" style="border-top:6px solid ' + LRT_COLOUR + '">' + esc(lrtName(id)) + '</button>')) +
         '</div>';
     }
@@ -12034,7 +12255,12 @@ function renderMtrView() {
       // No ⭐ inside the chip: the heading above it already says these are
       // saved, and at 特大 in English the star was taking a line of its own
       // away from the name.
-      html += '<div class="mtrsub">' + T('mtrSaved') + '</div><div class="mtrgrid">' +
+      // FOUR ACROSS IN CHINESE, THREE IN ENGLISH. A saved station is two or
+      // three characters in Chinese and fits four to a row at 特大; the same
+      // four columns turned Tsim Sha Tsui into 「Tsim Sha…」 and cut the A off
+      // AsiaWorld-Expo. The names are simply longer, so the row is shorter.
+      html += '<div class="mtrsub">' + T('mtrSaved') + '</div>' +
+        '<div class="mtrgrid' + (lang === 'zh' ? ' four' : '') + '">' +
         saved.map(sv => '<button class="mtrchip' + (sv.kind === 'lrt' ? ' lrt' : '') +
           '" data-mtr-' + (sv.kind === 'lrt' ? 'lrt' : 'station') + '="' + esc(sv.id) + '">' +
           '<span class="cname">' + esc(sv.name) + '</span>' +
@@ -12059,6 +12285,7 @@ function renderMtrView() {
     // (the Light Rail file landing, a saved station changing) leaves a query
     // sitting in the box above an empty list.
     if (st.query) mtrRenderSearch(st.query);
+    centreRailNet();
     return;
   }
 
@@ -12242,9 +12469,31 @@ function showRailResults() {
 // One listener for the whole screen: it is redrawn from scratch on every
 // change, so per-button handlers would be lost on each redraw.
 document.getElementById('mtrview').addEventListener('click', event => {
-  const el = event.target.closest('[data-mtr-station],[data-mtr-dir],[data-mtr-dest],[data-mtr-jump],[data-mtr-act],[data-mtr-lrt],[data-mtr-map]');
+  const el = event.target.closest('[data-mtr-station],[data-mtr-dir],[data-mtr-dest],[data-mtr-jump],[data-mtr-act],[data-mtr-lrt],[data-mtr-map],[data-mtr-net]');
   if (!el) return;
   const d = el.dataset;
+  // A STATION TAPPED ON THE NETWORK MAP.
+  // It opens the line that station is on and marks the station inside it, so
+  // the next thing the rider can do is slide along their own line. An
+  // interchange belongs to more than one line; the first is opened, and the
+  // other is one tap away in the list underneath.
+  if (d.mtrNet) {
+    const panel = document.getElementById('panel');
+    const was = panel ? panel.scrollTop : 0;
+    keepRailNetAt();
+    const id = d.mtrNet;
+    mtrState.mapPick = id;
+    mtrState.mapLine = isLrtNode(id) ? lrtLineOf(lrtIdOf(id)) : (whichLinesServe(id)[0] || null);
+    renderMtrView();
+    if (panel) panel.scrollTop = was;
+    // The line opened below is no use unless the station is in view in it.
+    const chip = document.querySelector('#mtrview .rmstop.pick');
+    const strip = chip && chip.closest('.rmstrip');
+    if (chip && strip)
+      strip.scrollLeft = Math.max(0, chip.offsetLeft - strip.clientWidth / 2 + chip.offsetWidth / 2);
+    return;
+  }
+
   // OPEN ONE LINE ON THE MAP, and keep the page where the rider left it.
   // The whole view is rebuilt from scratch on every change, so the scroll
   // position has to be carried over by hand — otherwise tapping a line near
@@ -12252,6 +12501,7 @@ document.getElementById('mtrview').addEventListener('click', event => {
   if (d.mtrMap) {
     const panel = document.getElementById('panel');
     const was = panel ? panel.scrollTop : 0;
+    keepRailNetAt();
     mtrState.mapLine = (mtrState.mapLine === d.mtrMap) ? null : d.mtrMap;
     renderMtrView();
     if (panel) panel.scrollTop = was;
@@ -12268,6 +12518,18 @@ document.getElementById('mtrview').addEventListener('click', event => {
     // ✕ empties the box and the list under it. Deliberately does NOT put
     // the keyboard back up: somebody who has just cleared a search usually
     // wants to see the screen they cleared it off.
+    // 全圖 / 放大. Two fixed sizes rather than a pinch: a pinch inside a
+    // scrolling panel fights the page, and two named buttons are a thing an
+    // older rider can find again tomorrow.
+    case 'net-zoom': {
+      const panel = document.getElementById('panel');
+      const was = panel ? panel.scrollTop : 0;
+      mtrState.mapWide = !mtrState.mapWide;
+      mtrState.mapAt = null;                 // a new size needs a new centre
+      renderMtrView();
+      if (panel) panel.scrollTop = was;
+      break;
+    }
     case 'clear-search': {
       mtrState.query = '';
       const box = document.getElementById('mtr-search');
