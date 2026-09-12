@@ -436,6 +436,20 @@
      never shift about as places are saved and removed. */
   .favbub.empty { border-style:dashed; border-color:var(--line-soft); background:var(--surface-2);
                   color:var(--ink-3); font-size:1.29rem; }
+  /* THE FOUR PLACES ARE ONE LINE EACH. A station name is two or three
+     characters; the two-line pill the 巴士 tab needs for a name AND a direction
+     was a quarter of the screen for four words. Still a finger's height. */
+  .mtrsub.tight { margin:8px 0 6px; }
+  .favgrid.rail { margin-bottom:2px; }
+  .favgrid.rail .favbub { min-height:46px; padding:4px 4px; }
+  .favgrid.rail .favbub.empty { font-size:1.1rem; }
+  /* STEP 1, STEP 2, STEP 3 — said in words, on every train and every walk, for
+     somebody riding this railway for the first time. Navy on its tint: the
+     same badge the stations-ahead list uses, so it reads as "one of a
+     sequence" rather than as a button. */
+  .rjstep { display:inline-block; flex:0 0 auto; padding:2px 9px; border-radius:999px;
+            background:var(--navy-tint); color:var(--navy); font-size:0.94rem; font-weight:800;
+            margin-right:6px; vertical-align:middle; }
   /* THE WAY THERE: one card per option, one button per train. The coloured
      left edge is the line's own colour, the same one the map uses. */
   .rjcard { border:2px solid var(--line-soft); border-radius:14px; padding:10px; margin-bottom:10px;
@@ -2017,7 +2031,7 @@ const TEXT = {
     railNeedStart:'Allow location, or type a starting station.',
     railTotal:'about {n} min', railFareOct:'Octopus {o}', railFareTkt:'single ticket {t}',
     railWalkOn:'Walk {n} min to {s} first', railWalkOff:'then walk {n} min',
-    railChangeWalk:'Walk {n} min to change',
+    railChangeWalk:'Walk {n} min to change', railStep:'Step {n}',
     lrtCheckBoard:'Read the platform board for the next {n}',
     lrtOutDir:'Leave the platform and walk {d}',
     railFareSplit:'\u2139 MTR does not publish one price for Light Rail and train together, so no total is shown. Each part shows its own fare.',
@@ -2328,7 +2342,7 @@ const TEXT = {
     railNeedStart:'請先允許定位，或輸入起點車站。',
     railTotal:'約 {n} 分鐘', railFareOct:'八達通 {o}', railFareTkt:'單程票 {t}',
     railWalkOn:'先步行 {n} 分鐘到 {s}', railWalkOff:'然後步行 {n} 分鐘',
-    railChangeWalk:'步行 {n} 分鐘轉乘',
+    railChangeWalk:'步行 {n} 分鐘轉乘', railStep:'第 {n} 步',
     lrtCheckBoard:'請看月台顯示屏的下班 {n}',
     lrtOutDir:'落車後往{d}行',
     railFareSplit:'ℹ 港鐵沒有公佈輕鐵連港鐵的合併車費，所以不顯示總數。每程分別顯示該程車費。',
@@ -12908,14 +12922,15 @@ function railPlanHtml() {
     '<div class="mtrpick" id="mtr-to-results"></div>';
 
   // ---- four places you go: always four slots, so nothing shifts about ----
-  html += '<div class="mtrsub">' + T('stopDestSaved') + '</div><div class="favgrid">';
+  html += '<div class="mtrsub tight">' + T('stopDestSaved') + '</div><div class="favgrid rail">';
   for (let i = 0; i < MAX_RAIL_DESTS; i++) {
     const d = railDests[i];
     if (!d) { html += '<div class="favbub empty" aria-hidden="true">☆</div>'; continue; }
     const on = railSameNode(p.to, d);
+    // The railway emoji only where it tells you something: a Light Rail stop.
     html += '<button class="favbub' + (on ? ' on' : '') + '" data-mtr-act="raildest" data-index="' + i + '">' +
-      '<span class="fbname">' + (on ? '★ ' : '') + esc(railNodeName(d)) + '</span>' +
-      '<span class="fbmeta">' + (d.kind === 'lrt' ? '🚈' : '🚇') + '</span></button>';
+      '<span class="fbname">' + (on ? '★ ' : '') + esc(railNodeName(d)) +
+      (d.kind === 'lrt' ? ' 🚈' : '') + '</span></button>';
   }
   html += '</div>';
   if (!railDests.length) html += '<div class="rshint">' + T('railFavHint') + '</div>';
@@ -12988,8 +13003,14 @@ function railWayCard(j, n) {
     '<span class="rjtag' + (n ? ' alt' : '') + '">' + T(n ? 'another' : 'bestTrain') + '</span>' +
     '<span class="rjtime">' + T('railTotal').replace('{n}', j.total) + '</span>' +
     (fare ? '<span class="rjfare">' + fare + '</span>' : '') + '</div>';
+  // Every walk and every train is a numbered step, in words — 第 1 步, 第 2 步 —
+  // so a first-timer can follow it with a finger. A change of line is not a
+  // step of its own: it happens where one train ends and the next begins, and
+  // the arrow between them says so.
+  let step = 0;
+  const badge = () => '<span class="rjstep">' + T('railStep').replace('{n}', ++step) + '</span>';
   if (j.walkOn && j.walkOn.minutes >= 2)
-    html += '<div class="rjwalk">🚶 ' + T('railWalkOn').replace('{n}', j.walkOn.minutes)
+    html += '<div class="rjwalk">' + badge() + '🚶 ' + T('railWalkOn').replace('{n}', j.walkOn.minutes)
               .replace('{s}', esc(stopName(j.legs[0].on))) + '</div>';
   j.legs.forEach((leg, i) => {
     if (i > 0) {
@@ -13002,13 +13023,15 @@ function railWayCard(j, n) {
     const colour = lrt ? '#b45309' : (MTR_LINE_COLOURS[leg.lineCode] || '#999');
     const head = lrt ? lrtTerminusName(leg.lrtVia) : railHeadFor(leg);
     html += '<button class="rjleg" data-mtr-leg="' + n + ',' + i + '" style="border-left-color:' + colour + '">' +
-      '<span class="rjline">' + (lrt ? '🚈 ' : '🚇 ') + esc(leg.route) +
+      '<span class="rjline">' + badge() + (lrt ? '🚈 ' : '🚇 ') + esc(leg.route) +
         (head ? ' · ' + T('towards') + ' ' + esc(head) : '') + '</span>' +
       '<span class="rjfromto">' + esc(stopName(leg.on)) + ' ▶ ' + esc(stopName(leg.off)) + ' · ' +
-        T('stopsAwayShort').replace('{n}', leg.stops) + '</span></button>';
+        // "1 stops" is the kind of slip a first-timer notices and trusts less for.
+        (leg.stops === 1 && lang === 'en' ? '1 stop' : T('stopsAwayShort').replace('{n}', leg.stops)) +
+        '</span></button>';
   });
   if (j.walkOff && j.walkOff.minutes >= 2)
-    html += '<div class="rjwalk">🚶 ' + T('railWalkOff').replace('{n}', j.walkOff.minutes) + '</div>';
+    html += '<div class="rjwalk">' + badge() + '🚶 ' + T('railWalkOff').replace('{n}', j.walkOff.minutes) + '</div>';
   return html + '</div>';
 }
 
