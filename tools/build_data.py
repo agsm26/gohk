@@ -27,6 +27,7 @@ FORMATS (what gohk.html reads — change both together or neither):
   hk-bus-lite.json
     routes: [{ r: route number, t: service type (string),
                b: {company: bound}, s: {company: [stop ids]},
+               i: NLB's own routeId (NLB only) — its live times are asked by it
                f: [fare boarding at stop 1, 2, ...]   (omitted if none)
                h: [the same on Sundays and public holidays] (omitted if none)
                q: published service windows            (omitted if none) }]
@@ -57,8 +58,10 @@ ROOT = os.path.dirname(HERE)
 
 # Companies whose routes, stops and fares travel in hk-bus-lite.json.
 # KMB is not here: its stops come from KMB's own API, its fares from
-# kmb-fares.json.
-LITE_COMPANIES = ('ctb', 'nlb', 'gmb', 'lrtfeeder', 'sunferry', 'fortuneferry', 'hkkf')
+# kmb-fares.json. Nor are the ferries: the crawler has 29 of them and no
+# sailing times, so they come from the Transport Department's own feed
+# instead — see build_ferries.py.
+LITE_COMPANIES = ('ctb', 'nlb', 'gmb', 'lrtfeeder')
 
 # Hong Kong, generously: a stop outside this box is a broken coordinate.
 LAT_RANGE = (22.13, 22.58)
@@ -66,8 +69,7 @@ LNG_RANGE = (113.80, 114.45)
 
 LITE_SOURCE = ('Transport Department open data via data.gov.hk, compiled by HK Bus '
                'Crawling@2021 (https://github.com/hkbus/hk-bus-crawling). Citybus, New '
-               'Lantao Bus, green minibus, MTR Bus and ferries — KMB comes from the KMB '
-               'open API.')
+               'Lantao Bus, green minibus and MTR Bus — KMB comes from the KMB open API.')
 KMB_SOURCE = ('Transport Department GTFS fare_attributes + timetables via data.gov.hk, '
               'compiled by HK Bus Crawling@2021 (https://github.com/hkbus/hk-bus-crawling)')
 KMB_NOTE = ('fares["route|bound|service_type"][seq-1] = adult HKD boarding at that stop '
@@ -111,6 +113,11 @@ def build_lite(source):
         record = {'r': route, 't': service_type,
                   'b': {c: entry['bound'][c] for c in companies},
                   's': {c: entry['stops'][c] for c in companies}}
+        # NLB answers live times per routeId, and files both directions of a
+        # route under bound "O": without the id the app has to guess which of
+        # six "route 1" variants a bus belongs to.
+        if 'nlb' in companies and entry.get('nlbId'):
+            record['i'] = str(entry['nlbId'])
         fares = fare_list(entry.get('fares'))
         if fares:
             record['f'] = fares
@@ -213,9 +220,13 @@ def check(lite, kmb):
             problems.append('stop %s (%s) is outside Hong Kong: %s,%s' % (sid, zh or en, lat, lng))
         if not (en or zh):
             problems.append('stop %s has no name' % sid)
-    for key, values in kmb['fares'].items():
-        if any(v is not None and not (0 < v < 200) for v in values):
-            problems.append('KMB %s has an impossible fare' % key)
+    for field in ('fares', 'faresHoliday'):
+        for key, values in (kmb.get(field) or {}).items():
+            if any(v is not None and not (0 < v < 200) for v in values):
+                problems.append('KMB %s has an impossible %s value' % (key, field))
+    nlb = [r for r in lite['routes'] if 'nlb' in r['b']]
+    if nlb and sum(1 for r in nlb if r.get('i')) < 0.9 * len(nlb):
+        problems.append('only %d of %d NLB routes carry their NLB routeId' % (sum(1 for r in nlb if r.get('i')), len(nlb)))
     return problems
 
 
@@ -225,10 +236,11 @@ def summary(lite, kmb):
         for c in r['b']:
             by_company[c] = by_company.get(c, 0) + 1
     holiday = sum(1 for r in lite['routes'] if 'h' in r)
+    nlb_ids = sum(1 for r in lite['routes'] if 'i' in r)
     suffixed = sum(1 for r in lite['routes'] if 'v' in r['t'])
-    return ('%d routes %s, %d stops, %d with holiday fares, %d variants given their own key; '
-            'KMB: %d fares, %d timetables'
-            % (len(lite['routes']), by_company, len(lite['stops']), holiday, suffixed,
+    return ('%d routes %s, %d stops, %d with holiday fares, %d variants given their own key, '
+            '%d NLB routeIds; KMB: %d fares, %d timetables'
+            % (len(lite['routes']), by_company, len(lite['stops']), holiday, suffixed, nlb_ids,
                len(kmb['fares']), len(kmb['freq'])))
 
 
@@ -256,9 +268,16 @@ def main():
     if args.check_only:
         print('checks passed (nothing written)')
         return
-    for name, data in (('hk-bus-lite.json', lite), ('kmb-fares.json', kmb)):
-        with open(os.path.join(ROOT, name), 'w', encoding='utf-8') as fh:
-            json.dump(data, fh, ensure_ascii=False, separators=(',', ':'))
+    # Both files are written whole or not at all: serialised first (NaN is
+    # refused, not written as a bare NaN the app cannot parse), then each is
+    # swapped in from a temporary file.
+    texts = {name: json.dumps(data, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+             for name, data in (('hk-bus-lite.json', lite), ('kmb-fares.json', kmb))}
+    for name, text in texts.items():
+        path = os.path.join(ROOT, name)
+        with open(path + '.tmp', 'w', encoding='utf-8') as fh:
+            fh.write(text)
+        os.replace(path + '.tmp', path)
     print('written: hk-bus-lite.json, kmb-fares.json')
 
 

@@ -44,6 +44,7 @@ import io
 import json
 import math
 import os
+import re
 import sys
 import urllib.request
 
@@ -76,6 +77,28 @@ def rows(text, keep=None):
         record = dict(zip(header, row))
         if keep is None or keep(record):
             yield record
+
+
+def pier_name(name):
+    """The feed joins a pier's names with "|" — two berths ("…碼頭 (西面泊位）|
+    …碼頭 (東面泊位）") or a long and a short name ("塔門碼頭|塔門"). One name
+    is shown: the berth brackets dropped, then the most specific (longest)."""
+    if '|' not in name:
+        return name.strip()
+    parts = [re.sub(r'\s*[(（][^()（）]*[)）]\s*$', '', p).strip() for p in name.split('|')]
+    parts = [p for p in parts if p]
+    return max(parts, key=len) if parts else name.strip()
+
+
+def service_mask(service_id):
+    """The TD's service ids are day masks (bit0 Monday … bit6 Sunday, bit7
+    public holidays). Bit 8 changes nothing in the calendar; the app reads it
+    as "from the TD feed, so a missing holiday bit means no service on public
+    holidays". Every ferry row IS from the TD feed, so every one gets it."""
+    try:
+        return str(int(service_id) | 256)
+    except ValueError:
+        return service_id
 
 
 def hhmm(value):
@@ -159,7 +182,7 @@ def build(args):
 
         timetable = collections.defaultdict(dict)
         for trip, rs in keep:
-            service = trip['service_id']
+            service = service_mask(trip['service_id'])
             if trip['trip_id'] in freqs:
                 for f in freqs[trip['trip_id']]:
                     timetable[service][hhmm(f['start_time'])] = [hhmm(f['end_time']), str(int(f['headway_secs']))]
@@ -192,7 +215,7 @@ def build(args):
     out_stops = {}
     for sid in sorted(used_stops):
         e, t = stops_en[sid], stops_tc.get(sid, {})
-        out_stops[sid] = [e.get('stop_name', ''), t.get('stop_name', ''),
+        out_stops[sid] = [pier_name(e.get('stop_name', '')), pier_name(t.get('stop_name', '')),
                           round(float(e['stop_lat']), 5), round(float(e['stop_lon']), 5)]
     return {'generated': datetime.date.today().isoformat(), 'source': SOURCE,
             'stops': out_stops, 'routes': out_routes}
@@ -242,8 +265,10 @@ def main():
     if args.check_only:
         print('checks passed (nothing written)')
         return
-    with open(OUT, 'w', encoding='utf-8') as fh:
-        json.dump(data, fh, ensure_ascii=False, separators=(',', ':'))
+    text = json.dumps(data, ensure_ascii=False, separators=(',', ':'), allow_nan=False)
+    with open(OUT + '.tmp', 'w', encoding='utf-8') as fh:
+        fh.write(text)
+    os.replace(OUT + '.tmp', OUT)
     print('written: ferries.json')
 
 
