@@ -1,7 +1,12 @@
 name: probe
-on: workflow_dispatch
+on:
+  push:
+    branches: [test-workflow-scope]
 jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - run: curl -s -o /dev/null -w "%{http_code}\n" https://static.data.gov.hk/td/pt-headway-en/routes.txt
+      - run: |
+          for u in https://static.data.gov.hk/td/pt-headway-en/routes.txt https://data.etabus.gov.hk/v1/transport/kmb/route/ https://raw.githubusercontent.com/hkbus/hk-bus-crawling/gh-pages/routeFareList.min.json https://data.etagmb.gov.hk/route https://opendata.mtr.com.hk/data/mtr_bus_stops.csv; do
+            echo "$u $(curl -s -o /dev/null -w '%{http_code}' -m 60 "$u")"
+          done
