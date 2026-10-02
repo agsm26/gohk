@@ -262,6 +262,11 @@
   .cotag.gmb { background:#f3e8ff; color:#6b21a8; }
   .cotag.mtr { background:var(--red-tint); color:var(--red); }
   .cotag.lrt { background:#fef3c7; color:#854d0e; }
+  .cotag.mtrbus { background:#ffe4e6; color:#881337; }   /* 7.97:1 */
+  .cotag.ferry { background:#e0f2fe; color:#0c4a6e; }    /* 8.24:1 */
+  .jsroute.ferryname { font-size:1.18rem; }
+  .holfare { font-size:0.82rem; font-weight:700; color:#713f12; background:#fef9c3;
+             padding:1px 6px; border-radius:6px; margin-left:6px; white-space:nowrap; }
 
   /* BOTTOM BAR — map, bus, train, favourites, settings.
      It sits at the foot of the screen, under the thumb, which is the half of
@@ -2131,9 +2136,11 @@ rmStations:'{n} stations',
     stepTo:'to', stepArrive:'and you are at',
     changeBusPlain:'Change buses here', changeTrainPlain:'Change lines here',
     changeToTrain:'Change to the train here', changeToLrt:'Change to the Light Rail here',
+    changeToFerry:'Change to the ferry here',
 
     totalBuses:'buses to take', totalTrains:'trains to take',
     totalBus1:'bus to take', totalTrain1:'train to take',
+    totalFerry1:'ferry to take', totalFerries:'ferries to take', totalMixed:'buses and ferries',
     totalLrts:'Light Rail rides', totalLrt1:'Light Rail ride',
     totalRails:'rail rides', totalRail1:'rail ride',
     boardHere:'✓ Board right here at', walkTo:'🚶 Walk', minTo:'min to',
@@ -2323,6 +2330,12 @@ rmStations:'{n} stations',
     shareChangeWalk:'   ↳ Change: walk about {m} min to {s}',
     shareArrive:'{n}. 🚶 Walk about {m} min to {s}',
     shareTotal:'About {t} min in all', shareFare:'Fare ${f}',
+    sayFerry:'Step {n}: take the {r} ferry to {s}.',
+    shareFerry:'{n}. ⛴ {r} ferry to {s}{f}',
+    ferryWord:'Ferry', ferryCrossing:'about {m} min',
+    ferryNext:'Next sailing {t}', ferryIn:'leaves in {m} min', ferryNoMore:'No more sailings today.',
+    ferryTimetable:'Ferry times are from the timetable — check the board at the pier.',
+    holidayFareTag:'holiday fare', mtrBusWord:'MTR BUS',
     favTrains:'MY TRAINS', noTrainsLong:'No trains saved. On the MTR tab, choose a station and direction, then tap ☆.',
     favTrainOpen:'Show next trains',
     trainSaved:'Saved {s}', trainRemoved:'Removed {s}', liveOpenRoute:'Show all stops ›',
@@ -2475,9 +2488,11 @@ rmStations:'{n} 個站',
     stepTo:'至', stepArrive:'即到達',
     changeBusPlain:'在此轉乘巴士', changeTrainPlain:'在此轉綫',
     changeToTrain:'在此轉乘港鐵列車', changeToLrt:'在此轉乘輕鐵',
+    changeToFerry:'在此轉乘渡輪',
 
     totalBuses:'程巴士', totalTrains:'程港鐵',
     totalBus1:'程巴士', totalTrain1:'程港鐵',
+    totalFerry1:'程船', totalFerries:'程船', totalMixed:'程車及船',
     totalLrts:'程輕鐵', totalLrt1:'程輕鐵',
     totalRails:'程鐵路', totalRail1:'程鐵路',
     boardHere:'✓ 就在此處上車：', walkTo:'🚶 步行', minTo:'分鐘至',
@@ -2664,6 +2679,12 @@ rmStations:'{n} 個站',
     shareChangeWalk:'   ↳ 轉車：步行約 {m} 分鐘到 {s}',
     shareArrive:'{n}. 🚶 步行約 {m} 分鐘到 {s}',
     shareTotal:'全程約 {t} 分鐘', shareFare:'車費 ${f}',
+    sayFerry:'第{n}步，搭{r}渡輪，到{s}。',
+    shareFerry:'{n}. ⛴ {r} 渡輪到 {s}{f}',
+    ferryWord:'渡輪', ferryCrossing:'約 {m} 分鐘',
+    ferryNext:'下一班船 {t}', ferryIn:'{m} 分鐘後開', ferryNoMore:'今日已沒有船班。',
+    ferryTimetable:'船期按時間表，請以碼頭告示為準。',
+    holidayFareTag:'假日收費', mtrBusWord:'港鐵巴士',
     favTrains:'我的列車', noTrainsLong:'尚未收藏列車。在「港鐵」選好車站及方向後，按 ☆ 收藏。',
     favTrainOpen:'查看下班列車',
     trainSaved:'已收藏 {s}', trainRemoved:'已移除 {s}', liveOpenRoute:'查看所有車站 ›',
@@ -3003,6 +3024,14 @@ async function cacheGet(key) {
       request.onerror = () => resolve(null);
     });
   } catch (error) { return null; }
+}
+
+const LITE_CACHE_KEY = 'hkbus-lite-2';
+async function cacheDrop(key) {
+  try {
+    const db = await openCache();
+    if (db) db.transaction('files', 'readwrite').objectStore('files').delete(key);
+  } catch (error) { /* nothing to drop is fine */ }
 }
 
 async function cachePut(key, value) {
@@ -3819,14 +3848,24 @@ function esc(text) {
                            .replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-function departureKey(route, dir, stop) {
-  return String(route).toUpperCase() + '|' + (dir || '') + '|' + stop;
+// `variant` tells apart two buses with the same number, direction letter and
+// stop: NLB 1 to 大澳 and NLB 1 to 梅窩 are both "1, O" at 銀灣邨. It is NLB's
+// routeId, and empty for everything else, which keeps every key saved before
+// it exactly as it was.
+function departureKey(route, dir, stop, variant) {
+  return String(route).toUpperCase() + '|' + (dir || '') + '|' + stop + (variant ? '|' + variant : '');
+}
+function nlbIdOf(route, dir, serviceType) {
+  return nlbIds.get(String(route) + '|' + (dir || 'O') + '|' + (serviceType || '1')) || '';
+}
+function depVariant(d) {
+  return String(d.co || '').toUpperCase() === 'NLB' ? String(d.nlbId || nlbIdOf(d.route, d.dir, d.serviceType)) : '';
 }
 
-function isSavedDeparture(route, dir, stop) {
+function isSavedDeparture(route, dir, stop, variant) {
   if (!stop) return false;
-  const key = departureKey(route, dir, stop);
-  return departures.some(d => departureKey(d.route, d.dir, d.stop) === key);
+  const key = departureKey(route, dir, stop, variant);
+  return departures.some(d => departureKey(d.route, d.dir, d.stop, depVariant(d)) === key);
 }
 
 function loadDepartures() {
@@ -3841,8 +3880,8 @@ function saveDepartures() {
 }
 
 function toggleDeparture(entry) {
-  const key = departureKey(entry.route, entry.dir, entry.stop);
-  const at = departures.findIndex(d => departureKey(d.route, d.dir, d.stop) === key);
+  const key = departureKey(entry.route, entry.dir, entry.stop, depVariant(entry));
+  const at = departures.findIndex(d => departureKey(d.route, d.dir, d.stop, depVariant(d)) === key);
   if (at >= 0) { departures.splice(at, 1); saveDepartures(); return false; }
 
   departures.unshift(entry);
@@ -3861,6 +3900,7 @@ document.addEventListener('click', event => {
   const added = toggleDeparture({
     route: star.dataset.route, dir: star.dataset.dir,
     serviceType: star.dataset.type, co: star.dataset.co, stop: star.dataset.stop,
+    nlbId: star.dataset.nlb || undefined,
     stopName_en: star.dataset.sen, stopName_tc: star.dataset.stc,
     dest_en: star.dataset.den, dest_tc: star.dataset.dtc
   });
@@ -4178,7 +4218,7 @@ document.getElementById('setview').addEventListener('click', event => {
   lang = pick.dataset.lang === 'en' ? 'en' : 'zh';
   script = pick.dataset.lang === 'sc' ? 'sc' : 'tc';
   try { localStorage.setItem('hkfast-lang', lang); localStorage.setItem('hkfast-script', script); } catch (e) {}
-  holidays = null;               // holiday names are language-specific
+  loadHolidays(true);            // the names are language-specific; the dates stay meanwhile
   applyLanguage();
   redrawJourney();
   document.getElementById('journeys').innerHTML = '';
@@ -4295,12 +4335,37 @@ const HKBUS_URL = 'https://raw.githubusercontent.com/hkbus/hk-bus-crawling/gh-pa
 // Citybus, New Lantao Bus and green minibus — and it sits beside this page,
 // so it costs no mobile data at all. The network file stays as the fallback
 // for anyone running this without the local copy.
-const LITE_URL = 'hk-bus-lite.json';
+// "?v=2": the file changed shape on 2 Oct 2026 (holiday fares, one key per
+// variant, NLB route ids). A phone still run by the old service worker would
+// otherwise be answered from that worker's stored copy of the old file —
+// and keep it for a week under the new cache name.
+const LITE_URL = 'hk-bus-lite.json?v=2';
 
-let fareIndex = null;      // "ROUTE|BOUND|TYPE|CO" -> { fares, stops }
+let fareIndex = null;      // "ROUTE|BOUND|TYPE|CO" -> { fares, faresHoliday, stops }
 let hkbusRoutes = null;    // the raw route list, reused to build the journey index
 let serviceInfo = new Map();   // routeKey -> { freq } for working out service hours
 let ctbStops = [];         // Citybus stops, reshaped to look like KMB stops
+
+// FERRIES (2 Oct 2026). Their own file, built from the Transport Department's
+// GTFS feed by tools/build_ferries.py: every licensed ferry, with when each
+// sailing leaves and how long it takes. Merged into the route list as one
+// more company, 'ferry', so the planner, the 車站 tab and the fares treat a
+// pier like any other stop. Pier ids get an 'F' in front: the feed numbers
+// piers 101101…, which is the same shape as a Citybus stop id, and two stops
+// sharing an id would be one stop to every map in this app.
+const FERRY_URL = 'ferries.json';
+const FERRY_PREFIX = 'F';
+const FERRY_KMH = 20;          // only for a pier pair the feed gives no time for
+const ferryInfo = new Map();   // "ROUTE|BOUND|1|ferry" -> { mins: [per pier], names: [en, zh] }
+const ferrySeg = new Map();    // "Fid>Fid" -> minutes between consecutive piers
+
+// NLB's own routeId for each variant, carried in the route file since 2 Oct
+// 2026 (field "i", from HK Bus Crawling's nlbId). NLB answers live times per
+// routeId and files both directions of route 1 under bound "O", so this is
+// the only reliable way to know which way a bus is going. Filled when the
+// route file loads; nlbRouteIdFor falls back to matching stop lists for a
+// route file cached before the ids were in it.
+const nlbIds = new Map();      // "route|bound|type" -> NLB routeId
 
 // One number that decides how a value is read, in one place: this file nests
 // things differently from the government feeds, so we unwrap it defensively.
@@ -4337,8 +4402,8 @@ function widenLiteRoutes(list) {
   (list || []).forEach((row, index) => {
     out['lite' + index] = {
       route: row.r, serviceType: row.t,
-      bound: row.b || {}, stops: row.s || {},
-      fares: row.f || null, freq: row.q || null
+      bound: row.b || {}, stops: row.s || {}, nlbId: row.i || null,
+      fares: row.f || null, faresHoliday: row.h || null, freq: row.q || null
     };
   });
   return out;
@@ -4355,11 +4420,45 @@ function loadFareData() {
   return fareDataPromise;
 }
 
+// The ferry file: small (60 KB), read once per session. A missing file is not
+// an error the rider needs to see — the app is a bus app without it.
+let ferriesData = null;
+async function loadFerries() {
+  if (ferriesData) return ferriesData;
+  try {
+    const response = await fetch(FERRY_URL, { signal: AbortSignal.timeout(20000) });
+    if (!response.ok) throw new Error('server said ' + response.status);
+    ferriesData = await response.json();
+  } catch (error) {
+    console.warn('Ferry timetable unavailable:', error);
+  }
+  return ferriesData;
+}
+
+// Minutes between consecutive piers, from the feed's own crossing times. The
+// planner's paths are lists of stops with no route attached, so a ride is
+// timed by adding these up; where two routes share a pair, the quicker wins.
+function buildFerrySegments(ferries) {
+  ferrySeg.clear();
+  for (const r of ferries.routes || []) {
+    const ids = (r.s || []).map(id => FERRY_PREFIX + id), mins = r.m || [];
+    for (let i = 1; i < ids.length; i++) {
+      const pair = ids[i - 1] + '>' + ids[i], m = Number(mins[i]) - Number(mins[i - 1]);
+      if (!isFinite(m) || m <= 0) continue;
+      if (!ferrySeg.has(pair) || m < ferrySeg.get(pair)) ferrySeg.set(pair, m);
+    }
+  }
+}
+
 async function loadFareDataNow() {
   const newFareIndex = new Map();
 
   try {
-    let data = await cacheGet('hkbus-lite');
+    // A new name because the file changed shape (holiday fares, one key per
+    // variant — 2 Oct 2026): a phone holding last week's copy would otherwise
+    // keep it for up to CACHE_DAYS. The old copy is dropped.
+    let data = await cacheGet(LITE_CACHE_KEY);
+    if (!data) cacheDrop('hkbus-lite');
     let stopList;
 
     if (!data) {
@@ -4376,31 +4475,59 @@ async function loadFareDataNow() {
         const full = await response.json();
         data = { routes: null, stops: full.stopList || {}, routeList: full.routeList || {} };
       }
-      cachePut('hkbus-lite', data);
+      cachePut(LITE_CACHE_KEY, data);
     }
 
-    hkbusRoutes = data.routes ? widenLiteRoutes(data.routes) : (data.routeList || {});
+    // Published only once the ferries are in it. Assigned before the ferry
+    // file had arrived, the stop index could take it in that gap — and it is
+    // only ever extended once, so the ferries were gone for the session.
+    const routes = data.routes ? widenLiteRoutes(data.routes) : (data.routeList || {});
     stopList = data.stops || {};
+
+    // The ferries join here, as one more company. A copy of the stop list, not
+    // the stored one: that object is the IndexedDB cache's own.
+    const ferries = await loadFerries();
+    if (ferries) {
+      stopList = Object.assign({}, stopList);
+      for (const [id, record] of Object.entries(ferries.stops || {})) stopList[FERRY_PREFIX + id] = record;
+      ferryInfo.clear();
+      (ferries.routes || []).forEach((r, i) => {
+        routes['ferry' + i] = {
+          route: String(r.r), serviceType: '1', bound: { ferry: r.b },
+          stops: { ferry: (r.s || []).map(id => FERRY_PREFIX + id) },
+          fares: r.f || null, faresHoliday: null, freq: r.q || null };
+        ferryInfo.set(String(r.r) + '|' + r.b + '|1|ferry', { mins: r.m || [], names: r.n || [] });
+      });
+      buildFerrySegments(ferries);
+    }
+    hkbusRoutes = routes;
 
     // Citybus, minibus and NLB have no bulk stop download of their own, so
     // their stops travel with this file. Collecting them here is what makes
     // those journeys possible at all.
-    const wanted = new Set();
+    const wanted = new Set(), feederIds = new Set();
     for (const entry of Object.values(hkbusRoutes)) {
       if (!entry || !entry.stops) continue;
       for (const co of PLANNED_OPERATORS)
         for (const id of (entry.stops[co] || [])) wanted.add(id);
+      for (const id of (entry.stops.lrtfeeder || [])) feederIds.add(id);
     }
 
     ctbStops = [];
     for (const id of wanted) {
       const stop = readStopRecord(id, stopList[id]);
-      if (stop) ctbStops.push(stop);
+      if (!stop) continue;
+      if (id.startsWith(FERRY_PREFIX)) stop.pier = true;   // timed by the ferry table, not a bus speed
+      if (feederIds.has(id)) stop.feeder = true;            // one id per MTR Bus route at a spot — see stopsNear
+      ctbStops.push(stop);
     }
 
     // Fares, keyed per company so KMB 6 and Citybus 6 never collide.
+    nlbIds.clear();
     for (const entry of Object.values(hkbusRoutes)) {
       if (!entry || !entry.route) continue;
+      if (entry.nlbId && entry.bound && entry.bound.nlb)
+        nlbIds.set(String(entry.route) + '|' + entry.bound.nlb + '|' + (entry.serviceType || '1'), String(entry.nlbId));
 
       for (const company of Object.keys(entry.bound || {})) {
         const key = String(entry.route).toUpperCase() + '|' + entry.bound[company] +
@@ -4408,6 +4535,7 @@ async function loadFareDataNow() {
 
         newFareIndex.set(key, {
           fares: entry.fares || [],
+          faresHoliday: entry.faresHoliday || null,
           stops: (entry.stops || {})[company] || []
         });
 
@@ -4454,9 +4582,26 @@ const HOLIDAY_URL_ZH = 'https://www.1823.gov.hk/common/ical/tc.json';
 
 let holidays = null;      // Map 'YYYYMMDD' -> holiday name
 
-async function loadHolidays() {
-  if (holidays) return;
-  holidays = new Map();
+// Loaded at start-up, not only when a trip is searched: the fares on a stop
+// screen and a ferry's sailings both depend on whether today is a holiday.
+// Built aside and swapped in whole, so a reload (a language switch brings
+// new names) never leaves a moment with no holidays at all. `force` reloads.
+let holidaysLoading = null;
+function loadHolidays(force) {
+  if (holidays && !force) return Promise.resolve();
+  if (!holidaysLoading)
+    holidaysLoading = loadHolidaysNow().finally(() => { holidaysLoading = null; });
+  return holidaysLoading;
+}
+async function loadHolidaysNow() {
+  const found = new Map();
+  try {
+    await fillHolidays(found);
+  } finally {
+    if (found.size || !holidays) holidays = found;
+  }
+}
+async function fillHolidays(holidays) {
 
   // Local gazetted file first.
   try {
@@ -4614,6 +4759,38 @@ function patternsForToday(freq) {
   return today.length ? { masks: today, state: 'day' } : { masks: [], state: 'closed' };
 }
 
+// THE NEXT SAILINGS of a ferry route from the pier at position `seq` (1 =
+// the first pier), as minutes after today's midnight. The table lists when
+// each sailing leaves the FIRST pier; a later pier adds its own minutes. Just
+// after midnight yesterday's late sailings ("2430") still count.
+const FERRY_SOON_MIN = 180;      // a sailing this soon keeps a ferry in the plan
+function ferrySailings(routeKey, seq, count, withinMin) {
+  const info = serviceInfo.get(routeKey);
+  if (!info || !info.freq) return [];
+  const ferry = ferryInfo.get(routeKey);
+  const offset = ferry ? (Number(ferry.mins[seq - 1]) || 0) : 0;
+  const now = minutesNow();
+  const found = new Set();
+  const add = (masks, shift) => {
+    for (const mask of masks)
+      for (const [start, value] of Object.entries(info.freq[mask] || {})) {
+        const w = svcWindow(start, value);
+        if (!w) continue;
+        for (let t = w.a; t <= w.b; t += (w.hw || 100000)) found.add(t + offset + shift);
+      }
+  };
+  add(patternsForToday(info.freq).masks, 0);
+  if (now < 360) {
+    const y = new Date(Date.now() - 86400000);
+    const ybit = DAY_BITS[(y.getDay() + 6) % 7];
+    const masks = Object.keys(info.freq).map(Number).filter(m => isFinite(m) && m > 0 &&
+      (isPublicHoliday(y) ? (m & PH_BIT) : (m & ybit)));
+    add(masks, -1440);
+  }
+  return [...found].filter(t => t >= now && t - now <= (withinMin || 100000))
+                   .sort((a, b) => a - b).slice(0, count || 3);
+}
+
 // "2430" -> 1470. Four digits, and the hour may run past midnight: KMB,
 // Citybus and NLB keep counting (the largest value in the files is "3000"),
 // so an hour of 24 to 30 is data, not a typo. The old reader rejected
@@ -4763,6 +4940,9 @@ function routeServiceNow(context) {
 }
 
 function isRunningNow(routeKey) {
+  // A ferry is not "running" in the minute between sailings the way a bus
+  // route is: it counts if a sailing leaves within FERRY_SOON_MIN.
+  if (String(routeKey).endsWith('|ferry')) return ferrySailings(routeKey, 1, 1, FERRY_SOON_MIN).length > 0;
   const nowMins = minutesNow();
   const info = serviceInfo.get(routeKey);
   const today = info ? patternsForToday(info.freq) : { masks: [], state: 'noData' };
@@ -4812,9 +4992,10 @@ function fareForLeg(routeNo, bound, serviceType, boardStopId, co) {
 
   const entry = fareIndex.get(key);
   if (!entry || entry.fares.length === 0) return null;
+  const fares = (entry.faresHoliday && holidayFareDay() && entry.faresHoliday) || entry.fares;
 
   const index = entry.stops.indexOf(boardStopId);
-  const raw = (index >= 0 && index < entry.fares.length) ? entry.fares[index] : entry.fares[0];
+  const raw = (index >= 0 && index < fares.length) ? fares[index] : fares[0];
 
   const fare = Number(raw);
   return isFinite(fare) && fare > 0 ? fare : null;
@@ -4827,6 +5008,24 @@ function fareForLeg(routeNo, bound, serviceType, boardStopId, co) {
 // known to have finished. The larger file below covers the other operators.
 const KMB_FARE_URL = 'kmb-fares.json';
 let kmbFares = null;      // "ROUTE|BOUND|TYPE" -> [fare boarding at seq 1, seq 2, ...]
+let kmbFaresHoliday = null;   // the same, where Sundays and public holidays cost more
+
+// SUNDAY AND PUBLIC-HOLIDAY FARES (2 Oct 2026). New Lantao Bus charges more
+// on those days — route 1 is $12.7 on a weekday and $21.4 on a Sunday — and
+// the app quoted the weekday fare every day. The data files now carry the
+// holiday table where an operator publishes one, and it is used on exactly
+// the days dayType() calls 'holiday'.
+// Asked for every fare of every search — thousands of times on one tap — so
+// the answer is kept for a minute instead of building a date each time. The
+// holiday list's size is part of the key: it fills in after start-up.
+let holidayFareMemo = { at: -Infinity, value: false, size: -1 };
+function holidayFareDay() {
+  const now = Date.now(), size = holidays ? holidays.size : -1;
+  if (now >= holidayFareMemo.at && now - holidayFareMemo.at < 60000 && size === holidayFareMemo.size)
+    return holidayFareMemo.value;
+  holidayFareMemo = { at: now, value: dayType() === 'holiday', size };
+  return holidayFareMemo.value;
+}
 
 async function loadKmbFares() {
   try {
@@ -4834,6 +5033,7 @@ async function loadKmbFares() {
     if (!response.ok) throw new Error('server said ' + response.status);
     const data = await response.json();
     kmbFares = data.fares || null;
+    kmbFaresHoliday = data.faresHoliday || null;
 
     // The same file carries KMB's published service windows. Feeding them in
     // here is what stops the planner offering a route that finished hours
@@ -4845,6 +5045,7 @@ async function loadKmbFares() {
   }
 }
 loadKmbFares();
+loadHolidays();
 
 // Hong Kong buses charge SECTION fares: the price depends on where you get
 // on, so the stop's position along the route (its seq) is what we look up.
@@ -4858,7 +5059,9 @@ function stopFare(routeNo, bound, serviceType, seq, co) {
   if (company === 'lwb') company = 'kmb';
 
   if (kmbFares && company === 'kmb') {
-    const list = kmbFares[String(routeNo).toUpperCase() + '|' + bound + '|' + type];
+    const kmbKey = String(routeNo).toUpperCase() + '|' + bound + '|' + type;
+    const holidayList = kmbFaresHoliday && kmbFaresHoliday[kmbKey];
+    const list = (holidayList && holidayFareDay() && holidayList) || kmbFares[kmbKey];
     if (list) {
       const fare = Number(list[position - 1]);
       if (isFinite(fare) && fare > 0) return fare;
@@ -4868,12 +5071,26 @@ function stopFare(routeNo, bound, serviceType, seq, co) {
   if (fareIndex) {
     const entry = fareIndex.get(String(routeNo).toUpperCase() + '|' + bound +
                                 '|' + type + '|' + company);
-    if (entry && entry.fares.length) {
-      const fare = Number(entry.fares[position - 1]);
+    const list = entry && ((entry.faresHoliday && holidayFareDay() && entry.faresHoliday) || entry.fares);
+    if (list && list.length) {
+      const fare = Number(list[position - 1]);
       if (isFinite(fare) && fare > 0) return fare;
     }
   }
   return null;
+}
+
+// Is the fare on screen today's holiday fare? Said beside it, so a rider
+// who knows the weekday price is not left wondering why it went up.
+function holidayFareApplies(routeNo, bound, serviceType, co) {
+  if (!holidayFareDay()) return false;
+  let company = String(co || 'kmb').toLowerCase();
+  if (company === 'lwb') company = 'kmb';
+  const type = String(serviceType || '1');
+  if (company === 'kmb')
+    return !!(kmbFaresHoliday && kmbFaresHoliday[String(routeNo).toUpperCase() + '|' + bound + '|' + type]);
+  const entry = fareIndex && fareIndex.get(String(routeNo).toUpperCase() + '|' + bound + '|' + type + '|' + company);
+  return !!(entry && entry.faresHoliday);
 }
 
 // Total fare as a NUMBER, or null if any leg's fare is unknown.
@@ -5712,7 +5929,25 @@ function stopsNear(lat, lng, limit) {
       }
     }
   }
-  return near.sort((a, b) => a.metres - b.metres).slice(0, 25);
+  near.sort((a, b) => a.metres - b.metres);
+  // THE 25 NEAREST STOPS, as always — and, beside them, the MTR's own buses
+  // and the piers. An MTR Bus stop is filed once PER ROUTE (seven ids on the
+  // one spot at 大埔墟站), so counted in with the rest they took eleven of
+  // the 25 places at Tai Po Market and pushed KMB's 74A out of the plan.
+  // They get places of their own instead: every id at the six nearest MTR
+  // Bus spots, and the four nearest piers.
+  const out = [], spots = new Set();
+  let main = 0, piers = 0;
+  for (const n of near) {
+    if (n.stop.pier) { if (piers < 4) { out.push(n); piers++; } continue; }
+    if (n.stop.feeder) {
+      const spot = Number(n.stop.lat).toFixed(4) + ',' + Number(n.stop.long).toFixed(4);
+      if (spots.has(spot) || spots.size < 6) { spots.add(spot); out.push(n); }
+      continue;
+    }
+    if (main < 25) { out.push(n); main++; }
+  }
+  return out;
 }
 
 // The whole network in one file. It is big, so: long timeout, one retry,
@@ -5775,7 +6010,7 @@ async function buildIndexesNow() {
 // Deliberately NOT included: 'mtr' and 'lightRail'. Those are trains, and our
 // timing model assumes road speeds and road-following shapes. Including them
 // would produce confident, wrong numbers.
-const PLANNED_OPERATORS = ['ctb', 'nlb', 'gmb'];
+const PLANNED_OPERATORS = ['ctb', 'nlb', 'gmb', 'lrtfeeder', 'ferry'];
 
 // Citybus, NLB and minibus join the index once their file has loaded. The
 // index is built at start-up, before that file is fetched, and it was never
@@ -6005,6 +6240,18 @@ const BUS_KMH_EXPRESS = 32;
 // Time from the distance measured ALONG the chain of stops — road distance,
 // near enough — rather than the straight line, which cut across the harbour.
 function rideMinutesForPath(path) {
+  // A crossing is timed from the ferry table, never from a bus speed: Central
+  // to Cheung Chau is 12 km and an hour, not the 22 minutes a bus would take.
+  if (path.length > 1 && path.every(stop => stop && stop.pier)) {
+    let total = 0;
+    for (let i = 1; i < path.length; i++) {
+      const known = ferrySeg.get(path[i - 1].stop + '>' + path[i].stop);
+      total += known !== undefined ? known
+        : metresBetween(Number(path[i - 1].lat), Number(path[i - 1].long),
+                        Number(path[i].lat), Number(path[i].long)) / 1000 / FERRY_KMH * 60;
+    }
+    return Math.max(1, Math.round(total));
+  }
   const km = pathMetres(path) / 1000;
   const speed = km > 8 ? BUS_KMH_EXPRESS : BUS_KMH_LOCAL;
   return Math.max(1, Math.round(km / speed * 60));
@@ -6021,6 +6268,19 @@ function refreshStopById() {
   for (const stop of allStops) stopById.set(stop.stop, stop);
   for (const stop of ctbStops) stopById.set(stop.stop, stop);   // Citybus too
   routeDistances.clear();
+}
+
+// Time for a stretch of one route, from its distance: the ferry table's own
+// pace for a ferry, the bus rule for everything else.
+function rideMinutesOn(routeKey, metres) {
+  if (String(routeKey).endsWith('|ferry')) {
+    const info = ferryInfo.get(routeKey);
+    const full = info && info.mins.length ? Number(info.mins[info.mins.length - 1]) : 0;
+    const length = info ? metresAlongRoute(routeKey, 1, info.mins.length) : 0;
+    return Math.max(1, Math.round(full > 0 && length > 0 ? full * metres / length
+                                                         : metres / 1000 / FERRY_KMH * 60));
+  }
+  return rideMinutesForMetres(metres);
 }
 
 // Time from a distance along the stops, the same rule as rideMinutesForPath.
@@ -6261,7 +6521,7 @@ async function findBuses() {
         const consider = (target, changeOff, seqA, walkMetres) => {
           const legAMetres = metresAlongRoute(keyA, board.seq, seqA);
           if (legAMetres < MIN_USEFUL_LEG_M) return;
-          const minutes = rideMinutesForMetres(legAMetres) + rideMinutesForMetres(target.legMetres) +
+          const minutes = rideMinutesOn(keyA, legAMetres) + rideMinutesOn(keyB, target.legMetres) +
                           TRANSFER_PENALTY_MIN;
           const walkMinutes = walkMetres > 0 ? walkingEstimate(walkMetres).minutes : 0;
           const cost = minutes * EFFORT.perRideMinute +
@@ -6697,8 +6957,24 @@ const OPERATORS = {
   nlb: { en:'NLB',     zh:'嶼巴',   css:'nlb' },
   gmb: { en:'MINIBUS', zh:'小巴',   css:'gmb' },
   mtr: { en:'MTR',     zh:'港鐵',   css:'mtr' },
-  lrt: { en:'LIGHT RAIL', zh:'輕鐵', css:'lrt' }
+  lrt: { en:'LIGHT RAIL', zh:'輕鐵', css:'lrt' },
+  lrtfeeder: { en:'MTR BUS', zh:'港鐵巴士', css:'mtrbus' },
+  ferry: { en:'FERRY', zh:'渡輪', css:'ferry' }
 };
+
+// What a step calls its vehicle. A ferry route's number is the Transport
+// Department's own (7005) and means nothing on a pier, so a ferry is named by
+// where it goes instead: 中環 - 長洲.
+function legLabel(leg) {
+  if (!leg || leg.co !== 'ferry') return leg ? leg.route : '';
+  const info = ferryInfo.get(leg.route + '|' + leg.bound + '|1|ferry');
+  const names = info ? info.names : null;
+  const name = names && (lang === 'zh' ? (names[1] || names[0]) : (names[0] || names[1]));
+  // "ABERDEEN - AP LEI CHAU (BOARDING AT STATIONARY VESSEL OUTSIDE …)": a
+  // bracket at the END is pier small print. One in the middle is part of the
+  // name — 將軍澳(南) - 西灣河 — and stays.
+  return (name ? String(name).replace(/\s*[（(][^（()）]*[)）]\s*$/, '').trim() : '') || T('ferryWord');
+}
 
 function coName(co) {
   const entry = OPERATORS[co] || OPERATORS.kmb;
@@ -6754,6 +7030,9 @@ function buildCompareStrip(picks) {
 // lie in the biggest figure on the card. A journey that touches both railways
 // gets the word that covers both.
 function ridesWord(journey, isTrainTrip, legCount) {
+  // Nor is "1 程巴士" over a ferry crossing.
+  const ferries = journey.legs.filter(leg => leg.co === 'ferry').length;
+  if (ferries) return T(ferries < legCount ? 'totalMixed' : legCount === 1 ? 'totalFerry1' : 'totalFerries');
   if (!isTrainTrip) return T(legCount === 1 ? 'totalBus1' : 'totalBuses');
   const kinds = new Set(journey.legs.map(leg => leg.co));
   if (kinds.has('lrt') && kinds.has('mtr')) return T(legCount === 1 ? 'totalRail1' : 'totalRails');
@@ -6956,17 +7235,20 @@ function makeCard(pick) {
     // 🔔 on every road step: the get-off alarm for THIS bus, counted along
     // the stops the planner already knows it passes. Not on trains — the
     // GPS goes underground with them, and every train announces its stops.
-    const alarm = (!isTrain && !isLrt && leg.path && leg.path.length > 1)
+    const alarm = (!isTrain && !isLrt && leg.co !== 'ferry' && leg.path && leg.path.length > 1)
       ? '<button type="button" class="jsalarm" data-leg="' + index + '">' + T('rideAlarmBtn') + '</button>'
       : '';
+    const isFerry = leg.co === 'ferry';
     steps += stepHtml(
-      (isTrain ? '\u{1F687} ' : isLrt ? '\u{1F688} ' : '\u{1F68C} ') +
-      '<span class="jsroute">' + esc(leg.route) + '</span>' +
+      (isTrain ? '\u{1F687} ' : isLrt ? '\u{1F688} ' : isFerry ? '\u26F4 ' : '\u{1F68C} ') +
+      '<span class="jsroute' + (isFerry ? ' ferryname' : '') + '">' + esc(legLabel(leg)) + '</span>' +
       '<span class="cotag ' + coClass(leg.co) + '">' + coName(leg.co) + '</span>' +
       (legFare !== null ? '<span class="legfare">' + fareText(legFare) + '</span>' : ''),
       T('rideTo') + ' <b>' + esc(stopName(leg.off)) + '</b>' +
-      ' <span class="jscount">(' + leg.stops + ' ' +
-      T(isTrain || isLrt ? 'stations' : 'stops') + ')</span>',
+      ' <span class="jscount">(' + (isFerry
+        // A crossing is counted in minutes, not piers: "1 stop" says nothing.
+        ? esc(T('ferryCrossing').replace('{m}', rideMinutesForPath(leg.path && leg.path.length > 1 ? leg.path : [leg.on, leg.off])))
+        : leg.stops + ' ' + T(isTrain || isLrt ? 'stations' : 'stops')) + ')</span>',
       alarm);
 
     if (index < legCount - 1) {
@@ -6990,6 +7272,7 @@ function makeCard(pick) {
       const what = (isLrt && nextCo === 'mtr') ? 'changeToTrain'
                  : (isTrain && nextCo === 'lrt') ? 'changeToLrt'
                  : (nextCo === 'mtr' || nextCo === 'lrt') && (isTrain || isLrt) ? 'changeTrainPlain'
+                 : nextCo === 'ferry' ? 'changeToFerry'
                  : 'changeBusPlain';
       steps += '<li class="jschange">' + T(what) +
                (hop
@@ -7115,8 +7398,8 @@ function journeySteps(journey) {
   legs.forEach((leg, i) => {
     const rail = leg.co === 'mtr' || leg.co === 'lrt';
     const fare = rail ? null : fareForLeg(leg.route, leg.bound, leg.serviceType, leg.on.stop, leg.co);
-    steps.push({ kind: rail ? 'train' : 'bus', r: leg.route, c: coName(leg.co), k: leg.stops,
-                 s: stopName(leg.off), fare });
+    steps.push({ kind: rail ? 'train' : leg.co === 'ferry' ? 'ferry' : 'bus', r: legLabel(leg), c: coName(leg.co),
+                 k: leg.stops, s: stopName(leg.off), fare });
     if (i < legs.length - 1) {
       const hop = (journey.transferWalks || [])[i];
       steps.push({ kind: 'change', m: hop ? hop.minutes : 0, s: stopName(legs[i + 1].on) });
@@ -7154,7 +7437,8 @@ function nextBusSpeech(el) {
   }
   if (inline.trim()) parts.push(inline.trim());
   const stop = lang === 'zh' ? '。' : '. ';
-  return parts.map(p => p.replace(/\s*·\s*/g, lang === 'zh' ? '、' : ', ')).join(stop) + (parts.length ? stop : '');
+  return parts.map(p => p.replace(/\s*·\s*/g, lang === 'zh' ? '、' : ', '))
+              .map(p => (/[。.!?！？]$/.test(p) ? p + (lang === 'zh' ? '' : ' ') : p + stop)).join('');
 }
 function shownFare(f) { return (elderly ? elderlyFare(f) : f).toFixed(1); }
 
@@ -7164,8 +7448,11 @@ function journeySpeech(journey) {
   let n = 0;
   for (const step of journeySteps(journey)) {
     if (step.kind === 'change') { parts.push(fillStep(T(step.m ? 'sayChangeWalk' : 'sayChange'), step, n)); continue; }
-    const key = { walk: 'sayWalk', boardHere: 'sayBoardHere', bus: 'sayBus', train: 'sayTrain', arrive: 'sayArrive' }[step.kind];
-    parts.push(fillStep(T(key), step, ++n));
+    const key = { walk: 'sayWalk', boardHere: 'sayBoardHere', bus: 'sayBus', train: 'sayTrain', ferry: 'sayFerry', arrive: 'sayArrive' }[step.kind];
+    // "中環 - 長洲" is read out as 中環至長洲: a dash is not a word.
+    const said = step.kind === 'ferry'
+      ? Object.assign({}, step, { r: String(step.r).replace(/\s*-\s*/g, lang === 'zh' ? '至' : ' to ') }) : step;
+    parts.push(fillStep(T(key), said, ++n));
   }
   parts.push(T('sayTotal').replace('{t}', journey.total));
   const fare = journeyFare(journey);
@@ -7180,9 +7467,9 @@ function journeyShareText(journey) {
   let n = 0;
   for (const step of journeySteps(journey)) {
     if (step.kind === 'change') { lines.push(fillStep(T(step.m ? 'shareChangeWalk' : 'shareChange'), step, n)); continue; }
-    const key = { walk: 'shareWalk', boardHere: 'shareBoardHere', bus: 'shareBus', train: 'shareTrain', arrive: 'shareArrive' }[step.kind];
+    const key = { walk: 'shareWalk', boardHere: 'shareBoardHere', bus: 'shareBus', train: 'shareTrain', ferry: 'shareFerry', arrive: 'shareArrive' }[step.kind];
     let line = fillStep(T(key), step, ++n);
-    if (step.kind === 'bus') line = line.replace('{f}', step.fare !== null && step.fare !== undefined ? ' · $' + shownFare(step.fare) : '');
+    if (step.kind === 'bus' || step.kind === 'ferry') line = line.replace('{f}', step.fare !== null && step.fare !== undefined ? ' · $' + shownFare(step.fare) : '');
     lines.push(line);
   }
   const fare = journeyFare(journey);
@@ -8170,6 +8457,22 @@ function renderFavouriteList() {
 function openSavedDepartureRoute(dep) {
   const wanted = String(dep.route).toUpperCase();
 
+  // NLB, minibus and MTR Bus open from our own route file. These used to fall
+  // through to the KMB lookup below, so tapping NLB 1 opened KMB 1. A ferry
+  // has no stop list worth opening: its row already lists the sailings.
+  const company = String(dep.co || 'KMB').toUpperCase();
+  if (company === 'FERRY') return;
+  if (company === 'LRTFEEDER' || company === 'NLB' || company === 'GMB') {
+    const open = () => {
+      const v = liteVariantFor(company.toLowerCase(), wanted, dep.dir, dep.serviceType);
+      if (!v) { status.textContent = T('routeNotFound').replace('{r}', dep.route); return; }
+      goToRouteMode(dep.route);
+      showLiteRoute(v);
+    };
+    if (hkbusRoutes) open(); else loadFareData().then(open).catch(() => {});
+    return;
+  }
+
   if (dep.co === 'CTB') {
     const route = ctbRoutes.find(r => String(r.route).toUpperCase() === wanted);
     if (!route) { status.textContent = T('routeNotFound').replace('{r}', dep.route); return; }
@@ -8232,22 +8535,52 @@ async function loadDepartureEta(dep, index) {
       if (found && label) label.textContent = plainStopName(stopName(found));
     }
 
-    const response = await fetch(
-      'https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/' + stopId,
-      { signal: AbortSignal.timeout(10000) });
-    if (!response.ok) throw new Error('server said ' + response.status);
+    // KMB answers per stop; every other company through the same fetchPoleRows
+    // the 車站 tab uses, so a saved Citybus, minibus, NLB, MTR Bus or ferry
+    // counts down like a KMB one instead of asking KMB about a stop it has
+    // never heard of.
+    let rowsHere;
+    const company = String(dep.co || 'KMB').toUpperCase();
+    if (company === 'KMB' || company === 'LWB') {
+      const response = await fetch(
+        'https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/' + stopId,
+        { signal: AbortSignal.timeout(10000) });
+      if (!response.ok) throw new Error('server said ' + response.status);
+      rowsHere = (await response.json()).data || [];
+    } else {
+      await loadFareData();
+      await buildIndexes();
+      if (!operatorsIndexed) addOperatorsToIndexes();
+      const stop = stopById.get(stopId) || ctbStops.find(s => s.stop === stopId) || { stop: stopId };
+      rowsHere = (await fetchPoleRows(stop, new Set([String(dep.route)]))) || [];
+    }
 
-    const mine = ((await response.json()).data || [])
+    // WHICH OF THEM ARE THIS BUS. By direction letter for most companies.
+    // Not for NLB, which files both ways of a route as "O": by its routeId.
+    // Not for MTR Bus either: its feed answers per stop id, and the stop id
+    // (…-U…, …-D…) already is the direction.
+    const wantNlb = company === 'NLB' ? (depVariant(dep) || await nlbRouteIdFor(dep.route, dep.dir || 'O', dep.serviceType)) : '';
+    const byDir = !wantNlb && company !== 'LRTFEEDER';
+    const mine = rowsHere
       .filter(row => String(row.route).toUpperCase() === String(dep.route).toUpperCase()
-                  && (!dep.dir || row.dir === dep.dir));
-    const entries = etaEntries(mine, dep.dir, null).slice(0, 3);
+                  && (!byDir || !dep.dir || row.dir === dep.dir)
+                  && (!wantNlb || String(row.nlb_id) === String(wantNlb)));
+    const entries = etaEntries(mine, byDir ? dep.dir : null, null).slice(0, 3);
+    // A sailing is a clock time on the pier's board, not a countdown.
+    const sailings = company === 'FERRY'
+      ? mine.map(row => new Date(row.eta)).filter(d => d.getTime() >= Date.now() - 60000)
+            .sort((a, b) => a - b).slice(0, 3)
+            .map(d => d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }))
+      : null;
 
     if (!document.getElementById('depeta-' + index)) return;   // screen changed
-    cell.innerHTML = entries.length
+    cell.innerHTML = sailings
+      ? (sailings.length ? sailings.join(', ') : esc(T('ferryNoMore')))
+      : entries.length
       ? entries.map(e => (e.m === 0 ? T('due') : e.m + T('min')) +
                          (e.last ? lastBusTag() : '')).join(', ')
       : esc(T('noneDue'));
-    cell.classList.toggle('quiet', entries.length === 0);
+    cell.classList.toggle('quiet', (sailings || entries).length === 0);
   } catch (error) {
     cell.textContent = T('etaOffline');
     cell.classList.add('quiet');
@@ -8953,7 +9286,10 @@ async function loadNextBus(pick) {
       // NLB answers per route AND per stop, on its own endpoint — so it is
       // fetched here rather than through the shared URL below.
       const rows = await fetchNlbRows(leg.on, new Set([leg.route])).catch(() => []);
-      const soon = etaEntries(rows, null, null).slice(0, 3);
+      // Only this leg's own direction: both ways of NLB 1 call at 銀灣邨, and
+      // "next 1 in 1 minute" about the bus to 梅窩 is the wrong bus.
+      const want = await nlbRouteIdFor(leg.route, leg.bound, leg.serviceType);
+      const soon = etaEntries(want ? rows.filter(r => r.nlb_id === want) : rows, null, null).slice(0, 3);
       if (!soon.length) {
         line.className = 'jnext waiting';
         line.textContent = T('noBusDue');
@@ -8972,6 +9308,45 @@ async function loadNextBus(pick) {
       line.className = 'jnext waiting';
       line.textContent = T('noLiveMinibus');
       if (tile) tile.textContent = '—';
+      return;
+    }
+    // A ferry: the next sailings from the timetable, as clock times — "in 47
+    // minutes" reads like a delay, "14:30" reads like a sailing.
+    if (leg.co === 'ferry') {
+      const key = leg.route + '|' + leg.bound + '|1|ferry';
+      const seq = ((routeIndex.get(key) || []).find(e => e.stopId === leg.on.stop) || {}).seq || 1;
+      const next = ferrySailings(key, seq, 3, 24 * 60);
+      if (!next.length) {
+        line.className = 'jnext waiting';
+        line.textContent = T('ferryNoMore');
+        if (tile) tile.textContent = '—';
+        return;
+      }
+      const wait = next[0] - minutesNow();
+      line.className = 'jnext';
+      line.innerHTML = esc(T('ferryNext').replace('{t}', svcClock(next[0]))) +
+        ' <span class="mins">' + (wait <= 0 ? T('dueNow') : esc(T('ferryIn').replace('{m}', wait))) + '</span>' +
+        (next.length > 1 ? '<div style="font-size:1rem;font-weight:600;margin-top:5px">' + esc(T('then')) + ' ' +
+          next.slice(1).map(svcClock).join(' · ') + '</div>' : '') +
+        '<div style="font-size:0.94rem;font-weight:600;opacity:.8;margin-top:4px">' + esc(T('ferryTimetable')) + '</div>';
+      if (tile) tile.textContent = svcClock(next[0]);
+      return;
+    }
+    // MTR Bus: its own feed, one request per route.
+    if (leg.co === 'lrtfeeder') {
+      const soon = etaEntries(await fetchMtrBusRows(leg.on, new Set([leg.route])), null, null).slice(0, 3);
+      if (!soon.length) {
+        line.className = 'jnext waiting';
+        line.textContent = T('noBusDue');
+        if (tile) tile.textContent = '—';
+        return;
+      }
+      line.className = 'jnext';
+      line.innerHTML = T('next') + ' ' + esc(leg.route) + ' ' + T('inTime') +
+        ' <span class="mins">' + (soon[0].sched ? esc(T('etaAbout')) : '') +
+        (soon[0].m === 0 ? T('dueNow') : soon[0].m + T('min')) + '</span>' +
+        (soon[0].last ? lastBusTag() : '');
+      if (tile) tile.textContent = leg.route + ' ' + (soon[0].m === 0 ? T('dueNow') : soon[0].m + T('min'));
       return;
     }
 
@@ -9157,7 +9532,7 @@ async function loadKmbArrivals(stop, marker) {
 function formatArrivals(entries, opts) {
   if (!entries || entries.length === 0) return '<div class="eta-note">' + T('noBusesListed') + '</div>';
   const now = Date.now(), byRoute = new Map();
-  let anySched = false, anyLast = false;
+  let anySched = false, anyLast = false, anyFerry = false;
 
   for (const entry of entries) {
     if (!entry.eta) continue;
@@ -9191,7 +9566,7 @@ function formatArrivals(entries, opts) {
     // the safe direction is the opposite: if either bay calls it the last
     // one, say so. Leaving early costs a wait; not knowing costs the night.
     if (seen) { if (!sched) seen.sched = false; if (last) seen.last = true; }
-    else bucket.push({ m: minutes, sched, last });
+    else bucket.push({ m: minutes, sched, last, at: entry.eta });
   }
   if (byRoute.size === 0) return '<div class="eta-note">' + T('noBusDue') + '</div>';
   for (const group of byRoute.values()) group.minutes.sort((a, b) => a.m - b.m);
@@ -9213,7 +9588,7 @@ function formatArrivals(entries, opts) {
     // A star per row. This row already IS a route, a direction and a stop,
     // so one tap saves all three — no follow-up questions, which is the
     // whole reason a saved departure beats a saved route number.
-    const saved = isSavedDeparture(sample.route, sample.dir, sample.stop);
+    const saved = isSavedDeparture(sample.route, sample.dir, sample.stop, sample.nlb_id);
     const star = sample.stop
       ? '<button class="eta-star' + (saved ? ' on' : '') + '"' +
         ' data-star="1"' +
@@ -9221,6 +9596,7 @@ function formatArrivals(entries, opts) {
         ' data-dir="' + (sample.dir || '') + '"' +
         ' data-type="' + (sample.service_type || '1') + '"' +
         ' data-co="' + (sample.co || 'KMB') + '"' +
+        (sample.nlb_id ? ' data-nlb="' + esc(sample.nlb_id) + '"' : '') +
         ' data-stop="' + sample.stop + '"' +
         ' data-sen="' + esc(sample.stopName_en || '') + '"' +
         ' data-stc="' + esc(sample.stopName_tc || '') + '"' +
@@ -9249,8 +9625,17 @@ function formatArrivals(entries, opts) {
     // first bus gets there. MINUTES_PER_STOP is the planner's own rough figure.
     let arriveTag = '';
     const stopsAway = opts && opts.arrive ? opts.arrive.get(routeKeyForRow(sample)) : undefined;
+    const isFerry = sample.co === 'FERRY';
+    // A crossing's length comes from the ferry table, not two minutes a stop.
+    const rideMins = stopsAway === undefined ? 0 : (() => {
+      const info = isFerry ? ferryInfo.get(routeKeyForRow(sample)) : null;
+      const at = Number(sample.seq) || 1;
+      return info && info.mins[at - 1 + stopsAway] !== undefined
+        ? Number(info.mins[at - 1 + stopsAway]) - Number(info.mins[at - 1] || 0)
+        : stopsAway * MINUTES_PER_STOP;
+    })();
     if (stopsAway !== undefined) {
-      const at = new Date(now + (group.minutes[0].m + stopsAway * MINUTES_PER_STOP) * 60000);
+      const at = new Date(now + (group.minutes[0].m + rideMins) * 60000);
       const hhmm = at.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
       // THE ANSWER, AT THE SIZE OF AN ANSWER.
       // "when do I get there" is the whole reason the rider opened this
@@ -9264,14 +9649,17 @@ function formatArrivals(entries, opts) {
                       .replace('{n}', stopsAway) + '</span>';
     }
     const shown = group.minutes.slice(0, 3);
-    if (shown.some(x => x.sched)) anySched = true;
+    if (isFerry) anyFerry = true;
+    else if (shown.some(x => x.sched)) anySched = true;
     if (shown.some(x => x.last)) anyLast = true;
-    const sortKey = stopsAway !== undefined ? group.minutes[0].m + stopsAway * MINUTES_PER_STOP : group.minutes[0].m;
+    const sortKey = stopsAway !== undefined ? group.minutes[0].m + rideMins : group.minutes[0].m;
     items.push({ sortKey, html:
-      '<div class="eta-row">' + star + '<span class="eta-route">' + route + '</span>' +
+      '<div class="eta-row">' + star + '<span class="eta-route">' + (isFerry ? '\u26F4' : esc(route)) + '</span>' +
       '<span class="eta-dest">' + dest + '</span>' + fareTag + poleTag +
       '<span class="eta-times">' +
       shown.map(x => {
+        // A sailing is a time on the pier's board, not a countdown.
+        if (isFerry) return new Date(x.at).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
         const when = x.sched
           ? '<span class="sched">' + esc(T('etaAbout')) + (x.m === 0 ? T('due') : x.m + T('min')) + '</span>'
           : (x.m === 0 ? T('due') : x.m + T('min'));
@@ -9285,7 +9673,8 @@ function formatArrivals(entries, opts) {
   // the times it is meant to explain.
   return items.map(x => x.html).join('') +
     (anyLast ? '<div class="schednote lastnote">' + esc(T('etaLastNote')) + '</div>' : '') +
-    (anySched ? '<div class="schednote">' + esc(T('etaSchedNote')) + '</div>' : '');
+    (anySched ? '<div class="schednote">' + esc(T('etaSchedNote')) + '</div>' : '') +
+    (anyFerry ? '<div class="schednote">' + esc(T('ferryTimetable')) + '</div>' : '');
 }
 
 
@@ -9476,7 +9865,19 @@ function showDirections(routeNo, variants, company) {
   // a direction and waits for twenty-four stops to come back empty. null is
   // "no timetable" and is left alone — see routeServiceNow.
   const off = ctx => routeServiceNow(ctx) === false;
-  if (company === 'CITYBUS') {
+  if (company === 'MTRBUS') {
+    // The normal run each way first; a short working tucked behind 更多.
+    const byBound = new Map();
+    for (const v of variants) { if (!byBound.has(v.bound)) byBound.set(v.bound, []); byBound.get(v.bound).push(v); }
+    for (const list of byBound.values()) {
+      const normal = list.find(v => v.type === '1') || list[0];
+      for (const v of list)
+        (v === normal ? choices : extras).push({
+          from: liteRouteEnd(v, 'orig'), to: liteRouteEnd(v, 'dest'), note: v === normal ? null : T('special'),
+          off: off({ routeNo, dir: v.bound, serviceType: v.type, co: 'lrtfeeder' }),
+          go: () => showLiteRoute(v) });
+    }
+  } else if (company === 'CITYBUS') {
     const route = variants[0];
     for (const direction of ['outbound', 'inbound']) {
       const from = direction === 'outbound' ? endName(route, 'orig') : endName(route, 'dest');
@@ -9781,6 +10182,10 @@ function stopCompany(stopId) {
   if (cos.has('kmb')) return 'KMB';
   if (cos.has('ctb')) return 'CTB';
   if (cos.size) return [...cos][0].toUpperCase();
+  // Not in the index yet: an MTR Bus stop id names its route (506-D020), and
+  // a pier is "F" and the Transport Department's number.
+  if (/^[A-Z0-9]+-[a-z]?[A-Z]\d{3}$/.test(stopId)) return 'LRTFEEDER';
+  if (/^F\d{6,8}$/.test(stopId)) return 'FERRY';
   return /^[0-9A-F]{16}$/i.test(stopId) ? 'KMB' : 'CTB';
 }
 function routesAtStop(stopId) {
@@ -9788,7 +10193,7 @@ function routesAtStop(stopId) {
   const seen = new Set(), out = [];
   for (const k of keys) {
     const [route, bound, type, co] = String(k.routeKey).split('|');
-    const id = route + '|' + bound + '|' + co;
+    const id = route + '|' + bound + '|' + type + '|' + co;
     if (seen.has(id)) continue;
     seen.add(id);
     out.push({ route, bound, type, co: (co || '').toUpperCase(), seq: k.seq });
@@ -9825,6 +10230,10 @@ function routeTerminus(routeKey) {
 function lookupStop(id) {
   return stopMapNow().get(id) || stopFavs.find(x => x.stop === id) || null;
 }
+// What a route is called on a stop's screen. A ferry's number is the
+// Transport Department's (7005) and nobody on a pier knows it: ⛴ and where it
+// goes say it instead.
+function routeTag(r) { return String(r.co).toUpperCase() === 'FERRY' ? '\u26F4' : String(r.route); }
 // Every route leaving a pole, with where it ends up.
 const servingMemo = new Map(); let servingMemoIndex = null;
 function routesServing(stopId) {
@@ -9977,11 +10386,11 @@ function poleRoutesLine(stopId, max, destIds) {
     // with itself.
     items = reachingRoutes(stopId, destIds)
       .sort((a, b) => a.reach.stopsAway - b.reach.stopsAway)
-      .map(x => '<b>' + esc(x.r.route) + '</b> ' +
+      .map(x => '<b>' + esc(routeTag(x.r)) + '</b> ' +
       T('stopsAwayShort').replace('{n}', x.reach.stopsAway) + (x.r.dest ? ' · ' + T('towards') + esc(x.r.dest) : ''));
   } else {
     const list = Array.isArray(stopId) ? routesServingAny(stopId) : routesServing(stopId);
-    items = list.map(r => '<b>' + esc(r.route) + '</b>' + (r.dest ? ' ' + T('towards') + esc(r.dest) : ''));
+    items = list.map(r => '<b>' + esc(routeTag(r)) + '</b>' + (r.dest ? ' ' + T('towards') + esc(r.dest) : ''));
   }
   if (!items.length) return '';
   const shown = items.slice(0, max || 4);
@@ -10767,7 +11176,7 @@ function applyRoadDrag(journeys) {
   for (const journey of journeys) {
     let added = 0, worst = null;
     for (const leg of journey.legs) {
-      if (leg.co === 'mtr' || leg.co === 'lrt') continue;
+      if (leg.co === 'mtr' || leg.co === 'lrt' || leg.co === 'ferry') continue;
       const road = pathDrag(leg.path);
       if (!road) continue;
       added += rideMinutesForPath(leg.path) * road.drag * ROAD_DRAG;
@@ -11149,7 +11558,7 @@ function gmbKeyFor(stopId, code, stopSeq) {
 // guessed from a name.
 const NLB_BASE = 'https://rt.data.gov.hk/v2/transport/nlb';
 let nlbRoutes = null;                    // the operator's own route list
-const nlbRouteIdCache = new Map();       // "route|bound" -> routeId or null
+const nlbRouteIdCache = new Map();       // "route|bound|type" -> routeId or null
 
 let nlbRoutesLoading = null;
 async function loadNlbRoutes() {
@@ -11175,45 +11584,80 @@ async function loadNlbRoutes() {
 // Not by reading the name. NLB writes its routes as "梅窩碼頭 > 大澳", and
 // matching that against our own terminus would break the first time either
 // side renamed a pier. The stop LIST is the fact: ask NLB for each candidate
-// routeId's stops and keep the one whose first stop is our first stop. Two
-// calls per route at worst, once per session.
+// routeId's stops and keep the one that matches ours.
+// KEYED BY VARIANT, not by number and bound: NLB files both directions of
+// route 1 under bound "O", and until the data files gave each variant its own
+// type ("1", "1v2"…, 2 Oct 2026) only one of them existed here at all.
+// MATCHED ON THE WHOLE LIST, not the first stop: route 1 alone has six
+// variants leaving 梅窩碼頭, and "the first one that starts here" was the
+// wrong bus as often as not. Each candidate's list is fetched once per
+// session and shared by every variant that asks.
+const nlbStopLists = new Map();          // routeId -> Promise of NLB stop ids, in order
+function nlbStopIdsOf(routeId) {
+  if (!nlbStopLists.has(routeId)) {
+    const answer = fetch(NLB_BASE + '/stop.php?action=list&routeId=' + encodeURIComponent(routeId),
+                         { signal: AbortSignal.timeout(10000) })
+      .then(response => { if (!response.ok) throw new Error('server said ' + response.status); return response.json(); })
+      .then(json => (json.stops || []).map(s => String(s.stopId)));
+    answer.catch(() => { if (nlbStopLists.get(routeId) === answer) nlbStopLists.delete(routeId); });
+    nlbStopLists.set(routeId, answer);
+  }
+  return nlbStopLists.get(routeId);
+}
 async function nlbRouteIdFor(routeNo, bound, serviceType) {
-  const key = routeNo + '|' + bound;
+  const key = routeNo + '|' + bound + '|' + (serviceType || '1');
+  const known = nlbIds.get(key);
+  if (known) return known;
   if (nlbRouteIdCache.has(key)) return nlbRouteIdCache.get(key);
-  let found = null;
+  let found = null, best = 0, unasked = 0;
   try {
     const all = await loadNlbRoutes();
     const mine = all.filter(r => String(r.routeNo).toUpperCase() === String(routeNo).toUpperCase());
     const ourKey = routeNo + '|' + bound + '|' + (serviceType || '1') + '|nlb';
-    const ourStops = (routeIndex && routeIndex.get(ourKey)) || [];
-    const ourFirst = ourStops.length ? String(ourStops[0].stopId) : null;
-    if (mine.length === 1) found = mine[0].routeId;
-    else if (ourFirst) {
+    const ours = ((routeIndex && routeIndex.get(ourKey)) || []).map(e => String(e.stopId));
+    if (mine.length === 1) { found = mine[0].routeId; best = 3; }
+    else if (ours.length) {
       for (const candidate of mine) {
-        const response = await fetch(NLB_BASE + '/stop.php?action=list&routeId=' +
-                                     encodeURIComponent(candidate.routeId),
-                                     { signal: AbortSignal.timeout(10000) });
-        if (!response.ok) continue;
-        const stops = ((await response.json()).stops || []);
-        if (stops.length && String(stops[0].stopId) === ourFirst) { found = candidate.routeId; break; }
+        let theirs;
+        try { theirs = await nlbStopIdsOf(candidate.routeId); } catch (error) { unasked++; continue; }
+        if (!theirs.length) continue;
+        // 3 the same stops in the same order; 2 same two ends; 1 same start.
+        const score = theirs.join('|') === ours.join('|') ? 3
+          : theirs[0] === ours[0] && theirs[theirs.length - 1] === ours[ours.length - 1] ? 2
+          : theirs[0] === ours[0] ? 1 : 0;
+        if (score > best) { best = score; found = candidate.routeId; }
+        if (score === 3) break;
       }
     }
   } catch (error) {
     console.warn('NLB route list unavailable:', error.message);
     return null;                          // NOT cached: a dropped call is not an answer
   }
-  nlbRouteIdCache.set(key, found);
+  // A guess made while some candidates could not be asked is used, not kept.
+  if (best === 3 || !unasked) nlbRouteIdCache.set(key, found);
   return found;
 }
 
 async function fetchNlbRows(stop, wantRoutes) {
-  let routes = routesAtStop(stop.stop).filter(r => r.co === 'NLB');
-  if (wantRoutes && wantRoutes.size) routes = routes.filter(r => wantRoutes.has(r.route));
-  routes = routes.slice(0, 8);
-  const lists = await Promise.all(routes.map(async r => {
+  let variants = routesAtStop(stop.stop).filter(r => r.co === 'NLB');
+  if (wantRoutes && wantRoutes.size) variants = variants.filter(r => wantRoutes.has(r.route));
+  // ONE REQUEST PER NLB routeId, not per variant: route 1 is seven variants
+  // in the data but two routeIds at NLB, one each way, and NLB's times are
+  // per routeId. Each answer is filed under one variant of its own routeId —
+  // the plain one where there is one — so a row's direction is its own, and
+  // a busy terminus no longer runs out of its eight requests before every
+  // route has been asked.
+  await loadNlbRoutes().catch(() => null);      // the destination names; one call a session
+  const ids = await Promise.all(variants.map(r => nlbRouteIdFor(r.route, r.bound, r.type)));
+  const byId = new Map();
+  variants.forEach((r, i) => {
+    if (!ids[i]) return;
+    const had = byId.get(ids[i]);
+    if (!had || (had.type !== '1' && r.type === '1')) byId.set(ids[i], r);
+  });
+  // 24: the most any stop has (東涌站巴士總站, 24 routeIds); most have under ten.
+  const lists = await Promise.all([...byId].slice(0, 24).map(async ([routeId, r]) => {
     try {
-      const routeId = await nlbRouteIdFor(r.route, r.bound, r.type);
-      if (!routeId) return [];
       const response = await fetch(NLB_BASE + '/stop.php?action=estimatedArrivals&routeId=' +
         encodeURIComponent(routeId) + '&stopId=' + encodeURIComponent(stop.stop) +
         '&language=' + (lang === 'zh' ? 'zh' : 'en'),
@@ -11226,7 +11670,7 @@ async function fetchNlbRows(stop, wantRoutes) {
         .filter(a => String(a.departed) !== '1' && a.estimatedArrivalTime)
         .map(a => ({
           co: 'NLB', route: r.route, dir: r.bound, service_type: r.type || '1',
-          seq: r.seq,
+          seq: r.seq, nlb_id: String(routeId),
           // "2026-09-11 11:30:00" with no zone. The phone is in Hong Kong and
           // so is the bus, but an implied zone is a bug waiting for a
           // traveller, so it is stated.
@@ -11236,8 +11680,8 @@ async function fetchNlbRows(stop, wantRoutes) {
           // the 約 marking already in the app picks it up unchanged.
           rmk_tc: String(a.noGPS) === '1' ? '原定班次' : '',
           rmk_en: String(a.noGPS) === '1' ? 'Scheduled Bus' : '',
-          dest_tc: nlbDestOf(r.route, r.bound, 'c'),
-          dest_en: nlbDestOf(r.route, r.bound, 'e')
+          dest_tc: nlbDestById(routeId, 'c') || routeEndNames(r).tc,
+          dest_en: nlbDestById(routeId, 'e') || routeEndNames(r).en
         }));
     } catch (error) { return []; }
   }));
@@ -11245,13 +11689,128 @@ async function fetchNlbRows(stop, wantRoutes) {
 }
 
 // The far end of the route, as NLB writes it: "梅窩碼頭 > 大澳".
-function nlbDestOf(routeNo, bound, which) {
-  const id = nlbRouteIdCache.get(routeNo + '|' + bound);
+function nlbDestById(id, which) {
   const row = (nlbRoutes || []).find(r => String(r.routeId) === String(id));
   if (!row) return '';
   const name = which === 'c' ? (row.routeName_c || '') : (row.routeName_e || '');
   const parts = name.split('>');
   return (parts.length > 1 ? parts[parts.length - 1] : name).trim();
+}
+
+// ============================================================
+// MTR BUS — live arrivals (2 Oct 2026)
+// ============================================================
+// The MTR's own buses in the north-west New Territories and Tai Po (505, 506,
+// K12, K76…). One request answers for a WHOLE route — every stop, both ways —
+// so it is asked once per route and shared for twenty seconds by every stop
+// that wants it. A POST with a JSON body: the feed answers a browser only
+// when the request says Content-Type: application/json (checked from the
+// live site, 2 Oct 2026).
+const MTRBUS_URL = 'https://rt.data.gov.hk/v1/transport/mtr/bus/getSchedule';
+const mtrBusAsked = new Map();          // "route|lang" -> { at, answer: Promise }
+function mtrBusSchedule(route) {
+  const key = route + '|' + lang;
+  const recent = mtrBusAsked.get(key);
+  if (recent && Date.now() - recent.at < 20000) return recent.answer;
+  const answer = fetch(MTRBUS_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language: lang === 'zh' ? 'zh' : 'en', routeName: route }),
+      signal: AbortSignal.timeout(10000) })
+    .then(response => { if (!response.ok) throw new Error('server said ' + response.status); return response.json(); });
+  // A failure is not kept: the next stop that asks tries again.
+  answer.catch(() => { const now = mtrBusAsked.get(key); if (now && now.answer === answer) mtrBusAsked.delete(key); });
+  mtrBusAsked.set(key, { at: Date.now(), answer });
+  return answer;
+}
+
+// The far end of a route variant, in both languages, from our own stop list.
+function routeEndNames(r) {
+  const key = r.route + '|' + r.bound + '|' + (r.type || '1') + '|' + String(r.co).toLowerCase();
+  const list = (routeIndex && routeIndex.get(key)) || [];
+  const last = list.length ? list.reduce((a, b) => (b.seq > a.seq ? b : a)) : null;
+  const stop = last ? (stopById.get(last.stopId) || lookupStop(last.stopId)) : null;
+  if (!stop) return { tc: '', en: '' };
+  return { tc: plainStopName(stop.name_tc || stop.name_en), en: plainStopName(stop.name_en || stop.name_tc) };
+}
+
+// THE BUSES AT ONE MTR BUS STOP ON ONE ROUTE. The feed's stop id already
+// says which way (K12-U010 one way, K12-D040 the other), so these are exactly
+// the buses calling HERE, whichever variant they are; `stamp` only files them
+// (direction, type, seq, destination). Throws when the feed could not be
+// read: "could not ask" must never reach the screen as "no bus".
+async function mtrBusRowsAt(stopId, routeNo, stamp) {
+  const data = await mtrBusSchedule(routeNo);
+  if (!data || !Array.isArray(data.busStop)) throw new Error('no MTR Bus answer');
+  const here = data.busStop.find(b => String(b.busStopId) === String(stopId));
+  if (!here || String(here.isSuspended) === '1') return [];
+  const now = Date.now();
+  return (here.bus || []).map(bus => {
+    // At a terminus the feed reports when the bus LEAVES, and parks 108000
+    // in the arrival field — a placeholder, not a time.
+    let secs = Number(bus.arrivalTimeInSecond);
+    if (!isFinite(secs) || secs >= 108000) secs = Number(bus.departureTimeInSecond);
+    if (!isFinite(secs) || secs < 0 || secs >= 108000) return null;
+    const sched = String(bus.isScheduled) === '1';
+    return { co: 'LRTFEEDER', route: routeNo, dir: stamp.bound || '', service_type: stamp.type || '1',
+             seq: stamp.seq || 0, eta: new Date(now + secs * 1000).toISOString(),
+             // The same words KMB uses for "timetable, not a bus we can see",
+             // so the 約 marking already in the app applies unchanged.
+             rmk_tc: sched ? '原定班次' : '', rmk_en: sched ? 'Scheduled Bus' : '',
+             dest_tc: stamp.tc || '', dest_en: stamp.en || '' };
+  }).filter(Boolean);
+}
+
+async function fetchMtrBusRows(stop, wantRoutes) {
+  // One set of times per ROUTE at this stop: 506 runs two variants through
+  // the same stop ids, and asking for each would list every bus twice. Where
+  // the variants end in different places, the row names both ends — the
+  // feed does not say which kind each bus is.
+  const byRoute = new Map();
+  for (const r of routesAtStop(stop.stop).filter(r => r.co === 'LRTFEEDER')) {
+    if (wantRoutes && wantRoutes.size && !wantRoutes.has(r.route)) continue;
+    const group = byRoute.get(r.route) || { main: r, ends: new Map() };
+    if (group.main.type !== '1' && r.type === '1') group.main = r;
+    const end = routeEndNames(r);
+    if (end.tc || end.en) group.ends.set(end.tc || end.en, end);
+    byRoute.set(r.route, group);
+  }
+  // A stop the index has not reached yet still names its own route: 506-D020.
+  const own = /^([A-Z0-9]+)-[a-z]?[A-Z]\d{3}$/.exec(String(stop.stop));
+  if (!byRoute.size && own && !(wantRoutes && wantRoutes.size && !wantRoutes.has(own[1])))
+    byRoute.set(own[1], { main: { route: own[1], bound: '', type: '1', seq: 0 }, ends: new Map() });
+  let failed = 0;
+  const groups = [...byRoute.values()].slice(0, 8);
+  const lists = await Promise.all(groups.map(async g => {
+    const ends = [...g.ends.values()].slice(0, 2);
+    try {
+      return await mtrBusRowsAt(stop.stop, g.main.route, { bound: g.main.bound, type: g.main.type, seq: g.main.seq,
+        tc: ends.map(e => e.tc).join(' / '), en: ends.map(e => e.en).join(' / ') });
+    } catch (error) { failed++; return []; }
+  }));
+  if (groups.length && failed === groups.length) throw new Error('MTR Bus times unavailable');
+  return lists.flat();
+}
+
+// FERRIES: the timetable, written as arrival rows so every screen that lists
+// buses can list sailings. Nothing leaves the LAST pier of a route, so a pier
+// at the end of one gets no rows from it.
+function fetchFerryRows(stop, wantRoutes) {
+  let routes = routesAtStop(stop.stop).filter(r => r.co === 'FERRY');
+  if (wantRoutes && wantRoutes.size) routes = routes.filter(r => wantRoutes.has(r.route));
+  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+  const rows = [];
+  for (const r of routes) {
+    const key = r.route + '|' + r.bound + '|1|ferry';
+    const info = ferryInfo.get(key);
+    if (info && r.seq >= info.mins.length) continue;
+    const end = routeEndNames(r);
+    for (const t of ferrySailings(key, r.seq, 3, 24 * 60))
+      rows.push({ co: 'FERRY', route: r.route, dir: r.bound, service_type: '1', seq: r.seq,
+                  eta: new Date(midnight.getTime() + t * 60000).toISOString(),
+                  rmk_tc: '原定班次', rmk_en: 'Scheduled',
+                  dest_tc: end.tc, dest_en: end.en });
+  }
+  return rows;
 }
 
 async function fetchGmbRows(stop) {
@@ -11267,10 +11826,13 @@ async function fetchGmbRows(stop) {
     const seq = Number(entry.stop_seq) || 0;
     const hit = gmbKeyFor(stop.stop, info.c, seq);
     const dir = hit ? String(hit.routeKey).split('|')[1] : 'O';
+    // The variant too: minibus route 1 runs in three districts, and a row
+    // filed under the wrong one was priced from the wrong route's fares.
+    const type = hit ? String(hit.routeKey).split('|')[2] : '1';
     const dest = (info.d || {})[String(entry.route_seq)] || {};
     for (const e of entry.eta) {
       if (!e.timestamp) continue;
-      rows.push({ route: info.c, dir, service_type: '1', seq, eta: e.timestamp,
+      rows.push({ route: info.c, dir, service_type: type, seq, eta: e.timestamp,
                   dest_tc: dest.tc || '', dest_en: dest.en || '',
                   rmk_tc: e.remarks_tc || '', rmk_en: e.remarks_en || '' });
     }
@@ -11309,6 +11871,10 @@ async function fetchPoleRows(stop, wantRoutes) {
     rows = await fetchGmbRows(stop);
   } else if (co === 'NLB') {
     rows = await fetchNlbRows(stop, wantRoutes);
+  } else if (co === 'LRTFEEDER') {
+    rows = await fetchMtrBusRows(stop, wantRoutes);
+  } else if (co === 'FERRY') {
+    rows = fetchFerryRows(stop, wantRoutes);
   }
   return rows === null ? null : rows.map(row => Object.assign({}, row,
     { stop: stop.stop, stopName_en: stop.name_en, stopName_tc: stop.name_tc, co: row.co || co }));
@@ -11637,11 +12203,12 @@ function stopRowsHtml() {
       return '<div class="norunrow" data-stop-act="openroute" data-route="' + esc(r.route) +
              '" data-dir="' + esc(r.bound) + '" data-type="' + esc(r.type || '1') +
              '" data-co="' + esc(r.co) + '">' +
-             '<div class="norunhead"><span class="rt">' + esc(r.route) + '</span>' +
+             '<div class="norunhead"><span class="rt">' + esc(routeTag(r)) + '</span>' +
              (r.dest ? '<span class="norundest">' + esc(T('towards')) + ' ' + esc(r.dest) + '</span>' : '') +
              (fare !== null ? '<span class="eta-fare">' + fareText(fare) + '</span>' : '') + '</div>' +
              (when ? '<div class="norunwhen">🕘 ' + when + '</div>' : '') +
-             '<div class="norunopen">🚌 ' + esc(T('favBusRoute')) + ' ›</div>' +
+             // A ferry has no stop list to open (see openSavedDepartureRoute).
+             (r.co === 'FERRY' ? '' : '<div class="norunopen">🚌 ' + esc(T('favBusRoute')) + ' ›</div>') +
              '</div>';
     }).join('') + '</div>';
   };
@@ -11651,8 +12218,8 @@ function stopRowsHtml() {
     if (destIds) routes = routes.filter(r => routeReaches(r.key, r.seq, destIds));
     if (!routes.length && destIds) return '<div class="favempty">' + T('stopFilterNone').replace('{d}', esc(st.destFilter)) + '</div>';
     return '<div class="rshint">' + T('stopNoLive') + '</div>' +
-      routes.map(r => '<div class="stoproute"><span class="rt">' + esc(r.route) + '</span>' +
-        '<span class="quiet">' + (r.dest ? T('towards') + ' ' + esc(r.dest) + ' · ' : '') + esc(r.co) + '</span></div>').join('');
+      routes.map(r => '<div class="stoproute"><span class="rt">' + esc(routeTag(r)) + '</span>' +
+        '<span class="quiet">' + (r.dest ? T('towards') + ' ' + esc(r.dest) + ' · ' : '') + esc(coName(String(r.co).toLowerCase())) + '</span></div>').join('');
   }
   if (st.rows) {
     let rows = st.rows;
@@ -11809,16 +12376,66 @@ function routeMatches(typed) {
     out.push({ no, variants, co: 'KMB' });
   for (const route of ctbRoutes.filter(r => r.route.toUpperCase().startsWith(q)).slice(0, 4))
     out.push({ no: route.route, variants: [route], co: 'CITYBUS' });
+  // MTR Bus (K12, 506…), from the route file once it is here.
+  for (const [no, variants] of [...liteRoutes('lrtfeeder')].filter(([no]) => no.startsWith(q)).slice(0, 4))
+    out.push({ no, variants, co: 'MTRBUS' });
   // The exact number first, then shortest: typing 6 puts 6 above 6C above 60X.
   out.sort((a, b) => (a.no.toUpperCase() === q ? 0 : 1) - (b.no.toUpperCase() === q ? 0 : 1) ||
                      a.no.length - b.no.length || a.no.localeCompare(b.no));
   return out.slice(0, 6);
 }
 
+// ROUTES THE LITE FILE CARRIES (MTR Bus, NLB, minibus), by number, each with
+// its variants — read from the route file the planner already loads, so
+// opening one costs no download. Empty until that file is here.
+const liteRouteMemo = new Map(); let liteRouteMemoFrom = null;
+function liteRoutes(co) {
+  if (!hkbusRoutes) return new Map();
+  if (liteRouteMemoFrom !== hkbusRoutes) { liteRouteMemo.clear(); liteRouteMemoFrom = hkbusRoutes; }
+  if (liteRouteMemo.has(co)) return liteRouteMemo.get(co);
+  const byNo = new Map();
+  for (const entry of Object.values(hkbusRoutes)) {
+    const ids = entry && entry.stops && entry.stops[co];
+    if (!ids || ids.length < 2 || !entry.bound || !entry.bound[co]) continue;
+    const no = String(entry.route).toUpperCase();
+    if (!byNo.has(no)) byNo.set(no, []);
+    byNo.get(no).push({ co, route: String(entry.route), bound: entry.bound[co],
+                        type: String(entry.serviceType || '1'), stops: ids });
+  }
+  liteRouteMemo.set(co, byNo);
+  return byNo;
+}
+function liteStop(id) { return stopById.get(id) || ctbStops.find(s => s.stop === id) || null; }
+function liteRouteEnd(v, which) {
+  const stop = liteStop(which === 'orig' ? v.stops[0] : v.stops[v.stops.length - 1]);
+  return stop ? plainStopName(lang === 'zh' ? (stop.name_tc || stop.name_en) : (stop.name_en || stop.name_tc)) : '';
+}
+const LITE_LOOK = {
+  lrtfeeder: { fill: '#db2777', edge: '#881337' },
+  nlb:       { fill: '#22c55e', edge: '#166534' },
+  gmb:       { fill: '#a855f7', edge: '#6b21a8' }
+};
+function showLiteRoute(v) {
+  routeList.innerHTML = '';
+  routeLayer.clearLayers();
+  const stops = v.stops.map(liteStop).filter(Boolean);
+  if (stops.length < 2) { status.textContent = T('couldNotLoadRoute').replace('{r}', v.route); return; }
+  const look = LITE_LOOK[v.co] || LITE_LOOK.nlb;
+  paintRoute(v.route, coName(v.co), liteRouteEnd(v, 'orig'), liteRouteEnd(v, 'dest'), stops,
+             look.fill, look.edge, null, { co: v.co.toUpperCase(), dir: v.bound, serviceType: v.type });
+}
+// The variant a saved or tapped row means: same bound and type, else bound.
+function liteVariantFor(co, routeNo, dir, serviceType) {
+  const list = liteRoutes(co).get(String(routeNo).toUpperCase()) || [];
+  return list.find(x => x.bound === dir && x.type === String(serviceType || '1')) ||
+         list.find(x => x.bound === dir) || list[0] || null;
+}
+
 // Held between the render and the tap: a route match is an object, and a
 // data- attribute can only carry a string.
 let routeSuggestions = [];
 
+let liteAskedForSuggest = false;
 function stopRenderDest(query) {
   const box = document.getElementById('stop-dest-results');
   if (!box) return;
@@ -11830,10 +12447,15 @@ function stopRenderDest(query) {
   // Suggest while typing; once a name is picked (or tapped from the saved
   // places) the list stands down until the text changes again.
   routeSuggestions = routeMatches(q);
+  if (!hkbusRoutes && !liteAskedForSuggest) {
+    liteAskedForSuggest = true;
+    loadFareData().then(() => { if (hkbusRoutes && stopState.destQuery === query) stopRenderDest(query); })
+                  .catch(() => {});
+  }
   if (routeSuggestions.length) {
     html += '<div class="suggest routesuggest">' + routeSuggestions.map((r, i) =>
       '<button data-stop-act="routepick" data-index="' + i + '">🚌 ' + esc(r.no) +
-      '<small>' + esc(r.co === 'KMB' ? 'KMB' : 'CITYBUS') + '</small></button>').join('') + '</div>';
+      '<small>' + esc(r.co === 'KMB' ? 'KMB' : r.co === 'MTRBUS' ? T('mtrBusWord') : 'CITYBUS') + '</small></button>').join('') + '</div>';
   }
   if (!stopState.destPicked) {
     const list = destSuggestions(q, 8);
@@ -14580,7 +15202,9 @@ function routeInfoBlock(context) {
   const lines = [];
 
   const fare = stopFare(context.routeNo, context.dir, context.serviceType, 1, context.co);
-  if (fare !== null) lines.push('<span class="rsi">💰 ' + T('fullFare') + ' ' + fareText(fare) + '</span>');
+  if (fare !== null) lines.push('<span class="rsi">💰 ' + T('fullFare') + ' ' + fareText(fare) +
+    (holidayFareApplies(context.routeNo, context.dir, context.serviceType, context.co)
+      ? ' <small class="holfare">' + esc(T('holidayFareTag')) + '</small>' : '') + '</span>');
 
   const info = serviceInfoFor(context);
   const today = info ? patternsForToday(info.freq) : { masks: [], state: 'noData' };
@@ -14823,6 +15447,7 @@ function renderRouteStops(context, stops) {
       const added = toggleDeparture({
         route: context.routeNo, dir: context.dir, serviceType: context.serviceType,
         co: context.co, stop: stop.stop,
+        nlbId: String(context.co).toUpperCase() === 'NLB' ? (nlbIdOf(context.routeNo, context.dir, context.serviceType) || undefined) : undefined,
         stopName_en: stop.name_en, stopName_tc: stop.name_tc,
         dest_en: context.destEn, dest_tc: context.destTc
       });
@@ -14846,7 +15471,8 @@ function renderRouteStops(context, stops) {
       }
       paintBottomBar();
     });
-    if (isSavedDeparture(context.routeNo, context.dir, stop.stop)) {
+    if (isSavedDeparture(context.routeNo, context.dir, stop.stop,
+                         String(context.co).toUpperCase() === 'NLB' ? nlbIdOf(context.routeNo, context.dir, context.serviceType) : '')) {
       star.textContent = '★';
       star.classList.add('on');
     }
@@ -15762,6 +16388,17 @@ async function loadStopEta(row) {
         encodeURIComponent(context.routeNo), { signal: AbortSignal.timeout(10000) });
       if (!response.ok) throw new Error(response.status);
       entries = etaEntries((await response.json()).data, context.dir, null);
+    } else if (String(context.co).toUpperCase() === 'LRTFEEDER') {
+      // One request covers the whole route, shared by every row of this list.
+      // Straight from this stop's id: this list can open before the stop
+      // index knows the MTR's buses, and a dead feed throws — "could not ask"
+      // — instead of reading as "no bus".
+      entries = etaEntries(await mtrBusRowsAt(stop.stop, context.routeNo,
+        { bound: context.dir, type: context.serviceType, seq: Number(row.dataset.index) + 1 }), null, null);
+    } else if (String(context.co).toUpperCase() === 'GMB') {
+      const rows = (await fetchGmbRows(stop))
+        .filter(r => String(r.route).toUpperCase() === String(context.routeNo).toUpperCase());
+      entries = etaEntries(rows, context.dir, null);
     } else {
       const response = await fetch('https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/' +
         stop.stop, { signal: AbortSignal.timeout(10000) });
@@ -15855,8 +16492,14 @@ function paintRoute(routeNo, company, from, to, stops, fill, edge, ctbRouteNo, c
     const marker = L.circleMarker([lat, lng], { radius:9, color:edge, weight:3,
       fillColor:fill, fillOpacity:0.9 }).addTo(routeLayer);
     marker.bindPopup(stopHeader(stop) + '<div class="eta-note">' + T('loadingArrivals') + '</div>');
+    const liteCo = context && ['NLB', 'GMB', 'LRTFEEDER'].includes(String(context.co).toUpperCase());
     marker.on('popupopen', () => ctbRouteNo
       ? loadCtbArrivals(stop, marker, ctbRouteNo)
+      : liteCo
+      ? fetchPoleRows(stop, new Set([routeNo]))
+          .then(rows => marker.setPopupContent(stopHeader(stop) +
+            formatArrivals((rows || []).filter(r => String(r.route).toUpperCase() === String(routeNo).toUpperCase()))))
+          .catch(() => marker.setPopupContent(stopHeader(stop) + '<div class="eta-note">' + T('couldNotLoadArrivals') + '</div>'))
       : loadKmbArrivals(stop, marker));
   }
   if (points.length === 0) { status.textContent = T('noStopLocations'); return; }
@@ -16719,7 +17362,7 @@ function busWayHtml(group, eta) {
   else if (eta === '')   live = '<span class="wayeta" style="color:var(--ink-3)">' + T('spotNoDue') + '</span>';
   else live = '<span class="wayeta">' + eta + '</span>';
   return '<button class="spotway bus" data-act="spot-stop" data-id="' + esc(group.stop.stop) + '">' +
-           '<b>🚌 ' + esc(stopName(group.stop)) + '</b>' + facing +
+           '<b>' + (group.stop.pier ? '\u26F4 ' : '🚌 ') + esc(stopName(group.stop)) + '</b>' + facing +
            '<small>' + T('spotWalkFrom').replace('{m}', walk.minutes).replace('{d}', walk.metres) +
            (code ? ' · ' + esc(code) : '') +
            ' · ' + T('spotOpenStop') + '</small>' + live +
@@ -16824,13 +17467,16 @@ function spotEtaLine(rows) {
     // The soonest bus per route — and whether THAT one is the last of the
     // night. A visitor reading a hotel's card at 23:40 needs it as much as
     // anybody standing at the stop.
-    if (!seen || seen.m > wait) soonest.set(route, { m: wait, last: isLastBusRmk(row) });
+    if (!seen || seen.m > wait) soonest.set(route, { m: wait, last: isLastBusRmk(row), ferry: row.co === 'FERRY', at: row.eta });
   }
   if (!soonest.size) return null;
+  // A sailing is ⛴ and its time on the pier's board, not 7005 in 15 minutes.
   return [...soonest.entries()].sort((a, b) => a[1].m - b[1].m).slice(0, 3)
-    .map(([route, e]) => '<span class="r">' + esc(route) + '</span> ' +
-                 (e.m <= 0 ? T('due') : e.m + T('min')) +
-                 (e.last ? lastBusTag() : ''))
+    .map(([route, e]) => e.ferry
+      ? '<span class="r">\u26F4</span> ' + new Date(e.at).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' })
+      : '<span class="r">' + esc(route) + '</span> ' +
+        (e.m <= 0 ? T('due') : e.m + T('min')) +
+        (e.last ? lastBusTag() : ''))
     .join(' · ');
 }
 
