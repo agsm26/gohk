@@ -1,0 +1,29 @@
+name: probe-build
+on:
+  push:
+    branches: [test-workflow-scope]
+    paths: ['tools/**', '.github/workflows/probe-build.yml']
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Build ferries.json
+        run: |
+          python3 tools/build_ferries.py 2>&1 | tee ferries.log
+          echo "::notice::$(tail -3 ferries.log | tr '\n' ' ')"
+      - name: Build bus files
+        run: |
+          python3 tools/build_data.py 2>&1 | tee data.log
+          echo "::notice::$(tail -3 data.log | tr '\n' ' ')"
+      - name: Commit results to this branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ferries.json hk-bus-lite.json kmb-fares.json
+          git commit -m "probe build output" || echo "nothing to commit"
+          git push
