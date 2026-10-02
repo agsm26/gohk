@@ -677,8 +677,33 @@
   .rsrow.alight { background:var(--red-tint); border-radius:8px; }
   .rsrow.alight .rsnum { background:var(--red); color:white; }
   .rsalighttag { font-size:0.94rem; font-weight:800; color:var(--red); margin-top:2px; }
-  .rsride { border:2px solid var(--navy); border-radius:12px; padding:12px 14px;
-            margin-bottom:10px; background:var(--navy-tint); }
+  /* THE GET-OFF ALARM BAR. Fixed just above the tab bar, so it is in view on
+     every screen and wherever the list has scrolled — the rider is looking
+     out of the window, and when they glance down it must already be there.
+     Red the stop before (press the bell), green on arrival. The panel gets
+     --rideh of room under its last row (body.riding, below) so the bar
+     never hides a stop. */
+  #ridebar { position:fixed; left:8px; right:8px; bottom:calc(var(--bottomh) + 8px); z-index:1450;
+             background:var(--navy-tint); border:3px solid var(--navy); border-radius:var(--r-lg);
+             padding:10px 14px 12px; box-shadow:0 6px 24px rgba(0,0,0,.35); }
+  #ridebar.soon { background:var(--red-tint); border-color:var(--red);
+                  animation:ridepulse 1.2s ease-in-out infinite; }
+  #ridebar.arrived { background:var(--green-tint); border-color:var(--green); }
+  @keyframes ridepulse { 50% { box-shadow:0 0 0 6px rgba(153,27,27,.35), 0 6px 24px rgba(0,0,0,.35); } }
+  .rbbtns { display:flex; gap:8px; margin-top:10px; }
+  .rbbtns button { flex:1 1 0; min-height:48px; border-radius:10px; font-size:1rem; font-weight:800;
+                   border:2px solid var(--navy); background:var(--surface); color:var(--navy); }
+  .rbbtns .rbsound.off { border-color:var(--line); color:var(--ink-3); }
+  #ridebar.arrived .rbstop { border-color:var(--green); background:var(--green); color:#fff; }
+  body.riding #panel { padding-bottom:calc(var(--rideh, 0px) + 18px); }
+  /* On the MAP tab the bottom of the screen belongs to 📍, 🚇, ☰ and the
+     Lands Department notice, which its licence requires to stay visible. The
+     bar shrinks to one card under the map's search box instead, below that
+     box's own results list so a search still reads. */
+  body.mapopen #ridebar { top:calc(var(--toph) + 74px); bottom:auto; z-index:1100;
+                          padding:8px 12px; border-width:2px; }
+  body.mapopen #ridebar .rsridesub, body.mapopen #ridebar .rbbtns { display:none; }
+  body.mapopen #ridebar .rsridebig { font-size:1.3rem; margin-top:2px; }
   .rsridehead { font-size:1rem; font-weight:800; color:var(--ink-2); overflow-wrap:anywhere; }
   .rsridebig { font-size:1.88rem; font-weight:800; color:var(--navy); margin-top:4px; line-height:1.15; }
   .rsridebig.soon { color:var(--red); }
@@ -1079,6 +1104,12 @@
   .rsrow.after .rsnum { background:var(--blue-tint); }
   .rscount { font-size:0.94rem; font-weight:800; color:var(--blue); margin-top:2px; }
   .rsboardtag { font-size:0.94rem; font-weight:800; color:var(--green); margin-top:2px; }
+  /* Shown only to a rider the app may not ask for their location by itself
+     (they said 暫時不用, or the browser refused): one plain tap finds the stop. */
+  .rsfindme { display:block; width:100%; min-height:52px; margin:0 0 10px;
+              border:2px solid var(--green); border-radius:10px; background:var(--green-tint);
+              color:var(--green); font-size:1.0588rem; font-weight:800; }
+  .rsfindme:active { background:#dcfce7; }
 
   .livehint { border:2px dashed var(--line); border-radius:12px; padding:12px;
               font-size:1rem; line-height:1.5; color:var(--ink-3); }
@@ -1413,6 +1444,13 @@
             background:var(--surface); color:var(--navy);
             font-size:1.0588rem; font-weight:800; }
   .jhedit:active { background:var(--navy-tint); }
+  /* 🔊 and 📤 under the steps, and 🔔 on each bus step. Full-width pills at
+     the same 48px+ as every other control: things an older hand taps. */
+  .jsacts { display:flex; gap:8px; margin-top:12px; }
+  .jsacts button, .jsalarm { flex:1 1 0; min-height:50px; border:2px solid var(--navy); border-radius:10px;
+                             background:var(--surface); color:var(--navy); font-size:1.0588rem; font-weight:800; }
+  .jsalarm { display:block; width:100%; margin-top:8px; }
+  .jsacts button:active, .jsalarm:active { background:var(--navy-tint); }
 
   .jwarn { background:#fff7ed; color:#9a3412; border-radius:10px; padding:9px 11px;
            margin:8px 0; font-size:1rem; font-weight:700; line-height:1.4; }
@@ -1972,6 +2010,10 @@
      message here, under the bar, for a few seconds. -->
 <div id="toast" role="status" aria-live="polite"></div>
 
+<!-- The get-off alarm: counts the stops down from GPS and sounds before the
+     rider's stop. Filled by ridePaint(); hidden when no alarm is set. -->
+<div id="ridebar" role="status" aria-live="assertive" style="display:none"></div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
@@ -2158,6 +2200,10 @@ rmStations:'{n} stations',
     rsNearestStop:'Nearest stop', rsNearestFound:'Nearest on this route: {s} ({m} m)',
     rsWalkNeedStop:'Tap 📍 first to find your stop', rsWalkTo:'Walking directions to {s}',
     rsPickRouteFirst:'Pick a bus route first.',
+    rsFindingStop:'Finding your nearest stop on this route…',
+    rsNearestFar:'Nearest stop on this route: {s}, about {d} away. Tap 📍 to choose it.',
+    rsLocDenied:'Location is off, so your stop could not be found. Allow location for this site in your phone settings.',
+    rsFindMe:'📍 Find the stop nearest me',
     renameTitle:'Rename', renameSave:'Save', cancel:'Cancel', removeLabel:'Remove',
     renameDone:'Renamed to {n}', renameCleared:'Name put back to {n}',
     fullFare:'Full fare', svcToday:'Today', svcUsual:'Usually', svcAllDay:'24 hours',
@@ -2241,6 +2287,42 @@ rmStations:'{n} stations',
     rsRemaining:'{n} stops to go', rsNextStop:'Next stop — get off!', rsArrived:'This is your stop',
     rsNearNow:'You are near {s}', rsNotOnRoute:'You are not near this route yet',
     rsNeedLocation:'Allow location to count down as you ride',
+    rideArmed:'🔔 Get-off alarm set for {s}', rideBell:'🔔 Press the bell now',
+    rideSoundOnBtn:'🔔 Sound on', rideSoundOffBtn:'🔕 Sound off',
+    rideStopBtn:'✕ Stop alarm', rideDoneBtn:'✓ Done',
+    rideScreenOn:'The screen stays on until your stop.',
+    rideScreenNeeded:'Keep the screen on — the alarm needs it.',
+    rideSayArmed:'Okay. I will remind you before {s}.',
+    rideSayTwo:'Two more stops to {s}.',
+    rideSayNext:'Next stop, {s}. Press the bell to get off.',
+    rideSayArrived:'This is {s}. Please get off.',
+    rideSaySoundOn:'Sound is on.',
+    rideAlarmBtn:'🔔 Remind me to get off',
+    readAloudBtn:'🔊 Read aloud', readTripBtn:'🔊 Read aloud', shareTripBtn:'📤 Send to family',
+    readNoVoice:'This phone cannot read text aloud.',
+    shareCopied:'Trip copied — paste it into WhatsApp or a message.',
+    sayTrip:'From {a} to {b}.',
+    sayWalk:'Step {n}: walk about {m} minutes to {s}.',
+    sayBoardHere:'Step {n}: get on at {s}.',
+    sayBus:'Step {n}: take the {r} {c}, {k} stops, and get off at {s}.',
+    sayTrain:'Step {n}: take the {r}, {k} stations, to {s}.',
+    sayChange:'Then change.',
+    sayChangeWalk:'Then change: walk about {m} minutes to {s}.',
+    sayArrive:'Last, walk about {m} minutes to {s}.',
+    sayTotal:'About {t} minutes in all.',
+    sayFare:'Fare {f} dollars.',
+    sayRouteStop:'Bus {r} to {to}. At {s}, next buses: {e}.',
+    sayRouteNoEta:'Bus {r} to {to}. At {s}, no bus times yet.',
+    sayRouteOnly:'Bus {r} from {from} to {to}, {n} stops. Tap your stop first.',
+    shareTitle:'GO HK trip', shareFromTo:'From {a} to {b}',
+    shareWalk:'{n}. 🚶 Walk about {m} min ({d} m) to {s}',
+    shareBoardHere:'{n}. 🚏 Get on at {s}',
+    shareBus:'{n}. 🚌 {r} ({c}) to {s}, {k} stops{f}',
+    shareTrain:'{n}. 🚇 {r} to {s}, {k} stations',
+    shareChange:'   ↳ Change here',
+    shareChangeWalk:'   ↳ Change: walk about {m} min to {s}',
+    shareArrive:'{n}. 🚶 Walk about {m} min to {s}',
+    shareTotal:'About {t} min in all', shareFare:'Fare ${f}',
     favTrains:'MY TRAINS', noTrainsLong:'No trains saved. On the MTR tab, choose a station and direction, then tap ☆.',
     favTrainOpen:'Show next trains',
     trainSaved:'Saved {s}', trainRemoved:'Removed {s}', liveOpenRoute:'Show all stops ›',
@@ -2462,6 +2544,10 @@ rmStations:'{n} 個站',
     rsNearestStop:'最近車站', rsNearestFound:'此路線最近的站：{s}（{m} 米）',
     rsWalkNeedStop:'請先按 📍 找出最近車站', rsWalkTo:'步行前往 {s}',
     rsPickRouteFirst:'請先選擇巴士路線。',
+    rsFindingStop:'正在找此路線最近你的車站…',
+    rsNearestFar:'此路線最近你的車站：{s}（約 {d}）。按 📍 可選擇此站。',
+    rsLocDenied:'未能使用定位，所以未能找出你的車站。請在手機設定允許此網站使用位置。',
+    rsFindMe:'📍 找出最近我的車站',
     renameTitle:'改名', renameSave:'儲存', cancel:'取消', removeLabel:'移除',
     renameDone:'已改名為 {n}', renameCleared:'已還原為 {n}',
     fullFare:'全程車費', svcToday:'今日', svcUsual:'平日', svcAllDay:'24 小時',
@@ -2542,6 +2628,42 @@ rmStations:'{n} 個站',
     rsRemaining:'還有 {n} 個站', rsNextStop:'下一站下車！', rsArrived:'已到達下車站',
     rsNearNow:'你正接近 {s}', rsNotOnRoute:'你尚未接近此路線',
     rsNeedLocation:'允許使用位置，乘車時會自動倒數',
+    rideArmed:'🔔 已設定下車提示：{s}', rideBell:'🔔 現在請按鐘',
+    rideSoundOnBtn:'🔔 聲音：開', rideSoundOffBtn:'🔕 聲音：關',
+    rideStopBtn:'✕ 停止提示', rideDoneBtn:'✓ 完成',
+    rideScreenOn:'螢幕會保持開啟，直至到站。',
+    rideScreenNeeded:'請保持螢幕開啟，提示才可運作。',
+    rideSayArmed:'好，到{s}之前會提你下車。',
+    rideSayTwo:'還有兩個站，就到{s}。',
+    rideSayNext:'下一站，{s}。請按鐘下車。',
+    rideSayArrived:'已到{s}，請下車。',
+    rideSaySoundOn:'聲音提示已開啟。',
+    rideAlarmBtn:'🔔 提我下車',
+    readAloudBtn:'🔊 讀出班次', readTripBtn:'🔊 讀出路線', shareTripBtn:'📤 傳送給家人',
+    readNoVoice:'這部手機未能讀出文字。',
+    shareCopied:'已複製行程，可貼到 WhatsApp 或訊息。',
+    sayTrip:'由{a}去{b}。',
+    sayWalk:'第{n}步，步行大約{m}分鐘，到{s}。',
+    sayBoardHere:'第{n}步，在{s}上車。',
+    sayBus:'第{n}步，搭{r}號{c}，坐{k}個站，到{s}下車。',
+    sayTrain:'第{n}步，搭{r}，坐{k}個站，到{s}。',
+    sayChange:'然後轉車。',
+    sayChangeWalk:'然後轉車，步行大約{m}分鐘，到{s}。',
+    sayArrive:'最後，步行大約{m}分鐘，到{s}。',
+    sayTotal:'全程大約{t}分鐘。',
+    sayFare:'車費{f}元。',
+    sayRouteStop:'{r}號巴士，往{to}。在{s}，下一班：{e}。',
+    sayRouteNoEta:'{r}號巴士，往{to}。在{s}，暫時未有班次資料。',
+    sayRouteOnly:'{r}號巴士，由{from}往{to}，共{n}個站。請先揀上車站。',
+    shareTitle:'GO香港 行程', shareFromTo:'由 {a} 到 {b}',
+    shareWalk:'{n}. 🚶 步行約 {m} 分鐘（{d} 米）到 {s}',
+    shareBoardHere:'{n}. 🚏 在 {s} 上車',
+    shareBus:'{n}. 🚌 {r}（{c}）到 {s} 下車，{k} 個站{f}',
+    shareTrain:'{n}. 🚇 {r} 到 {s}，{k} 個站',
+    shareChange:'   ↳ 在此轉車',
+    shareChangeWalk:'   ↳ 轉車：步行約 {m} 分鐘到 {s}',
+    shareArrive:'{n}. 🚶 步行約 {m} 分鐘到 {s}',
+    shareTotal:'全程約 {t} 分鐘', shareFare:'車費 ${f}',
     favTrains:'我的列車', noTrainsLong:'尚未收藏列車。在「港鐵」選好車站及方向後，按 ☆ 收藏。',
     favTrainOpen:'查看下班列車',
     trainSaved:'已收藏 {s}', trainRemoved:'已移除 {s}', liveOpenRoute:'查看所有車站 ›',
@@ -3557,6 +3679,13 @@ function drawPoint(point, colour, letter, text) {
 let etaRequests = new Map();      // arrival requests for the options on screen, per search
 let currentPicks = [];
 let routeStopsState = null;   // the open stop list, or null
+let rsAutoLocatedFor = null;  // the route whose stop GPS was asked for (autoLocateOnRoute)
+let rsGeoRefused = false;      // the browser refused location this session: stop asking
+let ride = null;               // the get-off alarm in progress, or null (THE GET-OFF ALARM)
+let rideAudio = null;          // its AudioContext, created inside a tap
+let rideWake = null;           // its screen lock, while held
+let rideWakePending = false;   // a screen-lock request still waiting for the phone
+let rsFindMeFor = null;        // the route whose list shows 📍 找出最近我的車站
 let weatherData = null;       // last Observatory reading — setPoint() reads it
 let busPicks = [], railPicks = [], railOptions = [], activeMode = 'bus';
 
@@ -3968,6 +4097,8 @@ function applyLanguage() {
     renderRouteStops(keep.context, keep.stops);
     if (routeStopsState) { Object.assign(routeStopsState, { boardAt: keep.boardAt, alightAt: keep.alightAt, autoBoard: keep.autoBoard }); paintStopCounts(); syncRideWatch(); }
   }
+  // A get-off alarm's bar speaks the new language at once, not at the next fix.
+  ridePaint();
 
   document.querySelector('.flabel.start').innerHTML = '● ' + T('start');
   document.querySelector('.flabel.end').innerHTML = '■ ' + T('destination');
@@ -6822,6 +6953,12 @@ function makeCard(pick) {
            ? lrtFare(journey.legs[lrtRun[0]].on.stop, journey.legs[lrtRun[1]].off.stop) : null)
       : fareForLeg(leg.route, leg.bound, leg.serviceType, leg.on.stop, leg.co);
 
+    // 🔔 on every road step: the get-off alarm for THIS bus, counted along
+    // the stops the planner already knows it passes. Not on trains — the
+    // GPS goes underground with them, and every train announces its stops.
+    const alarm = (!isTrain && !isLrt && leg.path && leg.path.length > 1)
+      ? '<button type="button" class="jsalarm" data-leg="' + index + '">' + T('rideAlarmBtn') + '</button>'
+      : '';
     steps += stepHtml(
       (isTrain ? '\u{1F687} ' : isLrt ? '\u{1F688} ' : '\u{1F68C} ') +
       '<span class="jsroute">' + esc(leg.route) + '</span>' +
@@ -6829,7 +6966,8 @@ function makeCard(pick) {
       (legFare !== null ? '<span class="legfare">' + fareText(legFare) + '</span>' : ''),
       T('rideTo') + ' <b>' + esc(stopName(leg.off)) + '</b>' +
       ' <span class="jscount">(' + leg.stops + ' ' +
-      T(isTrain || isLrt ? 'stations' : 'stops') + ')</span>');
+      T(isTrain || isLrt ? 'stations' : 'stops') + ')</span>',
+      alarm);
 
     if (index < legCount - 1) {
       // Hong Kong runs Bus-Bus Interchange schemes where the second fare is
@@ -6895,7 +7033,13 @@ function makeCard(pick) {
   // information, and 58px at the top of the screen is a step and a half of
   // the journey the rider came to read. The ✕ up in the head still ends the
   // trip outright.
+  // Read it out, or send it to family — both built from the journey itself
+  // (journeySteps), never scraped off this card.
   inner += '<ol class="jsteps">' + steps + '</ol>' +
+           '<div class="jsacts">' +
+             '<button type="button" class="jsread">' + T('readTripBtn') + '</button>' +
+             '<button type="button" class="jsshare">' + T('shareTripBtn') + '</button>' +
+           '</div>' +
            '<button class="jhedit" type="button">' + T('changeTrip') + '</button>';
 
   card.innerHTML = inner;
@@ -6931,7 +7075,154 @@ function makeCard(pick) {
     document.getElementById('panel').scrollTop = 0;
   });
 
+  card.querySelectorAll('.jsalarm').forEach(btn => btn.addEventListener('click', event => {
+    event.stopPropagation();
+    startTripRide(journey.legs[Number(btn.dataset.leg)]);
+  }));
+  card.querySelector('.jsread').addEventListener('click', event => {
+    event.stopPropagation();
+    // A second tap while it is talking stops it.
+    if (window.speechSynthesis && (speechSynthesis.speaking || speechSynthesis.pending)) {
+      try { speechSynthesis.cancel(); } catch (e) {}
+      return;
+    }
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    const nextText = nextBusSpeech(document.getElementById('next-' + pick.number));
+    if (!speakText(journeySpeech(journey) + (nextText ? ' ' + nextText : ''), true))
+      status.textContent = T('readNoVoice');
+  });
+  card.querySelector('.jsshare').addEventListener('click', event => {
+    event.stopPropagation();
+    shareText(journeyShareText(journey));
+  });
+
   return card;
+}
+
+// ============================================================
+// SAYING A TRIP OUT LOUD, AND SENDING IT TO FAMILY (2 Oct 2026)
+// ============================================================
+// Built from the journey, not scraped off the card: the card carries buttons,
+// emoji and tags that a voice reads as nonsense ("pedestrian, five minutes")
+// and a WhatsApp message does not need. One list of steps, two wordings.
+function journeySteps(journey) {
+  const steps = [];
+  const legs = journey.legs;
+  const firstOn = legs[0].on;
+  const boardsHere = !!(startPoint && startPoint.stop) && firstOn.stop === startPoint.stop.stop;
+  steps.push(boardsHere ? { kind: 'boardHere', s: stopName(firstOn) }
+                        : { kind: 'walk', m: journey.walkOn.minutes, d: journey.walkOn.metres, s: stopName(firstOn) });
+  legs.forEach((leg, i) => {
+    const rail = leg.co === 'mtr' || leg.co === 'lrt';
+    const fare = rail ? null : fareForLeg(leg.route, leg.bound, leg.serviceType, leg.on.stop, leg.co);
+    steps.push({ kind: rail ? 'train' : 'bus', r: leg.route, c: coName(leg.co), k: leg.stops,
+                 s: stopName(leg.off), fare });
+    if (i < legs.length - 1) {
+      const hop = (journey.transferWalks || [])[i];
+      steps.push({ kind: 'change', m: hop ? hop.minutes : 0, s: stopName(legs[i + 1].on) });
+    }
+  });
+  steps.push({ kind: 'arrive', m: journey.walkOff.minutes, d: journey.walkOff.metres,
+               s: plainStopName((endPoint && endPoint.label) || '') });
+  return steps;
+}
+
+function fillStep(template, step, n) {
+  const out = template.replace('{n}', n).replace('{m}', step.m).replace('{d}', step.d)
+                      .replace('{s}', step.s).replace('{r}', step.r).replace('{c}', step.c).replace('{k}', step.k);
+  // English says "1 minute", not "1 minutes"; Chinese has no plural to fix.
+  return lang === 'zh' ? out
+    : out.replace(/\b1 minutes\b/g, '1 minute').replace(/\b1 stops\b/g, '1 stop').replace(/\b1 stations\b/g, '1 station');
+}
+
+// The card's next-bus line, as sentences. It is several pieces of markup —
+// "a sooner bus is here", the next bus, the ones after, the time checked —
+// and read as one run of text it came out as a single breathless line. Each
+// piece becomes its own sentence; the "checked at" clock is left unsaid.
+function nextBusSpeech(el) {
+  if (!el || el.classList.contains('waiting')) return '';
+  const parts = [];
+  let inline = '';
+  for (const node of el.childNodes) {
+    if (node.nodeType === 1 && node.tagName === 'DIV') {
+      if (inline.trim()) { parts.push(inline.trim()); inline = ''; }
+      const text = node.textContent.trim();
+      if (text && !text.startsWith(T('checked'))) parts.push(text);
+    } else {
+      inline += node.textContent;
+    }
+  }
+  if (inline.trim()) parts.push(inline.trim());
+  const stop = lang === 'zh' ? '。' : '. ';
+  return parts.map(p => p.replace(/\s*·\s*/g, lang === 'zh' ? '、' : ', ')).join(stop) + (parts.length ? stop : '');
+}
+function shownFare(f) { return (elderly ? elderlyFare(f) : f).toFixed(1); }
+
+function journeySpeech(journey) {
+  const parts = [T('sayTrip').replace('{a}', plainStopName((startPoint && startPoint.label) || ''))
+                             .replace('{b}', plainStopName((endPoint && endPoint.label) || ''))];
+  let n = 0;
+  for (const step of journeySteps(journey)) {
+    if (step.kind === 'change') { parts.push(fillStep(T(step.m ? 'sayChangeWalk' : 'sayChange'), step, n)); continue; }
+    const key = { walk: 'sayWalk', boardHere: 'sayBoardHere', bus: 'sayBus', train: 'sayTrain', arrive: 'sayArrive' }[step.kind];
+    parts.push(fillStep(T(key), step, ++n));
+  }
+  parts.push(T('sayTotal').replace('{t}', journey.total));
+  const fare = journeyFare(journey);
+  if (fare !== null) parts.push(T('sayFare').replace('{f}', shownFare(fare)));
+  return parts.join(' ');
+}
+
+function journeyShareText(journey) {
+  const lines = [T('shareTitle'),
+                 T('shareFromTo').replace('{a}', plainStopName((startPoint && startPoint.label) || ''))
+                                 .replace('{b}', plainStopName((endPoint && endPoint.label) || ''))];
+  let n = 0;
+  for (const step of journeySteps(journey)) {
+    if (step.kind === 'change') { lines.push(fillStep(T(step.m ? 'shareChangeWalk' : 'shareChange'), step, n)); continue; }
+    const key = { walk: 'shareWalk', boardHere: 'shareBoardHere', bus: 'shareBus', train: 'shareTrain', arrive: 'shareArrive' }[step.kind];
+    let line = fillStep(T(key), step, ++n);
+    if (step.kind === 'bus') line = line.replace('{f}', step.fare !== null && step.fare !== undefined ? ' · $' + shownFare(step.fare) : '');
+    lines.push(line);
+  }
+  const fare = journeyFare(journey);
+  lines.push(T('shareTotal').replace('{t}', journey.total) +
+             (fare !== null ? ' · ' + T('shareFare').replace('{f}', shownFare(fare)) : ''));
+  lines.push(location.href.split(/[?#]/)[0]);
+  return lang === 'zh' ? sc(lines.join('\n')) : lines.join('\n');
+}
+
+// The phone's own share sheet (WhatsApp, Messages, WeChat…). It must be
+// called straight from the tap, so nothing awaits before it. With no sheet —
+// a computer — the text is copied instead, and failing that WhatsApp's own
+// link is opened with the text in it.
+async function shareText(text) {
+  if (navigator.share) {
+    try { await navigator.share({ title: T('shareTitle'), text }); return; }
+    catch (error) { if (error && error.name === 'AbortError') return; }   // the rider closed the sheet
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    status.textContent = T('shareCopied');
+    return;
+  } catch (error) {}
+  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
+}
+
+// A PLANNED TRIP'S BUS STEP SETS THE SAME ALARM as the stop list does.
+// The leg already carries every stop between getting on and getting off
+// (pathBetween), so there is nothing to look up.
+function startTripRide(leg) {
+  if (!leg || !leg.path || leg.path.length < 2) return;
+  // A stop list with its own 下車 mark would set ITS alarm again the next time
+  // it repainted. The rider has just asked for this one; it wins.
+  if (routeStopsState && routeStopsState.alightAt !== null) {
+    routeStopsState.alightAt = null;
+    paintStopCounts();
+  }
+  rideStart({ key: 'trip|' + leg.co + '|' + leg.route + '|' + leg.on.stop + '|' + leg.off.stop,
+              source: 'trip', route: leg.route, co: leg.co,
+              stops: leg.path, board: 0, alight: leg.path.length - 1 });
 }
 
 // Show ONE route at a time. Three lines drawn together always tangle where
@@ -14223,9 +14514,9 @@ function hideWeatherBar() {
 // both slow for the user and rude to the service.
 function clearRouteStops() {
   if (routeStopsState && routeStopsState.observer) routeStopsState.observer.disconnect();
-  if (routeStopsState && routeStopsState.watchId != null && navigator.geolocation)
-    navigator.geolocation.clearWatch(routeStopsState.watchId);
   routeStopsState = null;
+  // A get-off alarm set from this list carries on without it — see THE
+  // GET-OFF ALARM. Its bar has its own ✕.
   const box = document.getElementById('routestops');
   // The "nothing running" class lives on the BOX, which outlives the list
   // inside it. Emptying innerHTML left it behind, so the next route opened
@@ -14351,7 +14642,7 @@ function renderRouteStops(context, stops) {
 
   setTimeout(refreshAlerts, 0);           // the route on screen is now watched
   routeStopsState = { context, stops, boardAt: null, alightAt: null, autoBoard: false,
-                      watchId: null, observer: null, inFlight: 0, queue: [],
+                      observer: null, inFlight: 0, queue: [],
                       etaAsked: 0, etaWithBus: 0, serviceNow: null };
 
   const head = document.createElement('div');
@@ -14389,9 +14680,23 @@ function renderRouteStops(context, stops) {
   // Title and ✕ on the first line, 更新班次 beneath. Finding your stop lives
   // on the search bar now, beside the route number, where every other 📍 in
   // this app already is.
+  // 🔊 says the route and the next buses at the stop marked for the rider,
+  // in the phone's own voice — for eyes that find the small times hard.
+  const readBtn = document.createElement('button');
+  readBtn.className = 'refreshbtn rsread';
+  readBtn.textContent = T('readAloudBtn');
+  readBtn.addEventListener('click', () => {
+    if (window.speechSynthesis && (speechSynthesis.speaking || speechSynthesis.pending)) {
+      try { speechSynthesis.cancel(); } catch (e) {}
+      return;
+    }
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    if (!speakText(routeSpeech(), true)) status.textContent = T('readNoVoice');
+  });
   const acts = document.createElement('div');
   acts.className = 'rsacts';
   acts.appendChild(refresh);
+  acts.appendChild(readBtn);
   head.appendChild(title); head.appendChild(close); head.appendChild(acts);
   box.appendChild(head);
 
@@ -14443,10 +14748,9 @@ function renderRouteStops(context, stops) {
     }).catch(error => console.warn('Citybus fares unavailable:', error));
   }
 
-  // The ride banner: filled in once both marks are set, hidden otherwise.
-  const ride = document.createElement('div');
-  ride.id = 'rsride'; ride.className = 'rsride'; ride.style.display = 'none';
-  box.appendChild(ride);
+  // The ride countdown used to be drawn here, inside the list, where it
+  // scrolled away with the stops. It is the fixed bar #ridebar now — see
+  // THE GET-OFF ALARM.
 
   stops.forEach((stop, index) => {
     const row = document.createElement('div');
@@ -14479,6 +14783,9 @@ function renderRouteStops(context, stops) {
     pick.addEventListener('click', () => {
       const st = routeStopsState;
       st.autoBoard = false;
+      // The rider has taken charge of this list: a GPS answer arriving late
+      // must not put back a mark they have just moved or cleared.
+      context.touched = true;
       if (st.boardAt === null || index < st.boardAt) {
         st.boardAt = index;
         if (st.alightAt !== null && st.alightAt <= index) st.alightAt = null;
@@ -14569,6 +14876,7 @@ function renderRouteStops(context, stops) {
   paintStopCounts();
   paintWalkLink();
   watchForVisibleRows();
+  autoLocateOnRoute();
 
   const panel = document.getElementById('panel');
   if (!panel) return;
@@ -14737,52 +15045,604 @@ function nearestRouteStop(point) {
   return best;
 }
 
-// "How many more?" — answered from where the phone is, not from a guess.
-function paintRideBanner() {
-  const st = routeStopsState;
-  const el = document.getElementById('rsride');
-  if (!st || !el) return;
-  if (st.boardAt === null || st.alightAt === null) { el.style.display = 'none'; el.innerHTML = ''; return; }
-
-  const total = st.alightAt - st.boardAt;
-  let html = '<div class="rsridehead">🚌 ' + esc(rsStopName(st.boardAt)) + ' → ▼ ' + esc(rsStopName(st.alightAt)) +
-             ' · ' + (total === 1 ? T('rsOneStop') : T('rsStops').replace('{n}', total)) + '</div>';
-  if (!herePoint) {
-    html += '<div class="rsridesub">' + T('rsNeedLocation') + '</div>';
-  } else {
-    const near = nearestRouteStop(herePoint);
-    if (!near || near.metres > RS_RIDE_NEAR_M) {
-      html += '<div class="rsridesub">' + T('rsNotOnRoute') + '</div>';
-    } else {
-      const remaining = st.alightAt - near.index;
-      if (remaining <= 0)      html += '<div class="rsridebig arrived">' + T('rsArrived') + '</div>';
-      else if (remaining === 1) html += '<div class="rsridebig soon">' + T('rsNextStop') + '</div>';
-      else                      html += '<div class="rsridebig">' + T('rsRemaining').replace('{n}', remaining) + '</div>';
-      html += '<div class="rsridesub">' + T('rsNearNow').replace('{s}', esc(rsStopName(near.index))) + '</div>';
-    }
+// THE ROUTE FINDS YOUR STOP BY ITSELF (2 Oct 2026).
+// The owner's ask, from a 58X screenshot: type the number, pick the way, and
+// the app should ask for the location ON ITS OWN and mark the closest stop,
+// so the next bus there is the first thing to read. The 📍 beside the number
+// already did all of this — but only when pressed, and a rider who does not
+// know it is there scrolls twenty stops hunting for a name instead.
+//
+// Once per route opened. 更新班次 and a language switch redraw the SAME list
+// (same context object) and must not ask again.
+//
+// A FRESH FIX, not the one in hand. herePoint may be from breakfast at home;
+// the rider is at the stop now. The old fix still marks the list instantly
+// (renderRouteStops does that), and this one corrects it a moment later —
+// but only while the mark is still the app's guess. A stop the rider tapped
+// is never moved.
+//
+// Someone who answered 暫時不用 in the app's own location box is not asked by
+// the browser behind their back: they get one plain button instead.
+function autoLocateOnRoute() {
+  const mine = routeStopsState;
+  if (!mine) return;
+  if (rsAutoLocatedFor === mine.context) {
+    // A redraw of the same list (更新班次, a language switch) keeps the 📍
+    // button if the list had one.
+    if (rsFindMeFor === mine.context) showFindMeButton(true);
+    return;
   }
-  el.innerHTML = html;
-  el.style.display = 'block';
+  rsAutoLocatedFor = mine.context;
+  if (!navigator.geolocation) return;
+  if (geoChoice() === 'no' || rsGeoRefused) { showFindMeButton(true); return; }
+  rsLocateNow(mine);
 }
 
-// Watch the phone's position only while a ride is marked and the list is
-// open. It is the phone talking to its own GPS — no network, no timer of
-// ours — and it is cleared the moment the list closes.
+function rsLocateNow(asked) {
+  // The answer belongs to the ROUTE that asked, not to one drawing of its
+  // list: 更新班次 or a language switch while the phone is still looking
+  // redraws the list (a new state object, same context) and the answer must
+  // land in the redrawn one, not be thrown away.
+  const ctx = asked.context;
+  status.textContent = T('rsFindingStop');
+  navigator.geolocation.getCurrentPosition(
+    position => {
+      herePoint = { lat: position.coords.latitude, lng: position.coords.longitude,
+                    accuracy: position.coords.accuracy };
+      rememberGeoChoice('yes');                // the browser's yes is a yes
+      const mine = routeStopsState;
+      if (!mine || mine.context !== ctx) return;   // closed, or a different route by now
+      showFindMeButton(false);
+      const near = nearestRouteStop(herePoint);
+      if (!near) return;
+      const found = T('rsNearestFound').replace('{s}', rsStopName(near.index))
+                                       .replace('{m}', Math.round(near.metres));
+      // The rider tapped a stop while the phone was still looking — chose
+      // one, or cleared the one the app had guessed: their choice stands.
+      // The nearest stop is still worth saying, not marking.
+      if (ctx.touched) {
+        if (near.metres <= RS_NEAREST_MARK_M) status.textContent = found;
+        return;
+      }
+      if (near.metres > RS_NEAREST_MARK_M) {
+        // Not "your" stop at this distance (see RS_NEAREST_MARK_M), so it is
+        // named, not marked. 📍 marks it anyway for anyone who wants that.
+        // A mark drawn from an OLD fix is taken back: the fresh one says the
+        // rider is nowhere near it.
+        if (mine.autoBoard && mine.boardAt !== null) {
+          mine.boardAt = null; mine.autoBoard = false; mine.alightAt = null;
+          paintStopCounts(); syncRideWatch(); paintWalkLink();
+        }
+        status.textContent = T('rsNearestFar').replace('{s}', rsStopName(near.index))
+                                               .replace('{d}', lang === 'zh'
+                                                 ? (near.metres >= 1000 ? (near.metres / 1000).toFixed(1) + ' 公里' : Math.round(near.metres) + ' 米')
+                                                 : metresShort(near.metres));
+        return;
+      }
+      const moved = mine.boardAt !== near.index;
+      mine.boardAt = near.index;
+      mine.autoBoard = true;
+      mine.autoMetres = near.metres;
+      if (mine.alightAt !== null && mine.alightAt <= near.index) mine.alightAt = null;
+      paintStopCounts();
+      syncRideWatch();
+      paintWalkLink();
+      if (moved) scrollToMarkedStop();
+      rsLoadRowFirst(near.index);
+      status.textContent = found;
+    },
+    error => {
+      if (error && error.code === 1) rsGeoRefused = true;
+      if (!routeStopsState || routeStopsState.context !== ctx) return;
+      status.textContent = T(error && error.code === 1 ? 'rsLocDenied' : 'locationFailed');
+      showFindMeButton(true);
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+}
+
+// The plain button for riders the app may not ask: one tap is their yes.
+function showFindMeButton(show) {
+  const box = document.getElementById('routestops');
+  if (!box) return;
+  let btn = document.getElementById('rsfindme');
+  if (!show) { if (btn) btn.remove(); rsFindMeFor = null; return; }
+  if (!routeStopsState) return;
+  rsFindMeFor = routeStopsState.context;
+  if (btn) return;
+  btn = document.createElement('button');
+  btn.id = 'rsfindme';
+  btn.className = 'rsfindme';
+  btn.textContent = T('rsFindMe');
+  btn.addEventListener('click', () => {
+    rsGeoRefused = false;
+    rememberGeoChoice('yes');
+    if (!routeStopsState) return;
+    routeStopsState.context.touched = false;   // asked for by name: mark what is found
+    rsLocateNow(routeStopsState);
+  });
+  const hint = box.querySelector('.rshint');
+  if (hint) hint.insertAdjacentElement('beforebegin', btn); else box.prepend(btn);
+}
+
+// What 🔊 on the stop list says: the route, and the next buses at the stop
+// marked for the rider — or, with no stop marked yet, what the route is.
+function routeSpeech() {
+  const st = routeStopsState;
+  if (!st) return '';
+  const c = st.context || {};
+  const to = plainStopName(c.to || ''), from = plainStopName(c.from || '');
+  if (st.boardAt === null)
+    return T('sayRouteOnly').replace('{r}', c.routeNo).replace('{from}', from).replace('{to}', to)
+                            .replace('{n}', st.stops.length);
+  const row = document.querySelector('#routestops .rsrow[data-index="' + st.boardAt + '"]');
+  const cell = row && row.etaCell;
+  const eta = cell && !cell.classList.contains('quiet') ? cell.textContent.replace(/\s*·\s*/g, lang === 'zh' ? '、' : ', ') : '';
+  return T(eta ? 'sayRouteStop' : 'sayRouteNoEta').replace('{r}', c.routeNo).replace('{to}', to)
+           .replace('{s}', rsStopName(st.boardAt)).replace('{e}', eta);
+}
+
+// "How many more?" — answered from where the phone is, not from a guess.
+// The marks live on the stop list; the counting, the bar and the alarm live
+// in the ride engine below, which a planned trip uses too.
+function rideKeyForRoute(st) {
+  const c = st.context || {};
+  return 'route|' + c.routeNo + '|' + c.dir + '|' + c.serviceType + '|' + c.co + '|' + st.boardAt + '|' + st.alightAt;
+}
+// Starts the alarm or repaints it; never stops it. A redraw of the list (更新
+// 班次, a language switch) passes through a moment with no marks before they
+// are put back, and stopping there would set the alarm again — and say so
+// out loud — every time the rider refreshed the times.
+function paintRideBanner() {
+  const st = routeStopsState;
+  if (!st || st.boardAt === null || st.alightAt === null) return;
+  const key = rideKeyForRoute(st);
+  if (!ride || ride.key !== key) {
+    rideStart({ key, source: 'route', owner: st.context, route: st.context.routeNo, co: st.context.co,
+                stops: st.stops, board: st.boardAt, alight: st.alightAt });
+  } else {
+    ridePaint();
+  }
+}
+// After the rider CHANGED a mark in the list that set the alarm: if its marks
+// are gone or moved, that alarm ends. A list opened since — another route to
+// check a connection, or the same one opened afresh — is not that list, and
+// tapping around in it leaves the alarm alone; the bar has its own ✕.
 function syncRideWatch() {
   const st = routeStopsState;
-  const wanted = !!(st && st.boardAt !== null && st.alightAt !== null && navigator.geolocation);
-  if (wanted && st.watchId == null) {
-    st.watchId = navigator.geolocation.watchPosition(
-      position => {
-        herePoint = { lat: position.coords.latitude, lng: position.coords.longitude };
-        paintRideBanner();
-      },
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
-  } else if (!wanted && st && st.watchId != null) {
-    navigator.geolocation.clearWatch(st.watchId);
-    st.watchId = null;
+  if (ride && ride.source === 'route' && st && st.context === ride.owner &&
+      (st.boardAt === null || st.alightAt === null || rideKeyForRoute(st) !== ride.key)) rideStop(true);
+  paintRideBanner();
+}
+
+// ============================================================
+// THE GET-OFF ALARM (2 Oct 2026)
+// ============================================================
+// The countdown was silent: 「下一站下車！」 turned red on a screen the rider
+// had to be watching. An older rider on a moving bus is looking out of the
+// window, not at a phone, so the warning now also SOUNDS and SPEAKS — once
+// two stops before, once as the bus leaves the stop before theirs (press the
+// bell now), once on arrival — and the screen is kept awake while it runs,
+// because a locked phone stops reporting where it is and the alarm would
+// never fire. The owner chose that trade (battery for certainty) on 2 Oct 2026.
+//
+// ONE ENGINE, TWO WAYS IN. The bus lookup (mark 上車 and 下車 in the stop
+// list) and a planned trip (🔔 on a bus step) both hand it a list of stops
+// and two positions in it. It owns the GPS watch, the bar, the sound, the
+// voice and the screen lock; neither caller does. One ride at a time, and it
+// outlives the list that set it: closing the list or opening another route
+// does not end it. The ✕ on the bar does, or arriving.
+//
+// PHONES ONLY ALLOW SOUND AND SPEECH THAT START INSIDE A TAP. rideStart() is
+// always reached from one (the 下車 tap, the 🔔 tap), and that tap unlocks
+// both: the spoken 「好，到 X 之前會提你下車」 is the unlock AND the proof to
+// the rider that the phone can talk. iPhones cannot vibrate from a web page;
+// Android phones also buzz.
+//
+// WHERE ON THE RIDE, NOT WHICH STOP IS NEAREST. The silent countdown used the
+// nearest stop, which flips HALFWAY between two stops — so 「下一站下車」 came
+// while the bus was still short of the stop before the rider's (ring then and
+// the bus stops one early), and on a route that passes the same estate twice
+// (14H's stops 2 and 42 are 14 m apart) the nearest stop could be the getting-
+// off stop while the rider was still waiting to board. The phone is now placed
+// ON the line between consecutive stops, looked for only a few stops ahead of
+// where it last was, and it never moves backwards. A stop is "passed" once the
+// phone is RIDE_PASS_M beyond it towards the next one.
+//
+// STALE OR VAGUE FIXES NEVER FIRE IT, and nothing is said until the phone has
+// moved RIDE_MOVED_M from where the alarm was set — someone waiting at a stop
+// is not on the bus yet, however their GPS wanders.
+const RIDE_WINDOW = 8;               // stops ahead searched on each fix
+const RIDE_PASS_M = 60;              // this far beyond a stop = the bus has left it
+const RIDE_AT_M = 60;                // this close to the 下車 stop = arrived
+const RIDE_MOVED_M = 120;            // the phone is on a bus once it has moved this far
+const RIDE_ALERT_ACCURACY_M = 120;   // a vaguer fix moves the count, never the alarm
+
+function rideSoundOn() { return !(ride && ride.muted); }
+
+function rideStopName(index) {
+  const stop = ride && ride.stops[index];
+  if (!stop) return '';
+  return plainStopName(lang === 'zh' ? (stop.name_tc || stop.name_en) : (stop.name_en || stop.name_tc));
+}
+
+function rideStart(spec) {
+  if (!spec || !spec.stops || spec.alight <= spec.board) return;
+  if (ride) rideStop(true);
+  ride = Object.assign({ alerted: {}, here: null, accuracy: null, watchId: null, done: false,
+                         startedAt: Date.now(), pos: spec.board, misses: 0, origin: null,
+                         moved: false, hasFix: false, muted: false }, spec);
+  ride.lens = ride.stops.map((stop, i) => {
+    const next = ride.stops[i + 1];
+    if (!next) return null;
+    const m = metresBetween(Number(stop.lat), Number(stop.long), Number(next.lat), Number(next.long));
+    return isFinite(m) && m > 0 ? m : null;
+  });
+  rideAudioUnlock();
+  rideWakeOn();
+  if (navigator.geolocation) {
+    ride.watchId = navigator.geolocation.watchPosition(rideOnFix, rideOnFixError,
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
   }
+  const name = rideStopName(ride.alight);
+  speakText(T('rideSayArmed').replace('{s}', name), true);
+  status.textContent = T('rideArmed').replace('{s}', name);
+  ridePaint();
+}
+
+// Segment i runs from stop i to stop i+1. Metres on a flat plane about the
+// segment's start — at the size of a bus stop gap the earth is flat enough.
+function rideProject(here, a, b) {
+  const lat0 = Number(a.lat) * Math.PI / 180;
+  const kx = 111320 * Math.cos(lat0), ky = 110540;
+  const bx = (Number(b.long) - Number(a.long)) * kx, by = (Number(b.lat) - Number(a.lat)) * ky;
+  const px = (here.lng - Number(a.long)) * kx, py = (here.lat - Number(a.lat)) * ky;
+  const len2 = bx * bx + by * by;
+  if (!isFinite(len2) || len2 <= 0) return null;
+  const t = Math.max(0, Math.min(1, (px * bx + py * by) / len2));
+  const dx = px - t * bx, dy = py - t * by;
+  return { t, off: Math.sqrt(dx * dx + dy * dy) };
+}
+function rideScan(here, from, to) {
+  let best = null;
+  for (let i = from; i <= to; i++) {
+    const a = ride.stops[i], b = ride.stops[i + 1];
+    if (!a || !b) continue;
+    const hit = rideProject(here, a, b);
+    if (hit && (!best || hit.off < best.off - 1)) best = { seg: i, t: hit.t, off: hit.off };
+  }
+  return best;
+}
+// Where on the ride the phone is: a segment and how far along it, searched
+// from just behind the last known place to RIDE_WINDOW stops ahead. Lost for
+// a few fixes in a row (a tunnel, a screen that was off) and the whole ride
+// is searched, so the count catches up.
+function rideLocate(here) {
+  const at = Math.floor(ride.pos);
+  let best = rideScan(here, Math.max(ride.board, at - 1), Math.min(ride.alight - 1, at + RIDE_WINDOW));
+  if ((!best || best.off > RS_RIDE_NEAR_M) && ride.misses >= 2)
+    best = rideScan(here, Math.max(ride.board, at), ride.alight - 1);
+  return best && best.off <= RS_RIDE_NEAR_M ? best : null;
+}
+function ridePassFrac(k) {
+  const len = ride.lens[k];
+  return len ? Math.min(0.6, Math.max(0.12, RIDE_PASS_M / len)) : 0.3;
+}
+function ridePassed(k) { return k >= ride.board && ride.pos >= k + ridePassFrac(k); }
+function rideAtEnd() {
+  const end = ride.stops[ride.alight];
+  const near = ride.here && end
+    ? metresBetween(ride.here.lat, ride.here.lng, Number(end.lat), Number(end.long)) <= RIDE_AT_M : false;
+  const len = ride.lens[ride.alight - 1];
+  return near || ride.pos >= ride.alight - (len ? Math.min(0.5, RIDE_AT_M / len) : 0.15);
+}
+
+function rideOnFix(position) {
+  if (!ride) return;
+  herePoint = { lat: position.coords.latitude, lng: position.coords.longitude,
+                accuracy: position.coords.accuracy };
+  ride.here = herePoint;
+  ride.accuracy = position.coords.accuracy;
+  ride.hasFix = true;
+  // A position the phone had cached from BEFORE the alarm was set (the end
+  // of the last ride, say), or a vague one, may show on screen but it never
+  // moves the ride forward and never sounds anything.
+  const fresh = !position.timestamp || position.timestamp >= ride.startedAt - 500;
+  ride.trusted = fresh && (ride.accuracy == null || ride.accuracy <= RIDE_ALERT_ACCURACY_M);
+  const loc = rideLocate(herePoint);
+  ride.lost = !loc;
+  ride.misses = loc ? 0 : ride.misses + 1;
+  if (loc && ride.trusted) {
+    ride.pos = Math.max(ride.pos, loc.seg + loc.t);
+    if (!ride.origin) ride.origin = { lat: herePoint.lat, lng: herePoint.lng };
+    else if (!ride.moved && metresBetween(ride.origin.lat, ride.origin.lng, herePoint.lat, herePoint.lng) >= RIDE_MOVED_M)
+      ride.moved = true;
+  }
+  ridePaint();
+}
+function rideOnFixError(error) {
+  if (!ride) return;
+  ride.fixError = error && error.code === 1 ? 'denied' : 'failed';
+  // No location, no countdown: holding the screen on would only cost battery.
+  if (ride.fixError === 'denied') { ride.noWake = true; rideWakeOff(); }
+  ridePaint();
+}
+
+// quiet: replaced by another ride, or ended by the list's own marks — nothing
+// to undo. Otherwise the rider pressed ✕ or ✓ on the bar.
+function rideStop(quiet) {
+  const was = ride;
+  if (!was) return;
+  ride = null;
+  if (was.watchId != null && navigator.geolocation) navigator.geolocation.clearWatch(was.watchId);
+  rideWakeOff();
+  try { if (navigator.audioSession) navigator.audioSession.type = 'auto'; } catch (e) {}
+  if (!quiet) {
+    // Stopped on purpose: stop talking too.
+    try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) {}
+    // And take the 下車 mark off the list that set it, or that list's next
+    // repaint would quietly set the alarm again.
+    if (was.source === 'route' && routeStopsState && routeStopsState.context === was.owner &&
+        rideKeyForRoute(routeStopsState) === was.key) {
+      routeStopsState.alightAt = null;
+      paintStopCounts();
+    }
+  }
+  ridePaint();
+}
+
+// The bar is built ONCE per alarm and then only its words change. Rebuilt on
+// every GPS fix — about once a second on a moving bus — a finger landing on
+// ✕ as the button was replaced underneath it lost the tap, and a screen
+// reader read the whole bar out again every second.
+function rideBarParts(bar) {
+  if (!bar.firstChild) {
+    bar.innerHTML =
+      '<div class="rsridehead"></div>' +
+      '<div class="rsridebig" aria-live="polite"></div>' +
+      '<div class="rsridesub rbline1"></div>' +
+      '<div class="rsridesub rbline2"></div>' +
+      '<div class="rbbtns">' +
+        '<button type="button" class="rbsound" data-ride="sound"></button>' +
+        '<button type="button" class="rbstop" data-ride="stop"></button>' +
+      '</div>';
+  }
+  return { head: bar.querySelector('.rsridehead'), big: bar.querySelector('.rsridebig'),
+           line1: bar.querySelector('.rbline1'), line2: bar.querySelector('.rbline2'),
+           sound: bar.querySelector('.rbsound'), stop: bar.querySelector('.rbstop') };
+}
+function setLine(el, text) {
+  if (el.textContent !== text) el.textContent = text;
+  el.style.display = text ? '' : 'none';
+}
+
+function ridePaint() {
+  const bar = document.getElementById('ridebar');
+  if (!bar) return;
+  if (!ride) {
+    bar.style.display = 'none'; bar.innerHTML = ''; bar.className = '';
+    document.body.classList.remove('riding');
+    document.documentElement.style.setProperty('--rideh', '0px');
+    return;
+  }
+  const total = ride.alight - ride.board;
+  const alightName = rideStopName(ride.alight);
+  const arrived = ride.done || (ride.hasFix && ride.moved && rideAtEnd());
+  const ahead = Math.max(0, ride.alight - Math.floor(ride.pos + 1e-9));
+  let big = '', line1 = '', cls = '';
+
+  if (arrived) {
+    big = T('rsArrived'); cls = 'arrived';
+  } else if (!ride.hasFix) {
+    line1 = ride.fixError === 'denied' ? T('rsNeedLocation')
+          : ride.fixError ? T('locationFailed') : T('findingYou');
+  } else if (ride.lost) {
+    line1 = T('rsNotOnRoute');
+  } else {
+    const bell = ridePassed(ride.alight - 1);
+    if (ahead <= 1) { big = T('rsNextStop'); cls = 'soon'; }
+    else big = T('rsRemaining').replace('{n}', ahead);
+    if (bell) line1 = T('rideBell');
+    else {
+      // The next stop the bus will reach: the one it is at, until it has left it.
+      const at = Math.floor(ride.pos);
+      const next = ridePassed(at) ? at + 1 : at;
+      line1 = T('rsNearNow').replace('{s}', rideStopName(Math.min(next, ride.alight)));
+    }
+  }
+
+  const parts = rideBarParts(bar);
+  bar.className = cls;
+  setLine(parts.head, (ride.source === 'trip' ? '🔔 ' : '🚌 ') + ride.route + ' → ▼ ' + alightName + ' · ' +
+                      (total === 1 ? T('rsOneStop') : T('rsStops').replace('{n}', total)));
+  setLine(parts.big, big);
+  parts.big.className = 'rsridebig' + (cls ? ' ' + cls : '');
+  setLine(parts.line1, line1);
+  setLine(parts.line2, arrived || ride.noWake ? '' : T(rideWake ? 'rideScreenOn' : 'rideScreenNeeded'));
+  const sound = rideSoundOn();
+  parts.sound.textContent = T(sound ? 'rideSoundOnBtn' : 'rideSoundOffBtn');
+  parts.sound.classList.toggle('off', !sound);
+  parts.stop.textContent = T(arrived ? 'rideDoneBtn' : 'rideStopBtn');
+  bar.style.display = 'block';
+  document.body.classList.add('riding');
+  // The panel is given room under its last row for the bar, measured rather
+  // than assumed: the bar is two lines or four depending on the stop names
+  // and the reader's text size.
+  document.documentElement.style.setProperty('--rideh', bar.offsetHeight + 'px');
+
+  if (ride.done || !ride.hasFix || !ride.trusted || !ride.moved) return;
+  if (arrived) { rideAlert('arrived', alightName, total); rideArrived(); }
+  else if (ridePassed(ride.alight - 1)) rideAlert('next', alightName, total);
+  else if (total >= 3 && ridePassed(ride.alight - 2)) rideAlert('two', alightName, total);
+}
+
+// Each warning once. Reaching a later one first (a GPS gap jumped two stops)
+// sounds only the later one and retires the earlier ones.
+function rideAlert(level, name, total) {
+  const order = ['two', 'next', 'arrived'];
+  if (ride.alerted[level]) return;
+  for (const l of order) { ride.alerted[l] = true; if (l === level) break; }
+  const sound = rideSoundOn();
+  if (sound) rideChime(level === 'two' ? 1 : level === 'next' ? 3 : 2);
+  try { if (navigator.vibrate) navigator.vibrate(level === 'two' ? [300] : [500, 200, 500, 200, 500]); } catch (e) {}
+  if (sound) {
+    const key = level === 'two' ? 'rideSayTwo' : level === 'next' ? 'rideSayNext' : 'rideSayArrived';
+    const me = ride;
+    // Spoken just after the chime, not over it — and only if this alarm is
+    // still running by then: ✕ in that second means silence.
+    setTimeout(() => { if (ride === me && !me.muted) speakText(T(key).replace('{s}', name)); },
+               level === 'next' ? 1600 : 900);
+  }
+}
+
+// Arrived: the job is done, so the phone may sleep again and stop asking the
+// GPS. The bar stays, green, until the rider taps ✓ — it is the last thing
+// they will look at before stepping off.
+function rideArrived() {
+  if (!ride || ride.done) return;
+  ride.done = true;
+  if (ride.watchId != null && navigator.geolocation) navigator.geolocation.clearWatch(ride.watchId);
+  ride.watchId = null;
+  rideWakeOff();
+}
+
+document.addEventListener('click', event => {
+  const btn = event.target.closest && event.target.closest('#ridebar [data-ride]');
+  if (!btn || !ride) return;
+  if (btn.dataset.ride === 'sound') {
+    // For THIS alarm only. A sound switched off once and forgotten would
+    // leave every later alarm silent — and an iPhone cannot even buzz.
+    ride.muted = !ride.muted;
+    if (!ride.muted) { rideAudioUnlock(); speakText(T('rideSaySoundOn'), true); }
+    else if (window.speechSynthesis) { try { speechSynthesis.cancel(); } catch (e) {} }
+    ridePaint();
+  } else if (btn.dataset.ride === 'stop') {
+    rideStop(false);
+  }
+});
+
+// THE SCREEN LOCK. Released by the phone itself whenever the page is hidden,
+// so it is asked for again each time the rider comes back. The first request
+// must come from a tap on iPhones — rideStart() is always inside one. One
+// request at a time: two in quick succession would each get a lock, and the
+// first would never be let go.
+async function rideWakeOn() {
+  if (!ride || ride.done || ride.noWake || rideWake || rideWakePending || !navigator.wakeLock) return;
+  rideWakePending = true;
+  try {
+    const lock = await navigator.wakeLock.request('screen');
+    if (!ride || ride.done || ride.noWake || rideWake) { try { lock.release(); } catch (e) {} return; }
+    rideWake = lock;
+    if (lock.addEventListener) lock.addEventListener('release', () => { if (rideWake === lock) { rideWake = null; ridePaint(); } });
+    ridePaint();
+  } catch (e) {
+    rideWake = null;
+  } finally {
+    rideWakePending = false;
+  }
+}
+function rideWakeOff() {
+  const lock = rideWake;
+  rideWake = null;
+  if (lock) { try { lock.release(); } catch (e) {} }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && ride && !ride.done) { rideWakeOn(); ridePaint(); }
+});
+
+// THE CHIME. Made, not downloaded: two sine tones, the second lower, like
+// the bus's own bell. 'playback' tells an iPhone this is sound the rider
+// asked for, so the ring/silent switch does not swallow it.
+function rideAudioUnlock() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!rideAudio) rideAudio = new AC();
+    if (rideAudio.state === 'suspended') rideAudio.resume();
+    // A silent blip inside the tap: what makes iOS count the sound as started.
+    const osc = rideAudio.createOscillator(), gain = rideAudio.createGain();
+    gain.gain.value = 0.0001;
+    osc.connect(gain); gain.connect(rideAudio.destination);
+    osc.start(); osc.stop(rideAudio.currentTime + 0.03);
+  } catch (e) {}
+}
+function rideChime(times) {
+  if (!rideAudio) return;
+  try {
+    if (rideAudio.state === 'suspended') rideAudio.resume();
+    const t0 = rideAudio.currentTime + 0.05;
+    for (let i = 0; i < times; i++) {
+      [[880, 0], [660, 0.22]].forEach(([freq, dt]) => {
+        const osc = rideAudio.createOscillator(), gain = rideAudio.createGain();
+        const at = t0 + i * 0.6 + dt;
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, at);
+        gain.gain.exponentialRampToValueAtTime(0.7, at + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.38);
+        osc.connect(gain); gain.connect(rideAudio.destination);
+        osc.start(at); osc.stop(at + 0.42);
+      });
+    }
+  } catch (e) {}
+}
+
+// ============================================================
+// THE PHONE'S OWN VOICE (2 Oct 2026)
+// ============================================================
+// Used by the get-off alarm and by every 🔊 button. Cantonese for 繁體,
+// Mandarin for 简体, English for English — whatever voice the phone has for
+// that language; with none, the phone picks, which is still better than
+// silence. A little slower than the default, for older ears.
+//
+// iPhones before iOS 27 lose a sentence queued straight after cancel(), so a
+// voice already talking is stopped first and the new sentence waits a beat.
+// That wait cannot be used for the FIRST sentence (it must be spoken inside
+// the tap), which is fine: nothing is talking yet then.
+function speechLangTag() {
+  if (lang !== 'zh') return 'en-GB';
+  return script === 'sc' ? 'zh-CN' : 'zh-HK';
+}
+function speechVoice(tag) {
+  try {
+    const want = tag.toLowerCase();
+    const voices = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
+    const norm = v => String(v.lang || '').replace('_', '-').toLowerCase();
+    return voices.find(v => norm(v) === want)
+        || (want === 'zh-hk' ? voices.find(v => /^yue/.test(norm(v))) : null)
+        || null;
+  } catch (e) { return null; }
+}
+const SPOKEN_INITIALS = new Set(['KMB', 'MTR', 'NLB', 'CTB', 'LRT', 'LWB', 'GMB', 'BBI', 'HK', 'PTI',
+                                 'HSBC', 'IFC', 'ICC', 'YMCA', 'YWCA', 'APM', 'HKU', 'HKUST', 'CUHK', 'PolyU']);
+function speakText(text, inTap) {
+  if (!text || !window.speechSynthesis || typeof SpeechSynthesisUtterance === 'undefined') return false;
+  let clean = String(text).replace(/\p{Extended_Pictographic}|\uFE0F/gu, '').replace(/\s+/g, ' ').trim();
+  // KMB writes its English stop names in capitals, and a voice spells some
+  // capitals out letter by letter. "CHEUNG SHA WAN" is said as "Cheung Sha
+  // Wan"; real initials — KMB, MTR, HSBC… — are left as they are.
+  if (lang !== 'zh') clean = clean.replace(/\b([A-Z])([A-Z']+)\b/g,
+    (word, a, b) => SPOKEN_INITIALS.has(word) ? word : a + b.toLowerCase());
+  if (lang !== 'zh') clean = clean.replace(/~\s*/g, 'about ');   // "~25 min" is a scheduled time
+  if (!clean) return false;
+  const say = () => {
+    try {
+      const u = new SpeechSynthesisUtterance(lang === 'zh' ? sc(clean) : clean);
+      u.lang = speechLangTag();
+      // A voice the phone lists but will not accept must not cost the
+      // sentence: without it, the lang tag above still picks one.
+      try { const voice = speechVoice(u.lang); if (voice) u.voice = voice; } catch (e) {}
+      u.rate = 0.9;
+      speechSynthesis.speak(u);
+    } catch (e) {}
+  };
+  if (!inTap && (speechSynthesis.speaking || speechSynthesis.pending)) {
+    try { speechSynthesis.cancel(); } catch (e) {}
+    setTimeout(say, 250);
+  } else {
+    say();
+  }
+  return true;
 }
 
 // Fetch times only for the rows actually on screen, four at a time.
@@ -14801,12 +15661,16 @@ function watchForVisibleRows() {
       });
     }
   };
+  // Kept on the state so a stop found by GPS can jump the queue — see
+  // rsLoadRowFirst. Every row is flagged as it is queued, so none is asked twice.
+  routeStopsState.pump = pump;
 
   const rows = [...box.querySelectorAll('.rsrow')];
 
   // No IntersectionObserver (older browser): just load them in order rather
   // than showing "checking…" for ever.
   if (typeof IntersectionObserver === 'undefined') {
+    for (const row of rows) row.etaQueued = true;
     routeStopsState.queue = rows;
     pump();
     return;
@@ -14816,6 +15680,8 @@ function watchForVisibleRows() {
     for (const entry of entries) {
       if (!entry.isIntersecting) continue;
       observer.unobserve(entry.target);        // each stop is asked for once
+      if (entry.target.etaQueued) continue;
+      entry.target.etaQueued = true;
       routeStopsState.queue.push(entry.target);
     }
     pump();
@@ -14831,9 +15697,26 @@ function watchForVisibleRows() {
   // for outright and the observer is left to cover the rest.
   for (const row of rows.slice(0, 6)) {
     observer.unobserve(row);
+    row.etaQueued = true;
     routeStopsState.queue.push(row);
   }
   pump();
+}
+
+// THE STOP THE RIDER IS STANDING AT, FIRST.
+// The list asks for times in screen order, four at a time. When GPS has just
+// marked stop 14, its times are the answer the rider is waiting for, so that
+// row goes to the FRONT of the queue instead of waiting its turn — or is
+// skipped if it was already asked for.
+function rsLoadRowFirst(index) {
+  const st = routeStopsState;
+  if (!st) return;
+  const row = document.querySelector('#routestops .rsrow[data-index="' + index + '"]');
+  if (!row || row.etaQueued) return;
+  row.etaQueued = true;
+  if (st.observer) st.observer.unobserve(row);
+  st.queue.unshift(row);
+  if (st.pump) st.pump();
 }
 
 async function loadStopEta(row) {
