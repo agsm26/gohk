@@ -1,0 +1,7 @@
+name: probe
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -s -o /dev/null -w "%{http_code}\n" https://static.data.gov.hk/td/pt-headway-en/routes.txt
