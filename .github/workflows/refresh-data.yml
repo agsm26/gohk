@@ -1,0 +1,77 @@
+# MONTHLY DATA REFRESH
+# Rebuilds the bus, fare, timetable and ferry files from their public sources
+# once a month, and on demand from the Actions tab ("Run workflow").
+#
+# Safety: each builder checks what it built (route and stop counts against the
+# files already here, every stop inside Hong Kong, plausible fares and
+# crossing times…) and writes NOTHING if a check fails. A failed check turns
+# this run red, so GitHub emails the owner, and the site keeps last month's
+# files. The other builder still runs: a bad ferry month does not hold back
+# good bus data.
+#
+# Publishing: GitHub does not rebuild the Pages site for a commit pushed with
+# the workflow's own token (docs: "Commits pushed by a GitHub Actions workflow
+# that uses the GITHUB_TOKEN do not trigger a GitHub Pages build"), so the
+# last step asks for the build itself.
+name: refresh-data
+
+on:
+  schedule:
+    - cron: '17 19 1 * *'   # 19:17 UTC on the 1st = 03:17 Hong Kong time on the 2nd
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Ferries (Transport Department GTFS)
+        id: ferries
+        continue-on-error: true
+        run: python3 tools/build_ferries.py
+
+      - name: Buses, fares and timetables (HK Bus Crawling)
+        id: buses
+        continue-on-error: true
+        run: python3 tools/build_data.py
+
+      - name: Commit the files that passed
+        id: commit
+        run: |
+          if git diff --quiet -- ferries.json hk-bus-lite.json kmb-fares.json; then
+            echo "::notice::No data changed."
+            echo "pushed=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ferries.json hk-bus-lite.json kmb-fares.json
+          git commit -m "Monthly data refresh $(date -u +%Y-%m-%d)"
+          git push
+          echo "pushed=yes" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the site
+        if: steps.commit.outputs.pushed == 'yes' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds"
+
+      - name: Fail the run if a builder refused its data
+        if: steps.ferries.outcome == 'failure' || steps.buses.outcome == 'failure'
+        run: |
+          echo "::error::ferries: ${{ steps.ferries.outcome }}, buses: ${{ steps.buses.outcome }} — the refused files were left as they were."
+          exit 1
