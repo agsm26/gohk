@@ -1770,6 +1770,7 @@
   .rccount { font-size:1.7rem; font-weight:800; color:var(--ink); line-height:1.25; }
   .rcends { font-size:1rem; font-weight:700; color:var(--ink-2); overflow-wrap:anywhere; }
   .rcnext { font-size:1rem; font-weight:800; color:var(--green); margin-top:2px; }
+  .rchint { font-size:0.94rem; font-weight:700; color:var(--ink-3); margin-top:4px; }
   /* When you get there: the second answer, tinted like the 巴士 page's. */
   .rcarrive { font-size:1.18rem; font-weight:800; color:var(--ink); background:var(--green-tint);
               border-radius:8px; padding:4px 10px; margin:4px 0; display:inline-block; }
@@ -2372,7 +2373,7 @@ rmStations:'{n} stations',
     couldNotWork:'Could not work out routes:', checkInternet:'Please check your internet and press the button again.',
     someDataFailed:'Some bus data could not load:',
     loadingNetwork:'Loading the bus network… first time only, then it is saved', lookingFor:'Looking for buses…',
-    stopsOnRoute:'{n} stops on this route', rideCount:'Ride {n} stops', rideArrive:'Arrive about {t}', rideStopN:'Stop {n}', rideOn:'Get on', rideOff:'Get off · stop {n}', rideNext:'Next bus in {m} min', rideNextNow:'Next bus arriving', cleared:'Cleared.',
+    stopsOnRoute:'{n} stops on this route', rideCount:'Ride {n} stops', rideArrive:'Arrive about {t}', rideStopN:'Stop {n}', rideEnd:'Stop {n} · end of route', rideToEnd:'{n} stops to the end of the route', rideArriveEnd:'Reaches the end about {t}', ridePickOff:'Tap the stop where you get off on the 巴士 page to see how many stops you ride.', rideOn:'Get on', rideOff:'Get off · stop {n}', rideNext:'Next bus in {m} min', rideNextNow:'Next bus arriving', cleared:'Cleared.',
     rsHint:'Tap where you get on, then tap where you get off — the app counts the stops down as you ride. Tap ☆ to save that stop AND this bus to FAVOURITES.',
     rsBoarding:'● GETTING ON HERE', rsStopsAway:'{n} stops from your stop',
     rsOneStopAway:'1 stop from your stop', rsBefore:'before your stop',
@@ -2721,7 +2722,7 @@ rmStations:'{n} 個站',
     couldNotWork:'無法計算路線：', checkInternet:'請檢查網絡連線後再按一次。',
     someDataFailed:'部分巴士資料未能載入：',
     loadingNetwork:'正在載入巴士路線網絡…只需一次，之後會自動儲存', lookingFor:'正在搜尋巴士…',
-    stopsOnRoute:'此路線共 {n} 個站', rideCount:'坐 {n} 個站', rideArrive:'預計 {t} 到達', rideStopN:'第 {n} 站', rideOn:'上車', rideOff:'第 {n} 站 下車', rideNext:'下一班 {m} 分鐘', rideNextNow:'下一班即將到站', cleared:'已清除。',
+    stopsOnRoute:'此路線共 {n} 個站', rideCount:'坐 {n} 個站', rideArrive:'預計 {t} 到達', rideStopN:'第 {n} 站', rideEnd:'第 {n} 站 · 總站', rideToEnd:'到總站共 {n} 個站', rideArriveEnd:'預計 {t} 到總站', ridePickOff:'在巴士頁點選你下車的站，就會顯示要坐幾多個站。', rideOn:'上車', rideOff:'第 {n} 站 下車', rideNext:'下一班 {m} 分鐘', rideNextNow:'下一班即將到站', cleared:'已清除。',
     rsHint:'先按上車站，再按下車站，乘車時會自動倒數剩餘車站。按 ☆ 可同時收藏該車站及此路線，在「收藏」查看。',
     rsBoarding:'● 在此上車', rsStopsAway:'距離上車站 {n} 個站',
     rsOneStopAway:'距離上車站 1 個站', rsBefore:'在上車站之前',
@@ -3027,7 +3028,9 @@ function mapPadding() {
   // bites on something much shorter.
   const cap = Math.round(Math.max(40, window.innerHeight * 0.4));
   return { paddingTopLeft:     [20, Math.min(mapChromeTop, cap)],
-           paddingBottomRight: [20, Math.min(mapChromeBottom + bannerH, cap)] };
+           // 80 on the right: the round ☰ / 🚇 / 📍 buttons live there, and a
+           // route framed to the edge ended underneath them.
+           paddingBottomRight: [80, Math.min(mapChromeBottom + bannerH, cap)] };
 }
 
 const stopLayer    = L.layerGroup().addTo(map);   // browsable bus stops
@@ -4365,7 +4368,8 @@ let tdNotices = [];
 // The 巴士 page's ride on the map: what is being looked up there (stop +
 // destination), when that last changed, and when anything was last drawn
 // on the map. Whichever is newer wins when the map opens.
-let stopRideSig = '', stopRideAt = 0, mapDrawnAt = 0;
+let stopRideSig = '', stopRideAt = 0, routeRideSig = '', routeRideAt = 0, mapDrawnAt = 0, mapSeq = 0;
+let pendingFit = null;   // bounds to frame once the map is on screen (fitMapTo)
 let tdLoaded = false;   // the feed has answered at least once, empty or not
 let alertFlags = { mtr: {}, bus: {} };        // line → {since}; 'route|stop' → {since, text, label}
 let currentAlerts = [];
@@ -7767,7 +7771,10 @@ function showMode(mode) {
       drawStops();
       openMapLayer();
       // What the 巴士 page is showing, if that is newer than what is drawn.
-      if (showStopRideOnMap()) return;
+      if (showRideOnMap()) { mapCentredOnce = true; return; }
+      // A route or journey drawn while the map was hidden is framed now,
+      // against the map the rider is actually looking at.
+      if (pendingFit) { fitMapTo(pendingFit.bounds, pendingFit.pad); mapCentredOnce = true; return; }
       // Open on the rider, not on the whole territory — but only the FIRST
       // time. Someone who panned to Sha Tin and came back to check a bus is
       // owed Sha Tin again, not a map that keeps snapping home.
@@ -8861,7 +8868,7 @@ function selectOption(pick) {
 // without three loud lines fighting each other.
 function drawOneOption(chosenPick) {
   if (!startPoint || !endPoint) return;
-  mapDrawnAt = Date.now();
+  mapDrawnAt = ++mapSeq;
   paintRideCard(null);              // a planned trip replaces the 巴士 page's ride
   routeLayer.clearLayers();
   detailLayer.clearLayers();
@@ -8946,7 +8953,7 @@ function drawOneOption(chosenPick) {
   L.polyline([latLngOf(lastLeg.off), [endPoint.lat, endPoint.lng]],
              { color: '#991b1b', weight: 5, dashArray: '3 9' }).addTo(routeLayer);
 
-  map.fitBounds(L.latLngBounds(all), mapPadding());
+  fitMapTo(L.latLngBounds(all));
 
   document.getElementById('rb-route').textContent = journey.legs.map(l => l.route).join(' → ');
   const companies = [...new Set(journey.legs.map(l => coName(l.co)))];
@@ -15805,6 +15812,7 @@ function renderRouteStops(context, stops) {
 // mark get a count — a stop already behind you is not "3 away", it is gone.
 function paintStopCounts() {
   if (!routeStopsState) return;
+  noteRouteRide();
   const box = document.getElementById('routestops');
   const board = routeStopsState.boardAt, alight = routeStopsState.alightAt;
 
@@ -16694,6 +16702,14 @@ async function loadStopEta(row) {
     }
     mine.etaWithBus++;
     clearRouteOff();
+    // Kept on the row for the map's ride card: the next bus at this stop.
+    row.etaMinutes = entries[0].m; row.etaAt = Date.now();
+    // The map's card may be waiting for exactly this stop's next bus.
+    if (Number(row.dataset.index) === mine.boardAt) {
+      const card = document.getElementById('ridecard');
+      const ride = card && card.dataset.sig === 'route|' + routeRideSig ? currentRouteRide() : null;
+      if (ride) paintRideCard(ride);
+    }
     cell.className = 'rseta';
     cell.innerHTML = entries.slice(0, 3)
       .map(e => (e.sched ? '<span class="sched">' + esc(T('etaAbout')) + '</span>' : '') +
@@ -16754,7 +16770,7 @@ function etaMinutes(rows, dir, serviceType) {
 }
 
 function paintRoute(routeNo, company, from, to, stops, fill, edge, ctbRouteNo, context) {
-  mapDrawnAt = Date.now();
+  mapDrawnAt = ++mapSeq;
   paintRideCard(null);
   // Same rule as choosing a journey: once a route is on screen, the general
   // bus stop dots are clutter. They come back when the route is closed.
@@ -16784,7 +16800,7 @@ function paintRoute(routeNo, company, from, to, stops, fill, edge, ctbRouteNo, c
 
   L.polyline(points, { color:fill, weight:4, opacity:0.6, dashArray:'6 6' }).addTo(routeLayer);
   markEnds(points, from, to);
-  map.fitBounds(L.latLngBounds(points), mapPadding());
+  fitMapTo(L.latLngBounds(points));
 
   document.getElementById('rb-route').textContent = routeNo;
   document.getElementById('rb-company').textContent = company;
@@ -16815,35 +16831,81 @@ async function loadCtbArrivals(stop, marker, routeNo) {
 
 function markEnds(points, fromName, toName) {
   if (points.length < 2) return;
-  const make = (latlng, letter, word, finish) => L.marker(latlng, { zIndexOffset:900,
-    icon: L.divIcon({ className:'', iconSize:null, iconAnchor:[22,22],
-      html:'<div class="endwrap' + (finish ? ' finish' : '') + '">' +
-           '<div class="enddot">' + letter + '</div>' +
-           '<div class="endtext">' + word + '<br>' + fromToText(word, fromName, toName) +
-           '</div></div>' }) }).addTo(routeLayer);
-  make(points[0], 'A', 'START', false);
-  make(points[points.length-1], 'B', 'END', true);
+  // Each label reads away from the other end, so the one on the east side
+  // opens to the left instead of running off the screen (it used to: START
+  // 高鐵(西九龍站) half under the ☰ button, on the owner's phone).
+  const eastStart = points[0][1] > points[points.length - 1][1];
+  addStopLabel(points[0], 'A', 'START', fromName, false, eastStart ? 'left' : 'right', 900);
+  addStopLabel(points[points.length - 1], 'B', 'END', toName, true, eastStart ? 'right' : 'left', 900);
 }
-function fromToText(word, fromName, toName) { return word === 'START' ? fromName : toName; }
+
+// FRAMING A ROUTE WHILE THE MAP IS HIDDEN.
+// A route looked up on the 巴士 page, or a journey chosen in 收藏, is drawn
+// while the map is behind the panel — and Leaflet then frames it for a box it
+// cannot see. On the phone that left START cut off at the right edge and most
+// of the route off screen. Drawn while hidden, the bounds are kept and the
+// framing is done again the moment the map is actually on screen.
+function fitMapTo(bounds, padding) {
+  const pad = padding || mapPadding;
+  if (document.body.classList.contains('mapopen')) {
+    measureMapChrome();
+    const options = Object.assign(pad(), { animate: false });
+    // fine: half zoom steps for this one framing. A 20 km ride on a 375px
+    // phone is 283px at the next whole level and 271px fit — so it dropped a
+    // level and came out half the size it could have been.
+    const snap = map.options.zoomSnap;
+    if (options.fine) map.options.zoomSnap = 0.5;
+    map.fitBounds(bounds, options);
+    map.options.zoomSnap = snap;
+    pendingFit = null;
+  } else {
+    pendingFit = { bounds, pad };
+  }
+}
+
+// A ride's own framing. The card on top makes the furniture above the map
+// tall — on a 375×812 Android phone the usual bands top and bottom left about
+// 80px of map and the whole ride shrank into one corner, its two labels on
+// top of each other. The round buttons stand on the RIGHT, so the right gets
+// the room they need and the bottom only clears the copyright line.
+function ridePadding() {
+  const cap = Math.round(window.innerHeight * 0.45);
+  return { paddingTopLeft: [24, Math.min(mapChromeTop, cap)], paddingBottomRight: [100, 48], fine: true };   // 100: the 🚌 dot is 44px, the buttons 56px + 10px
+}
 
 // ============================================================
-// THE 巴士 PAGE'S RIDE, ON THE MAP
+// YOUR RIDE, ON THE MAP
 // ============================================================
-// A rider picks a stop on the 巴士 page and types where they are going
-// (只顯示往 友愛邨), and the page answers: 60X, 9 minutes, about 13 stops.
-// The map used to know nothing about it and went on showing whatever trip
-// was planned last — 高鐵 to 屯門市中心, days old. Now opening the map draws
-// THAT ride: just the part between the stop and the destination, every stop
+// Two places on the 巴士 page say which bus a rider is about to take, and the
+// map now follows whichever was used last:
+//  * a stop with a destination typed in (只顯示往 友愛邨) — the soonest bus
+//    there, 60X, about 13 stops;
+//  * a route looked up by number (60X) with the boarding stop marked — by
+//    the 📍, by GPS on opening, or by tapping — and maybe a stop to get off.
+// The map used to show the whole route from its first stop, or an old trip,
+// whatever the rider had just chosen. Now it draws THAT ride: from the stop
+// they get on to the stop they get off (or the end of the route), every stop
 // numbered so the count can be followed out of the window, 上車 in green,
 // 下車 in red, and a card on top saying how many stops in big type.
+//
+// Order is kept with a counter, not the clock: a route drawn and its stop
+// marked in the same millisecond still have to come out in the right order.
 
-// Called whenever the 巴士 page's rows are drawn: remembers when the stop or
-// the destination last changed, so the map knows the ride is news.
+// Called whenever the 巴士 page's rows are drawn.
 function noteStopRide() {
   const st = stopState;
   const sig = st.stop && st.destFilter ? st.stop.stop + '|' + st.destFilter : '';
-  if (sig !== stopRideSig) { stopRideSig = sig; stopRideAt = Date.now(); }
+  if (sig !== stopRideSig) { stopRideSig = sig; stopRideAt = ++mapSeq; }
 }
+// Called whenever the route list's 上車 / 下車 marks are painted.
+function noteRouteRide() {
+  const st = routeStopsState, c = st && st.context;
+  const sig = st && c && st.boardAt !== null
+    ? [c.routeNo, c.dir, c.serviceType, c.co, st.boardAt, st.alightAt].join('|') : '';
+  if (sig !== routeRideSig) { routeRideSig = sig; routeRideAt = ++mapSeq; }
+}
+
+const hasPlace = x => x && isFinite(Number(x.lat)) && isFinite(Number(x.long));
 
 // The bus the 巴士 page would tell you to catch — the soonest one that goes
 // to the destination — and the stops it calls at on the way. null when the
@@ -16871,47 +16933,73 @@ function currentStopRide() {
   for (const e of routeIndex.get(best.key) || []) {
     if (e.seq >= best.seq && e.seq <= toSeq && !bySeq.has(e.seq)) bySeq.set(e.seq, e.stopId);
   }
-  const stops = [...bySeq.keys()].sort((a, b) => a - b).map(q => lookupStop(bySeq.get(q)))
-    .filter(x => x && isFinite(Number(x.lat)) && isFinite(Number(x.long)));
+  const stops = [...bySeq.keys()].sort((a, b) => a - b).map(q => lookupStop(bySeq.get(q))).filter(hasPlace);
   if (stops.length < 2) return null;
   const row = best.row;
-  return { route: String(row.route), stops, row, key: best.key,
+  return { route: String(row.route), stops, row, key: best.key, toEnd: false,
            dest: lang === 'zh' ? (row.dest_tc || row.dest_en) : row.dest_en,
            minutes: isFinite(best.t) ? Math.max(0, Math.round((best.t - now) / 60000)) : null,
-           sig: stopRideSig + '|' + best.key };
+           sig: 'stop|' + stopRideSig + '|' + best.key };
 }
 
-// Draw it if the 巴士 page's ride is newer than whatever the map last drew.
-// Returns true when it drew (the caller then leaves the view alone).
-function showStopRideOnMap() {
-  // Same ride still on the map: only the card's minutes and arrival time
-  // move on, so refresh those from the 巴士 page's latest times.
-  const card = document.getElementById('ridecard');
-  if (card && card.classList.contains('on') && stopRideAt <= mapDrawnAt) {
-    const again = currentStopRide();
-    if (again && again.sig === card.dataset.sig) paintRideCard(again);
-    return false;
+// The route list's ride: from the 上車 mark to the 下車 mark, or to the end
+// of the route when no stop to get off has been picked yet. The next bus is
+// the one the list shows at the boarding stop, aged by the time since.
+function currentRouteRide() {
+  const st = routeStopsState;
+  if (!st || st.boardAt === null || !st.stops) return null;
+  const toEnd = st.alightAt === null;
+  const end = toEnd ? st.stops.length - 1 : st.alightAt;
+  if (end <= st.boardAt) return null;
+  const stops = st.stops.slice(st.boardAt, end + 1);
+  if (!hasPlace(stops[0]) || !hasPlace(stops[stops.length - 1])) return null;
+  const row = document.querySelector('#routestops .rsrow[data-index="' + st.boardAt + '"]');
+  // Not asked yet (the list asks in screen order): ask for this one first.
+  if (row && typeof row.etaMinutes !== 'number') rsLoadRowFirst(st.boardAt);
+  const minutes = row && typeof row.etaMinutes === 'number'
+    ? Math.max(0, row.etaMinutes - Math.round((Date.now() - row.etaAt) / 60000)) : null;
+  return { route: String(st.context.routeNo), stops, toEnd, minutes,
+           dest: st.context.to, row: { co: st.context.co, seq: st.boardAt + 1 }, key: null,
+           sig: 'route|' + routeRideSig };
+}
+
+// Draw the newest ride if it is newer than whatever the map last drew; else
+// bring the card's minutes up to date. Returns true when it drew.
+function showRideOnMap() {
+  const sources = [
+    { at: stopRideAt,  on: !!stopRideSig,  get: currentStopRide },
+    { at: routeRideAt, on: !!routeRideSig, get: currentRouteRide },
+  ].filter(x => x.on).sort((a, b) => b.at - a.at);
+  for (const source of sources) {
+    if (source.at <= mapDrawnAt) break;
+    const ride = source.get();
+    if (ride) { drawRide(ride); return true; }
   }
-  if (!stopRideSig || stopRideAt <= mapDrawnAt) return false;
-  const ride = currentStopRide();
-  if (!ride) return false;
-  drawStopRide(ride);
-  return true;
+  const card = document.getElementById('ridecard');
+  if (card && card.classList.contains('on')) {
+    for (const source of sources) {
+      const ride = source.get();
+      if (ride && ride.sig === card.dataset.sig) { paintRideCard(ride); break; }
+    }
+  }
+  return false;
 }
 
-function drawStopRide(ride) {
-  // The old trip goes: it is not what the rider is asking about now, and two
-  // routes on one map is the confusion this replaces.
-  resetTrip();
-  mapDrawnAt = Date.now();
+function drawRide(ride) {
+  // Whatever was on the map goes — the whole route, an old planned trip —
+  // but NOT the route list on the 巴士 page: the rider is in the middle of
+  // using it, and it is where this ride came from.
+  resetTrip({ keepRouteStops: true });
+  mapDrawnAt = ++mapSeq;
   journeyMode = true;
   stopLayer.clearLayers();
-  const points = ride.stops.map(x => [Number(x.lat), Number(x.long)]);
   const last = ride.stops.length - 1;
+  const at = x => [Number(x.lat), Number(x.long)];
+  const points = ride.stops.filter(hasPlace).map(at);
   L.polyline(points, { color:'#1d4ed8', weight:7, opacity:0.85 }).addTo(routeLayer);
   ride.stops.forEach((x, i) => {
-    if (i === 0 || i === last) return;
-    L.marker(points[i], { icon: L.divIcon({ className:'', iconSize:[30, 30], iconAnchor:[15, 15],
+    if (i === 0 || i === last || !hasPlace(x)) return;
+    L.marker(at(x), { icon: L.divIcon({ className:'', iconSize:[30, 30], iconAnchor:[15, 15],
       html:'<div class="ridenum">' + i + '</div>' }) })
       .bindPopup('<b>' + esc(T('rideStopN').replace('{n}', i)) + '</b><br>' + esc(stopName(x)))
       .addTo(routeLayer);
@@ -16919,19 +17007,23 @@ function drawStopRide(ride) {
   // Each label reads away from the other end, so the one on the east side
   // opens to the left instead of running off the screen. addStopLabel is the
   // journey card's own, so the two maps speak the same language.
-  const eastStart = points[0][1] > points[last][1];
-  addStopLabel(points[0], '🚌', T('rideOn'), stopName(ride.stops[0]), false, eastStart ? 'left' : 'right', 900);
-  addStopLabel(points[last], last, T('rideOff').replace('{n}', last), stopName(ride.stops[last]), true, eastStart ? 'right' : 'left', 900);
   paintRideCard(ride);
   paintMapReset();
-  measureMapChrome();
-  // Room on the right for the round ☰ / 🚇 / 📍 buttons, so neither end of
-  // the ride is drawn underneath them.
-  const pad = mapPadding();
-  pad.paddingBottomRight = [80, pad.paddingBottomRight[1]];
-  map.fitBounds(L.latLngBounds(points), pad);
+  // Framed BEFORE the end labels go on: how much they can say depends on how
+  // far apart the two ends land on the screen.
+  fitMapTo(L.latLngBounds(points), ridePadding);
   paintRideZoom();
-  status.textContent = ride.route + ' · ' + T('rideCount').replace('{n}', last);
+  const first = at(ride.stops[0]), final = at(ride.stops[last]);
+  const eastStart = first[1] > final[1];
+  // Close together, two two-line labels sit on top of each other (the
+  // owner's Android test: 上車 over 第 13 站 下車). Then they say only 上車 and
+  // 第 13 站 下車 — the card above already names both stops — and the names
+  // come back once there is room.
+  const roomy = map.latLngToContainerPoint(first).distanceTo(map.latLngToContainerPoint(final)) >= 300;
+  addStopLabel(first, '🚌', T('rideOn'), roomy ? stopName(ride.stops[0]) : '', false, eastStart ? 'left' : 'right', 900);
+  addStopLabel(final, last, T(ride.toEnd ? 'rideEnd' : 'rideOff').replace('{n}', last),
+               roomy ? stopName(ride.stops[last]) : '', true, eastStart ? 'right' : 'left', 900);
+  status.textContent = ride.route + ' · ' + T(ride.toEnd ? 'rideToEnd' : 'rideCount').replace('{n}', last);
 }
 
 // Zoomed out, thirteen numbered circles pile into one blot; there the stops
@@ -16948,7 +17040,7 @@ map.on('zoomend', paintRideZoom);
 function rideArrivalTime(ride) {
   if (ride.minutes === null) return '';
   const stopsAway = ride.stops.length - 1;
-  const info = ride.row.co === 'FERRY' ? ferryInfo.get(ride.key) : null;
+  const info = ride.row.co === 'FERRY' && ride.key ? ferryInfo.get(ride.key) : null;
   const at = Number(ride.row.seq) || 1;
   const rideMins = info && info.mins[at - 1 + stopsAway] !== undefined
     ? Number(info.mins[at - 1 + stopsAway]) - Number(info.mins[at - 1] || 0)
@@ -16960,17 +17052,19 @@ function rideArrivalTime(ride) {
 function paintRideCard(ride) {
   const card = document.getElementById('ridecard');
   if (!card) return;
-  if (!ride) { card.classList.remove('on'); card.innerHTML = ''; return; }
+  if (!ride) { card.classList.remove('on'); card.innerHTML = ''; card.dataset.sig = ''; return; }
   const last = ride.stops.length - 1;
   const arrive = rideArrivalTime(ride);
   const next = ride.minutes === null ? ''
     : ride.minutes <= 0 ? T('rideNextNow') : T('rideNext').replace('{m}', ride.minutes);
   card.innerHTML =
     '<div class="rchead">🚌 ' + esc(ride.route) + (ride.dest ? ' <span>' + esc(T('towards')) + ' ' + esc(ride.dest) + '</span>' : '') + '</div>' +
-    '<div class="rccount">' + esc(T('rideCount').replace('{n}', last)) + '</div>' +
-    (arrive ? '<div class="rcarrive">🏁 ' + T('rideArrive').replace('{t}', '<b>' + esc(arrive) + '</b>') + '</div>' : '') +
+    '<div class="rccount">' + esc(T(ride.toEnd ? 'rideToEnd' : 'rideCount').replace('{n}', last)) + '</div>' +
+    (arrive ? '<div class="rcarrive">🏁 ' + T(ride.toEnd ? 'rideArriveEnd' : 'rideArrive').replace('{t}', '<b>' + esc(arrive) + '</b>') + '</div>' : '') +
     '<div class="rcends">🟢 ' + esc(stopName(ride.stops[0])) + ' → 🔴 ' + esc(stopName(ride.stops[last])) + '</div>' +
-    (next ? '<div class="rcnext">' + esc(next) + '</div>' : '');
+    (next ? '<div class="rcnext">' + esc(next) + '</div>' : '') +
+    // No stop to get off picked yet: say how to get the count that matters.
+    (ride.toEnd ? '<div class="rchint">' + esc(T('ridePickOff')) + '</div>' : '');
   card.dataset.sig = ride.sig;
   card.classList.add('on');
 }
@@ -16988,7 +17082,10 @@ document.getElementById('clear-all').addEventListener('click', resetTrip);
 // points and returns the panel to the entry form, ready for a new search.
 document.getElementById('rb-close').addEventListener('click', resetTrip);
 
-function resetTrip() {
+// opts.keepRouteStops: clear the map and the trip but leave the 巴士 page's
+// route list alone (drawRide). Also called as a click handler, when opts
+// is the click event and has no such field.
+function resetTrip(opts) {
   startPoint = null; endPoint = null; arm(null);
   // The stored results describe a trip that no longer exists. Only
   // currentPicks was cleared, so tapping 巴士 afterwards restored the old
@@ -17006,7 +17103,7 @@ function resetTrip() {
 
   document.getElementById('journeys').innerHTML = '';
   document.getElementById('compare').innerHTML = '';
-  clearRouteStops();
+  if (!(opts && opts.keepRouteStops === true)) clearRouteStops();
   for (const id of ['start-text','end-text','route-text'])
     document.getElementById(id).value = '';
   for (const id of ['start-results','end-results','route-results'])
@@ -17355,7 +17452,7 @@ function resetMapView() {
   // Anything less leaves the map and the 巴士 tab disagreeing about whether
   // a journey exists.
   resetTrip();
-  mapDrawnAt = Date.now();          // cleared stays cleared until the 巴士 page changes
+  mapDrawnAt = ++mapSeq;            // cleared stays cleared until the 巴士 page changes
   if (hereMarker) { map.removeLayer(hereMarker); hereMarker = null; }
   if (hereRing)   { map.removeLayer(hereRing);   hereRing = null; }
   const locate = document.getElementById('maplocate');
