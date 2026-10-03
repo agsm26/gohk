@@ -1770,7 +1770,45 @@
   .rccount { font-size:1.7rem; font-weight:800; color:var(--ink); line-height:1.25; }
   .rcends { font-size:1rem; font-weight:700; color:var(--ink-2); overflow-wrap:anywhere; }
   .rcnext { font-size:1rem; font-weight:800; color:var(--green); margin-top:2px; }
+  /* 巴士 page → map. Blue like the map's own ride line, full width, and big
+     enough to be found without being looked for. */
+  .maphint { display:block; width:100%; box-sizing:border-box; min-height:56px; margin:10px 0 4px;
+             padding:10px 14px; text-align:left; cursor:pointer; border:2px solid var(--blue);
+             border-radius:12px; background:var(--blue-tint); }
+  .maphint:active { filter:brightness(.95); }
+  .mhmain { display:block; font-size:1.06rem; font-weight:800; color:var(--blue); }
+  .mhsub { display:block; font-size:0.94rem; font-weight:700; color:var(--ink-2); margin-top:2px; }
+  /* THE TWO ENDS OF A RIDE on the map: a dot on the stop and, beside it, what
+     happens there (上車 / 第 13 站 下車) over the stop's name in large type.
+     The marker is a zero-size point; the box hangs above or below it and
+     reaches towards the other end, set per ride by drawRide. */
+  .ridelabel { position:relative; width:0; height:0; }
+  .rldot { position:absolute; left:-22px; top:-22px; width:44px; height:44px; box-sizing:border-box;
+           border-radius:22px; border:4px solid white; color:white; font-size:1.2rem; font-weight:800;
+           display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.5); }
+  .rlbox { position:absolute; white-space:nowrap; max-width:230px; overflow:hidden; text-overflow:ellipsis;
+           padding:6px 12px; border-radius:10px; color:white; border:3px solid white;
+           box-shadow:0 2px 8px rgba(0,0,0,.5); }
+  .rlbox small { display:block; font-size:0.94rem; font-weight:800; }
+  .rlbox b { display:block; font-size:1.18rem; font-weight:800; overflow:hidden; text-overflow:ellipsis; }
+  .ridelabel.start .rldot, .ridelabel.start .rlbox { background:var(--green); }
+  .ridelabel.end .rldot, .ridelabel.end .rlbox { background:var(--red); }
+  .ridelabel.down .rlbox { top:28px; }
+  .ridelabel.up .rlbox { bottom:28px; }
+  .ridelabel.toleft .rlbox { right:-22px; }
+  #map.ridetight .rlbox { padding:3px 10px; }
+  #map.ridetight .rlbox small { font-size:0.82rem; }
+  #map.ridetight .rlbox b { font-size:1.06rem; }
+  #map.ridetight .ridelabel.down .rlbox { top:23px; }
+  #map.ridetight .ridelabel.up .rlbox { bottom:23px; }
+  .ridelabel.toright .rlbox { left:-22px; }
   .rchint { font-size:0.94rem; font-weight:700; color:var(--ink-3); margin-top:4px; }
+  #ridecard.compact { padding:8px 12px; }
+  #ridecard.compact .rcends { display:none; }
+  #ridecard.compact .rcnext { display:inline-block; margin-left:8px; }
+  #ridecard.compact .rchead, #ridecard.compact .rccount { display:inline-block; vertical-align:baseline; }
+  #ridecard.compact .rchead span { display:none; }
+  #ridecard.compact .rccount { font-size:1.5rem; margin-left:8px; }
   /* When you get there: the second answer, tinted like the 巴士 page's. */
   .rcarrive { font-size:1.18rem; font-weight:800; color:var(--ink); background:var(--green-tint);
               border-radius:8px; padding:4px 10px; margin:4px 0; display:inline-block; }
@@ -2373,7 +2411,7 @@ rmStations:'{n} stations',
     couldNotWork:'Could not work out routes:', checkInternet:'Please check your internet and press the button again.',
     someDataFailed:'Some bus data could not load:',
     loadingNetwork:'Loading the bus network… first time only, then it is saved', lookingFor:'Looking for buses…',
-    stopsOnRoute:'{n} stops on this route', rideCount:'Ride {n} stops', rideArrive:'Arrive about {t}', rideStopN:'Stop {n}', rideEnd:'Stop {n} · end of route', rideToEnd:'{n} stops to the end of the route', rideArriveEnd:'Reaches the end about {t}', ridePickOff:'Tap the stop where you get off on the 巴士 page to see how many stops you ride.', rideOn:'Get on', rideOff:'Get off · stop {n}', rideNext:'Next bus in {m} min', rideNextNow:'Next bus arriving', cleared:'Cleared.',
+    stopsOnRoute:'{n} stops on this route', rideCount:'Ride {n} stops', rideArrive:'Arrive about {t}', rideStopN:'Stop {n}', mapHint:'See this ride on the map', mapHintSwipe:'Swipe right 👉 or tap here — stops to ride, where to get on and off', rideEnd:'Stop {n} · end of route', rideToEnd:'{n} stops to the end of the route', rideArriveEnd:'Reaches the end about {t}', ridePickOff:'Tap your stop to get off on the 巴士 page to count the stops.', rideOn:'Get on', rideOff:'Get off · stop {n}', rideNext:'Next bus in {m} min', rideNextNow:'Next bus arriving', cleared:'Cleared.',
     rsHint:'Tap where you get on, then tap where you get off — the app counts the stops down as you ride. Tap ☆ to save that stop AND this bus to FAVOURITES.',
     rsBoarding:'● GETTING ON HERE', rsStopsAway:'{n} stops from your stop',
     rsOneStopAway:'1 stop from your stop', rsBefore:'before your stop',
@@ -2722,7 +2760,7 @@ rmStations:'{n} 個站',
     couldNotWork:'無法計算路線：', checkInternet:'請檢查網絡連線後再按一次。',
     someDataFailed:'部分巴士資料未能載入：',
     loadingNetwork:'正在載入巴士路線網絡…只需一次，之後會自動儲存', lookingFor:'正在搜尋巴士…',
-    stopsOnRoute:'此路線共 {n} 個站', rideCount:'坐 {n} 個站', rideArrive:'預計 {t} 到達', rideStopN:'第 {n} 站', rideEnd:'第 {n} 站 · 總站', rideToEnd:'到總站共 {n} 個站', rideArriveEnd:'預計 {t} 到總站', ridePickOff:'在巴士頁點選你下車的站，就會顯示要坐幾多個站。', rideOn:'上車', rideOff:'第 {n} 站 下車', rideNext:'下一班 {m} 分鐘', rideNextNow:'下一班即將到站', cleared:'已清除。',
+    stopsOnRoute:'此路線共 {n} 個站', rideCount:'坐 {n} 個站', rideArrive:'預計 {t} 到達', rideStopN:'第 {n} 站', mapHint:'在地圖看這程車', mapHintSwipe:'手指向右掃 👉 或點這裡：坐幾多個站、在哪裡上落車', rideEnd:'第 {n} 站 · 總站', rideToEnd:'到總站共 {n} 個站', rideArriveEnd:'預計 {t} 到總站', ridePickOff:'在巴士頁點選下車站，可知要坐幾個站。', rideOn:'上車', rideOff:'第 {n} 站 下車', rideNext:'下一班 {m} 分鐘', rideNextNow:'下一班即將到站', cleared:'已清除。',
     rsHint:'先按上車站，再按下車站，乘車時會自動倒數剩餘車站。按 ☆ 可同時收藏該車站及此路線，在「收藏」查看。',
     rsBoarding:'● 在此上車', rsStopsAway:'距離上車站 {n} 個站',
     rsOneStopAway:'距離上車站 1 個站', rsBefore:'在上車站之前',
@@ -12282,6 +12320,16 @@ function renderStopView() {
   view.innerHTML = html;
 }
 
+// The way from the 巴士 page's answer to the same ride drawn on the map. The
+// map tab sits LEFT of 巴士 in the bar, so the finger moves to the right to
+// reach it (swipeToTab: dx > 0 is one tab back) — and the line says so, as
+// well as working as a plain tap.
+function mapHintHtml() {
+  return '<button type="button" class="maphint" data-stop-act="tomap">' +
+         '<span class="mhmain">🗺️ ' + esc(T('mapHint')) + ' ›</span>' +
+         '<span class="mhsub">' + esc(T('mapHintSwipe')) + '</span></button>';
+}
+
 // The route rows for the chosen pole, filtered by destination when one is
 // typed. Kept separate so typing in the filter redraws only this part and
 // the box keeps focus.
@@ -12362,6 +12410,10 @@ function stopRowsHtml() {
     const arrivals = formatArrivals(rows, (arrive || multiPole)
       ? { arrive, destName: st.destFilter, multiPole } : null);
     html += arrivals;
+    // A destination is set and a bus goes there: say the map can show this
+    // ride — how many stops, where to get on and off. A button, because a
+    // gesture nobody has been told about is a gesture nobody uses.
+    if (arrive && /eta-row/.test(arrivals)) html += mapHintHtml();
     // The feed answered but nothing is coming. Same treatment: what runs from
     // here, when, and for how much.
     if (!/eta-row/.test(arrivals)) {
@@ -12761,6 +12813,7 @@ document.getElementById('stopview').addEventListener('click', event => {
     return;
   }
   switch (el.dataset.stopAct) {
+    case 'tomap':   swipeToTab(-1); break;   // slides in from the left, as the swipe does
     case 'change':  stopState = Object.assign(freshStopState(), { locateTried: true, destQuery: stopState.destQuery, destPicked: stopState.destPicked, indexing: stopState.indexing }); renderStopView(); break;
     case 'refresh': stopLoadRows(true); break;
     case 'geo-yes': rememberGeoChoice('yes'); stopLocate(); break;
@@ -16869,8 +16922,12 @@ function fitMapTo(bounds, padding) {
 // top of each other. The round buttons stand on the RIGHT, so the right gets
 // the room they need and the bottom only clears the copyright line.
 function ridePadding() {
-  const cap = Math.round(window.innerHeight * 0.45);
-  return { paddingTopLeft: [24, Math.min(mapChromeTop, cap)], paddingBottomRight: [100, 48], fine: true };   // 100: the 🚌 dot is 44px, the buttons 56px + 10px
+  // + room for a name label hanging ABOVE the northern end and BELOW the
+  // southern one (rideEndLabel): about 85px each way.
+  // A tall card (the route list's, with its tip) on a 375×812 phone needs
+  // ~500px above the ride; at 52% the northern label went under the card.
+  const cap = Math.round(window.innerHeight * 0.62);
+  return { paddingTopLeft: [24, Math.min(mapChromeTop + 110, cap)], paddingBottomRight: [100, 150], fine: true };   // 100: the 🚌 dot is 44px, the buttons 56px + 10px
 }
 
 // ============================================================
@@ -16991,6 +17048,7 @@ function drawRide(ride) {
   // using it, and it is where this ride came from.
   resetTrip({ keepRouteStops: true });
   mapDrawnAt = ++mapSeq;
+  map.getContainer().classList.remove('ridetight');
   journeyMode = true;
   stopLayer.clearLayers();
   const last = ride.stops.length - 1;
@@ -17013,17 +17071,62 @@ function drawRide(ride) {
   // far apart the two ends land on the screen.
   fitMapTo(L.latLngBounds(points), ridePadding);
   paintRideZoom();
+  // THE TWO ENDS, NAMED. Each label hangs off its stop on the far side from
+  // the other end — the southern one below, the northern one above — and
+  // reaches across towards the middle, so the two can never sit on top of
+  // each other however close the ride is. (Before, close ends dropped their
+  // names to avoid overlapping, and the owner could not tell where to get on
+  // and off without reading the card.)
   const first = at(ride.stops[0]), final = at(ride.stops[last]);
-  const eastStart = first[1] > final[1];
-  // Close together, two two-line labels sit on top of each other (the
-  // owner's Android test: 上車 over 第 13 站 下車). Then they say only 上車 and
-  // 第 13 站 下車 — the card above already names both stops — and the names
-  // come back once there is room.
-  const roomy = map.latLngToContainerPoint(first).distanceTo(map.latLngToContainerPoint(final)) >= 300;
-  addStopLabel(first, '🚌', T('rideOn'), roomy ? stopName(ride.stops[0]) : '', false, eastStart ? 'left' : 'right', 900);
-  addStopLabel(final, last, T(ride.toEnd ? 'rideEnd' : 'rideOff').replace('{n}', last),
-               roomy ? stopName(ride.stops[last]) : '', true, eastStart ? 'right' : 'left', 900);
+  const startSouth = first[0] <= final[0], eastStart = first[1] > final[1];
+  rideEndLabel(first, 'start', '🚌', T('rideOn'), stopName(ride.stops[0]),
+               startSouth ? 'down' : 'up', eastStart ? 'toleft' : 'toright');
+  rideEndLabel(final, 'end', String(last), T(ride.toEnd ? 'rideEnd' : 'rideOff').replace('{n}', last),
+               stopName(ride.stops[last]), startSouth ? 'up' : 'down', eastStart ? 'toright' : 'toleft');
+  keepRideLabelsInView();
   status.textContent = ride.route + ' · ' + T(ride.toEnd ? 'rideToEnd' : 'rideCount').replace('{n}', last);
+}
+
+// The padding is a forecast; this is the check. After the labels are on,
+// measure where they actually landed and move the map so both sit between
+// the card and the copyright line — on a short phone with a tall card the
+// forecast came up 12px short and the northern name went under the card.
+// Half a zoom step out, up to three times, when no shift can fit them both.
+function keepRideLabelsInView() {
+  const tools = document.getElementById('maptools');
+  const attribution = document.querySelector('.leaflet-control-attribution');
+  for (let tries = 0; tries < 4; tries++) {
+    const boxes = [...document.querySelectorAll('.leaflet-marker-pane .rlbox')].map(b => b.getBoundingClientRect());
+    if (!boxes.length) return;
+    const top = (tools ? tools.getBoundingClientRect().bottom : 0) + 8;
+    const bottom = (attribution ? attribution.getBoundingClientRect().top : window.innerHeight) - 8;
+    const high = Math.min(...boxes.map(r => r.top)), low = Math.max(...boxes.map(r => r.bottom));
+    if (high >= top && low <= bottom) return;
+    if (low - high <= bottom - top) {
+      // Fits: slide the map so the labels sit inside the gap.
+      const dy = high < top ? top - high : bottom - low;
+      map.panBy([0, -dy], { animate: false });
+      return;
+    }
+    // Too tall even so. First the labels tighten — the same words, a little
+    // smaller and closer to their dots — since zooming out cannot make a
+    // label shorter; only then is the map zoomed out.
+    const box = map.getContainer();
+    if (!box.classList.contains('ridetight')) { box.classList.add('ridetight'); continue; }
+    const snap = map.options.zoomSnap;
+    map.options.zoomSnap = 0.5;
+    map.setZoom(map.getZoom() - 0.5, { animate: false });
+    map.options.zoomSnap = snap;
+  }
+}
+
+function rideEndLabel(latlng, kind, dot, what, name, vertical, side) {
+  return L.marker(latlng, { zIndexOffset: 900, keyboard: false,
+    icon: L.divIcon({ className: '', iconSize: [0, 0], iconAnchor: [0, 0],
+      html: '<div class="ridelabel ' + kind + ' ' + vertical + ' ' + side + '">' +
+            '<div class="rldot">' + esc(dot) + '</div>' +
+            '<div class="rlbox"><small>' + esc(what) + '</small><b>' + esc(name) + '</b></div></div>' })
+  }).addTo(routeLayer);
 }
 
 // Zoomed out, thirteen numbered circles pile into one blot; there the stops
@@ -17066,7 +17169,15 @@ function paintRideCard(ride) {
     // No stop to get off picked yet: say how to get the count that matters.
     (ride.toEnd ? '<div class="rchint">' + esc(T('ridePickOff')) + '</div>' : '');
   card.dataset.sig = ride.sig;
+  // A short phone (an SE, 667px) has ~210px of map under the card — less
+  // than the two named labels need. There the card drops its 🟢 → 🔴 line,
+  // which the labels on the map now say beside the stops themselves, and
+  // puts the next bus on the arrival line.
+  card.classList.toggle('compact', window.innerHeight < 760);
   card.classList.add('on');
+  // The card can grow after the ride is drawn — the next bus at the stop
+  // arrives a moment later and adds two lines — so check the labels again.
+  if (document.body.classList.contains('mapopen')) keepRideLabelsInView();
 }
 
 
