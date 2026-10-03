@@ -1770,6 +1770,10 @@
   .rccount { font-size:1.7rem; font-weight:800; color:var(--ink); line-height:1.25; }
   .rcends { font-size:1rem; font-weight:700; color:var(--ink-2); overflow-wrap:anywhere; }
   .rcnext { font-size:1rem; font-weight:800; color:var(--green); margin-top:2px; }
+  /* When you get there: the second answer, tinted like the 巴士 page's. */
+  .rcarrive { font-size:1.18rem; font-weight:800; color:var(--ink); background:var(--green-tint);
+              border-radius:8px; padding:4px 10px; margin:4px 0; display:inline-block; }
+  .rcarrive b { font-size:1.45rem; color:var(--green); }
   /* Each stop on the way, numbered, so the count can be followed on the map. */
   .ridenum { width:30px; height:30px; box-sizing:border-box; border-radius:15px; background:white;
              border:3px solid var(--blue); color:var(--blue); font-weight:800; font-size:15px;
@@ -2368,7 +2372,7 @@ rmStations:'{n} stations',
     couldNotWork:'Could not work out routes:', checkInternet:'Please check your internet and press the button again.',
     someDataFailed:'Some bus data could not load:',
     loadingNetwork:'Loading the bus network… first time only, then it is saved', lookingFor:'Looking for buses…',
-    stopsOnRoute:'{n} stops on this route', rideCount:'Ride {n} stops', rideStopN:'Stop {n}', rideOn:'Get on', rideOff:'Get off · stop {n}', rideNext:'Next bus in {m} min', rideNextNow:'Next bus arriving', cleared:'Cleared.',
+    stopsOnRoute:'{n} stops on this route', rideCount:'Ride {n} stops', rideArrive:'Arrive about {t}', rideStopN:'Stop {n}', rideOn:'Get on', rideOff:'Get off · stop {n}', rideNext:'Next bus in {m} min', rideNextNow:'Next bus arriving', cleared:'Cleared.',
     rsHint:'Tap where you get on, then tap where you get off — the app counts the stops down as you ride. Tap ☆ to save that stop AND this bus to FAVOURITES.',
     rsBoarding:'● GETTING ON HERE', rsStopsAway:'{n} stops from your stop',
     rsOneStopAway:'1 stop from your stop', rsBefore:'before your stop',
@@ -2717,7 +2721,7 @@ rmStations:'{n} 個站',
     couldNotWork:'無法計算路線：', checkInternet:'請檢查網絡連線後再按一次。',
     someDataFailed:'部分巴士資料未能載入：',
     loadingNetwork:'正在載入巴士路線網絡…只需一次，之後會自動儲存', lookingFor:'正在搜尋巴士…',
-    stopsOnRoute:'此路線共 {n} 個站', rideCount:'坐 {n} 個站', rideStopN:'第 {n} 站', rideOn:'上車', rideOff:'第 {n} 站 下車', rideNext:'下一班 {m} 分鐘', rideNextNow:'下一班即將到站', cleared:'已清除。',
+    stopsOnRoute:'此路線共 {n} 個站', rideCount:'坐 {n} 個站', rideArrive:'預計 {t} 到達', rideStopN:'第 {n} 站', rideOn:'上車', rideOff:'第 {n} 站 下車', rideNext:'下一班 {m} 分鐘', rideNextNow:'下一班即將到站', cleared:'已清除。',
     rsHint:'先按上車站，再按下車站，乘車時會自動倒數剩餘車站。按 ☆ 可同時收藏該車站及此路線，在「收藏」查看。',
     rsBoarding:'● 在此上車', rsStopsAway:'距離上車站 {n} 個站',
     rsOneStopAway:'距離上車站 1 個站', rsBefore:'在上車站之前',
@@ -16871,7 +16875,7 @@ function currentStopRide() {
     .filter(x => x && isFinite(Number(x.lat)) && isFinite(Number(x.long)));
   if (stops.length < 2) return null;
   const row = best.row;
-  return { route: String(row.route), stops,
+  return { route: String(row.route), stops, row, key: best.key,
            dest: lang === 'zh' ? (row.dest_tc || row.dest_en) : row.dest_en,
            minutes: isFinite(best.t) ? Math.max(0, Math.round((best.t - now) / 60000)) : null,
            sig: stopRideSig + '|' + best.key };
@@ -16880,6 +16884,14 @@ function currentStopRide() {
 // Draw it if the 巴士 page's ride is newer than whatever the map last drew.
 // Returns true when it drew (the caller then leaves the view alone).
 function showStopRideOnMap() {
+  // Same ride still on the map: only the card's minutes and arrival time
+  // move on, so refresh those from the 巴士 page's latest times.
+  const card = document.getElementById('ridecard');
+  if (card && card.classList.contains('on') && stopRideAt <= mapDrawnAt) {
+    const again = currentStopRide();
+    if (again && again.sig === card.dataset.sig) paintRideCard(again);
+    return false;
+  }
   if (!stopRideSig || stopRideAt <= mapDrawnAt) return false;
   const ride = currentStopRide();
   if (!ride) return false;
@@ -16930,18 +16942,36 @@ function paintRideZoom() {
 }
 map.on('zoomend', paintRideZoom);
 
+// The 巴士 page's own estimate, worked out the same way so the two screens
+// never disagree: the next bus's minutes, plus the ride — the ferry table
+// for a crossing, MINUTES_PER_STOP a stop for a bus.
+function rideArrivalTime(ride) {
+  if (ride.minutes === null) return '';
+  const stopsAway = ride.stops.length - 1;
+  const info = ride.row.co === 'FERRY' ? ferryInfo.get(ride.key) : null;
+  const at = Number(ride.row.seq) || 1;
+  const rideMins = info && info.mins[at - 1 + stopsAway] !== undefined
+    ? Number(info.mins[at - 1 + stopsAway]) - Number(info.mins[at - 1] || 0)
+    : stopsAway * MINUTES_PER_STOP;
+  return new Date(Date.now() + (ride.minutes + rideMins) * 60000)
+    .toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+}
+
 function paintRideCard(ride) {
   const card = document.getElementById('ridecard');
   if (!card) return;
   if (!ride) { card.classList.remove('on'); card.innerHTML = ''; return; }
   const last = ride.stops.length - 1;
+  const arrive = rideArrivalTime(ride);
   const next = ride.minutes === null ? ''
     : ride.minutes <= 0 ? T('rideNextNow') : T('rideNext').replace('{m}', ride.minutes);
   card.innerHTML =
     '<div class="rchead">🚌 ' + esc(ride.route) + (ride.dest ? ' <span>' + esc(T('towards')) + ' ' + esc(ride.dest) + '</span>' : '') + '</div>' +
     '<div class="rccount">' + esc(T('rideCount').replace('{n}', last)) + '</div>' +
+    (arrive ? '<div class="rcarrive">🏁 ' + T('rideArrive').replace('{t}', '<b>' + esc(arrive) + '</b>') + '</div>' : '') +
     '<div class="rcends">🟢 ' + esc(stopName(ride.stops[0])) + ' → 🔴 ' + esc(stopName(ride.stops[last])) + '</div>' +
     (next ? '<div class="rcnext">' + esc(next) + '</div>' : '');
+  card.dataset.sig = ride.sig;
   card.classList.add('on');
 }
 
