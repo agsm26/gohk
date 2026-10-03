@@ -353,6 +353,17 @@
     overflow:hidden; white-space:nowrap;
     font-size:0.94rem; font-weight:700; color:var(--ink-2);
   }
+  /* One line of nothing, no width, with a chip's 3px above and below, so the
+     bar is exactly one chip tall whatever it holds — empty, the news alone,
+     a message, or a warning (which used to make it 6px taller when it
+     arrived). Same height in every case, so nothing below it moves when one
+     of them comes or goes. The -8px gives back the gap the bar would put
+     after it. (Only the 44px update button is taller, and it waits for a
+     tap that reloads the page anyway.) Its unseen text is ⚠, 📴 and a
+     Chinese character on purpose: those come from taller fonts than plain
+     letters, and a blank alone left a warning chip 4px taller than the bar. */
+  #weatherbar::before { content:'\00a0⚠📴國'; flex:0 0 0; overflow:hidden; padding:3px 0;
+                        margin-right:-8px; }
   /* A pull that produces nothing visible reads as a pull that did not work. */
   #weatherbar.refreshing { animation:pullflash .9s ease-out; }
   @keyframes pullflash { from { background:var(--navy-tint); } to { background:transparent; } }
@@ -375,7 +386,7 @@
   /* It may shrink and it may be ellipsised, but it keeps its 44px: half a
      sentence is still tappable, and on one line it must not be allowed to
      take the whole bar and crush the news beside it to nothing. */
-  .wxupdate { flex:0 1 auto; order:3; min-width:0; max-width:50%;
+  .wxupdate { flex:0 1 auto; order:4; min-width:0; max-width:50%;
               min-height:44px; border:none; border-radius:8px;
               background:var(--green); color:white; font-weight:800;
               font-size:0.94rem; padding:0 12px; cursor:pointer;
@@ -773,16 +784,63 @@
                 margin-top:3px; overflow-wrap:anywhere; }
   .poleroutes b { color:var(--blue); }
 
-  /* THE TOAST. Fixed under the bars, so it is in view whatever the sheet is
-     doing. Dark on light, not a coloured pill: it carries errors, "ready",
-     "saved" — all of them — and one plain style keeps it readable for all. */
-  #toast { position:fixed; top:calc(var(--toph) + 10px); left:12px; right:12px;
-           z-index:1500; background:var(--ink); color:white; border-radius:12px;
-           padding:12px 16px; font-size:1rem; font-weight:700; line-height:1.4;
-           box-shadow:0 6px 20px rgba(0,0,0,.35); pointer-events:none;
-           opacity:0; transform:translateY(-8px);
-           transition:opacity .18s ease, transform .18s ease; }
-  #toast.show { opacity:1; transform:none; }
+  /* THE MESSAGE. It used to float as a dark box just under the top bar —
+     which on the bus tab is exactly where the typing box is, so every
+     "更新緊…" sat on top of the thing the rider was about to tap. It now
+     lives IN the top bar, a dark chip beside the traffic news. Warnings keep
+     the first place (order 1), then 📴 (2), then the message (3) — an order
+     of its own, so it cannot swap with 📴 when the bar is redrawn.
+     Dark on light, not a coloured pill: it carries errors, "ready", "saved"
+     — all of them — and one plain style keeps it readable for all.
+     ONE LINE, like the rest of the bar, and for the same reason: a message
+     that wrapped made the bar grow and the whole screen jump down — and jump
+     back up on its own 4–6 s later, under a finger about to tap. Beside a
+     typhoon signal it was squeezed to a column one character wide and
+     hundreds of pixels tall. So the bar's height never depends on the
+     message. A message longer than its chip is shown a part at a time
+     instead (fitBarMessage).
+     The -3px margin gives back the 3px padding, and the fixed line-height
+     stops a Chinese font from making the line taller than the news line
+     beside it (on Android it would, by 4–6px); the padding sits in the
+     bar's own 5px. And the bar never hides now, so a message arriving in an
+     otherwise empty bar does not move the screen either. */
+  .wxmsg { flex:0 1 auto; order:3; min-width:0; overflow:hidden; white-space:nowrap;
+           background:var(--ink); color:white; border-radius:8px;
+           padding:3px 8px; margin:-3px 0; font-weight:800; line-height:1.1;
+           animation:wxmsgin .18s ease-out; }
+  .wxmsgtext { display:inline-block; }
+  /* The whole message, unseen and no height, so the chip is always as wide
+     as the whole message would make it. Without it the chip would narrow and
+     widen with each part, the news beside it with it. */
+  .wxmsgsize { display:block; height:0; overflow:hidden; visibility:hidden; }
+  @keyframes wxmsgin { from { opacity:0; } }
+  @media (prefers-reduced-motion: reduce) { .wxmsg { animation:none; } }
+  /* WHILE A MESSAGE IS UP, everything else on the line gives way to it, for
+     those seconds only (20 at the very most — fitBarMessage). The news keeps
+     a window, so it is still seen to be there, rather than its usual third.
+     A warning, the offline chip, the saved-route alert and the update button
+     shrink FIRST (flex-shrink:100 against the message's 1 — in proportion
+     they hardly gave way at all), down to their ⚠ / 📴 — 2.2rem INCLUDING
+     their padding, hence border-box — still in their colour, still first;
+     clipped, not "…", because at that width an ellipsis would replace the ⚠
+     itself. */
+  #weatherbar.hasmsg .wxticker { min-width:2.6rem; }
+  #weatherbar.hasmsg .wxwarn,
+  #weatherbar.hasmsg .wxoff,
+  #weatherbar.hasmsg .wxalert,
+  #weatherbar.hasmsg .wxupdate { flex-shrink:100; min-width:2.2rem; box-sizing:border-box;
+                                 overflow:hidden; text-overflow:clip; }
+  /* TIGHT: a typhoon signal, a rainstorm warning and no connection, at 特大,
+     left the message room for one character at a time. When it has less
+     than six, the news gives up its window as well. */
+  #weatherbar.hasmsg.tight .wxticker { display:none; }
+  /* #toast is now only what a screen reader hears. The chip above is what is
+     seen; this is the live region that announces the same words, and it is
+     kept out of the bar on purpose — the chip comes and goes, and a live
+     region has to be in the page before its words change to be announced.
+     Off-screen, never display:none, for the same reason. */
+  #toast { position:absolute; width:1px; height:1px; margin:-1px; padding:0; border:0;
+           overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; }
 
 
 
@@ -1054,7 +1112,7 @@
      the rest. It shrinks before the news does, and the ⚠ is written FIRST so
      that what survives the squeeze is a red button that still says "there is
      something about your routes" and still opens the notice when tapped. */
-  .wxalert { flex:0 1 auto; min-width:2.2rem; max-width:38%; order:4; background:var(--red);
+  .wxalert { flex:0 1 auto; min-width:2.2rem; max-width:38%; order:5; background:var(--red);
              color:white; border:none; border-radius:8px; padding:3px 8px;
              font-weight:800; font-size:0.94rem; text-align:left; cursor:pointer;
              overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -2006,13 +2064,16 @@
   <button class="bnav"    data-nav="set"><span class="bicon">⚙️</span><span class="blabel"></span></button>
 </nav>
 
-<!-- Weather and Observatory warnings, under the bar. Hidden until there is
-     something real to show, so a failed fetch costs no screen space. -->
-<div id="weatherbar" style="display:none"></div>
+<!-- Weather and Observatory warnings, traffic news and the app's messages.
+     ALWAYS THERE, from the first moment, even with nothing in it: it used to
+     be hidden until something arrived, and then the whole screen dropped a
+     line — at opening, just as the rider went to tap 我要去. -->
+<div id="weatherbar"></div>
 
 <!-- Every message the app has to say goes to #status at the BOTTOM of the
-     panel, which on a phone is usually off screen. This mirrors each new
-     message here, under the bar, for a few seconds. -->
+     panel, which on a phone is usually off screen. Each new message is shown
+     for a few seconds as a chip in the top bar (.wxmsg), and read out from
+     here, which is hidden from sight. -->
 <div id="toast" role="status" aria-live="polite"></div>
 
 <!-- The get-off alarm: counts the stops down from GPS and sounds before the
@@ -2840,22 +2901,27 @@ map.setView = function (centre, zoom, options) {
 
 const status = document.getElementById('status');
 
-// Mirror #status into the toast. Dozens of places write status.textContent;
-// watching the element means none of them has to know the toast exists.
+// The message on show in the top bar ('' when there is none), when it is due
+// to go, and the timers that take it away and turn its parts. Kept here, not
+// with the bar's code at the bottom of the file, because the watcher below is
+// the one that sets them and must never find them uninitialised.
+let barMessage = '', barMessageUntil = 0, barMessageTimer = null, barPartTimer = null;
+
+// Mirror #status into the top bar. Dozens of places write status.textContent;
+// watching the element means none of them has to know the bar exists.
 (function watchStatus() {
   const toast = document.getElementById('toast');
   if (!toast || typeof MutationObserver === 'undefined') return;
-  let hideTimer = null, last = '';
+  let last = '';
   new MutationObserver(() => {
     const text = status.textContent.trim();
     if (!text || text === last) return;
     last = text;
-    toast.textContent = text;
-    toast.classList.add('show');
-    clearTimeout(hideTimer);
-    // Long enough to read at a walking pace; errors linger a little longer.
-    hideTimer = setTimeout(() => toast.classList.remove('show'),
-                           text.length > 40 ? 6000 : 4000);
+    toast.textContent = text;                 // heard
+    const reading = showBarMessage(text);     // seen
+    // Long enough to read at a walking pace; errors linger a little longer,
+    // and a message shown in parts stays until its last part has been read.
+    holdBarMessage(Math.max(text.length > 40 ? 6000 : 4000, reading));
   }).observe(status, { childList: true, characterData: true, subtree: true });
 })();
 
@@ -9472,6 +9538,7 @@ window.addEventListener('resize', () => {
   window._resizeTimer = setTimeout(() => {
     map.invalidateSize(); drawStops();
     if (typeof fitLocateButton === 'function') fitLocateButton();
+    refitBarMessage();             // a turned phone gives the message new room
   }, 200);
 });
 
@@ -15051,23 +15118,184 @@ async function loadWeather() {
 function renderWeatherBar() {
   const bar = document.getElementById('weatherbar');
   if (!bar) return;
-  bar.innerHTML = '';
+  // Everything is rebuilt but the message, which is left exactly as it is —
+  // on the part it was showing, without its fade-in again. A redraw follows
+  // every load of arrival times; rebuilt, the message went back to its start
+  // each time and could be taken away before its end had been seen.
+  for (const el of [...bar.children]) {
+    if (!el.classList.contains('wxmsg') || !barMessage) el.remove();
+  }
 
-  // Order on the line: warning, then offline / update, then the routes the
-  // rider has saved, and the traffic news last taking whatever is left. CSS
+  // Order on the line: warning, then offline / the latest message / update,
+  // then the routes the rider has saved, and the traffic news last taking
+  // whatever is left. CSS
   // `order` puts each part in its place, so the order they are appended in
   // only has to be readable.
   const parts = [];
   if (updateWaiting) parts.push(updateChip());
   if (!navigator.onLine) parts.push(offlineChip());
   if (weatherData) parts.push(...weatherParts());
+  if (barMessage && !bar.querySelector('.wxmsg')) parts.push(messageChip());
   if (currentAlerts.length) parts.push(alertChip());
   const near = tdNotices.length ? nearbyNotices() : [];
   if (near.length) parts.push(tickerChip(near));
 
-  if (parts.length === 0) { hideWeatherBar(); return; }
+  // Even with no parts the bar stays, empty, holding its line (see the HTML).
   for (const part of parts) bar.appendChild(part);
   showWeatherBar();
+  // A warning that arrived, or one that went, changes the message's room.
+  refitBarMessage();
+}
+
+// THE MESSAGE CHIP — "更新緊…", "已收藏 2。", "無法取得你的位置。" and the
+// rest, for a few seconds, in the bar instead of over the screen.
+// Added and taken away on its own rather than by redrawing the bar: a redraw
+// rebuilds the news ticker, and the news would jump back to its start every
+// time a message came or went.
+function messageChip() {
+  const chip = document.createElement('span');
+  chip.className = 'wxmsg';
+  // Seen here, heard from #toast. Hidden from a screen reader so that it is
+  // not read out twice.
+  chip.setAttribute('aria-hidden', 'true');
+  const size = document.createElement('span');
+  size.className = 'wxmsgsize';
+  size.textContent = barMessage;
+  const words = document.createElement('span');
+  words.className = 'wxmsgtext';
+  chip.append(size, words);
+  return chip;
+}
+// Returns how long the message needs to be on screen to be read, in ms.
+function showBarMessage(text) {
+  barMessage = text;
+  barMessageUntil = 0;                   // its own time, not the last one's
+  const bar = document.getElementById('weatherbar');
+  if (!bar) return 0;
+  bar.classList.add('hasmsg');           // the rest of the line gives way
+  let chip = bar.querySelector('.wxmsg');
+  if (!chip) bar.appendChild(chip = messageChip());   // CSS `order` puts it in its place
+  chip.querySelector('.wxmsgsize').textContent = text;
+  showWeatherBar();
+  return fitBarMessage(chip);
+}
+// Keep the message up for at least `ms` from now — and never take it away
+// sooner than it was already promised.
+function holdBarMessage(ms) {
+  const until = Date.now() + ms;
+  if (until <= barMessageUntil) return;
+  barMessageUntil = until;
+  clearTimeout(barMessageTimer);
+  barMessageTimer = setTimeout(clearBarMessage, ms);
+}
+function clearBarMessage() {
+  barMessage = '';
+  barMessageUntil = 0;
+  clearTimeout(barMessageTimer);
+  clearTimeout(barPartTimer);
+  const bar = document.getElementById('weatherbar');
+  if (!bar) return;
+  bar.classList.remove('hasmsg', 'tight');
+  const chip = bar.querySelector('.wxmsg');
+  if (chip) chip.remove();
+  showWeatherBar();                      // re-measured; the bar itself stays
+}
+// The width the message's words have inside the chip, in whole px.
+function messageRoom(chip) {
+  const style = getComputedStyle(chip);
+  return Math.floor(chip.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
+}
+// A MESSAGE LONGER THAN ITS CHIP is not cut off. It is shown a chipful at a
+// time, each part held still long enough to read, with "…" where it carries
+// on. Parts and not a slide: text that keeps still is easier to read for the
+// riders this app is built for, it needs no motion for someone who has asked
+// their phone for less, and it works on a phone too old to animate.
+// Returns how long all the parts take, so the message is not taken away
+// before the last one has been read.
+function fitBarMessage(chip) {
+  clearTimeout(barPartTimer);
+  if (!chip || !barMessage) return 0;
+  const bar = chip.parentNode;
+  const words = chip.querySelector('.wxmsgtext');
+  words.textContent = barMessage;
+  // 4px of the chip's 8px right padding may be used: the warnings beside it
+  // leave "更新緊…" a pixel short at 特大, and cutting a four-character
+  // message in two over a pixel would be absurd. Clipping is at the padding
+  // edge, not the text's, so nothing is lost.
+  const SLACK = 4;
+  const em = parseFloat(getComputedStyle(chip).fontSize);
+  // Room for fewer than six characters, and more to say than that: the news
+  // gives up its window too (.tight), for as long as the message is up.
+  bar.classList.remove('tight');
+  if (messageRoom(chip) < 6 * em && words.offsetWidth > messageRoom(chip) + SLACK) bar.classList.add('tight');
+  chip.dataset.room = messageRoom(chip);
+  const room = messageRoom(chip) + SLACK;
+  if (room <= SLACK || words.offsetWidth <= room) return 0;
+  const parts = messageParts(words, barMessage, room);
+  // Under three characters a part cannot be read, and there would be dozens
+  // of them. Show the start and let it go at the usual time; the whole of it
+  // is still read out by #toast.
+  if (room < 3 * em) { words.textContent = parts[0].text; return 0; }
+  // About four Chinese characters or eight letters a second — 15ms for each
+  // pixel of text — never under two seconds, and a second more for the first
+  // part while the eye finds the chip. But never more than 20 seconds in all,
+  // since everything beside it stays squeezed while it is up: past that, each
+  // part is shortened in proportion, though never under a second and a half.
+  let holds = parts.map(p => Math.max(2000, Math.round(p.width * 15)));
+  holds[0] += 1000;
+  const total = holds.reduce((sum, ms) => sum + ms, 0);
+  if (total > 20000) holds = holds.map(ms => Math.max(1500, Math.round(ms * 20000 / total)));
+  let at = 0;
+  (function turn() {
+    words.textContent = parts[at].text;
+    if (at < parts.length - 1) barPartTimer = setTimeout(() => { at++; turn(); }, holds[at]);
+  })();
+  return holds.reduce((sum, ms) => sum + ms, 0);
+}
+// The room the message has can change while it is up — a warning arrives,
+// the phone is turned. Only then is it cut up again, from its first part,
+// and kept up until the last part has been read.
+function refitBarMessage() {
+  if (!barMessage) return;
+  const chip = document.querySelector('#weatherbar .wxmsg');
+  if (!chip || String(messageRoom(chip)) === chip.dataset.room) return;
+  const reading = fitBarMessage(chip);
+  if (reading) holdBarMessage(reading);
+}
+// Cut `text` into parts that each fit `room` px, "…" on every part but the
+// last. Measured on the chip's own words, so the font and size are exactly
+// what will be seen. An English part ends at a space where it can; Chinese
+// can end anywhere. By character, so an emoji is never cut in half.
+function messageParts(words, text, room) {
+  const fits = s => { words.textContent = s; return words.offsetWidth <= room; };
+  const parts = [];
+  let rest = Array.from(text);
+  while (rest.length) {
+    if (fits(rest.join(''))) { parts.push({ text: rest.join(''), width: words.offsetWidth }); break; }
+    // The longest start of what is left that fits with "…" after it — one
+    // character at the very least, so this always gets to the end.
+    let lo = 1, hi = rest.length - 1;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (fits(rest.slice(0, mid).join('') + '…')) lo = mid; else hi = mid - 1;
+    }
+    let cut = lo;
+    // Back to the last space only if the cut would split an English word or
+    // a number, or leave its full stop or comma to start the next part — not
+    // in Chinese, where "你附近 500 米內" would otherwise be cut at its first
+    // space and leave half the chip empty.
+    const word = /[A-Za-z0-9]/, wordOrMark = /[A-Za-z0-9.,;:!?'’)\]%]/;
+    if (word.test(rest[cut - 1]) && wordOrMark.test(rest[cut] || '')) {
+      const space = rest.slice(0, cut).lastIndexOf(' ');
+      if (space > cut * 0.4) cut = space;
+    }
+    const part = rest.slice(0, cut).join('').trimEnd() + '…';
+    fits(part);
+    parts.push({ text: part, width: words.offsetWidth });
+    rest = rest.slice(cut);
+    while (rest.length && rest[0] === ' ') rest.shift();
+  }
+  return parts;
 }
 
 // The weather half, as elements. Split out from the bar itself so that no
@@ -15105,7 +15333,9 @@ function weatherParts() {
   // The WARNINGS above stay. A red rainstorm or a No.8 signal is the one
   // thing here that decides whether you travel at all -- and when there is no
   // warning, no traffic notice, nothing offline and no update waiting, the
-  // bar has no parts, hides itself, and the screen below starts at the top.
+  // bar has no parts and stands empty. (It used to hide itself, and the
+  // screen dropped a line every time something arrived — at opening, under
+  // the rider's finger. One quiet line is the cheaper of the two.)
   return parts;
 }
 
@@ -15116,12 +15346,6 @@ function showWeatherBar() {
   const bar = document.getElementById('weatherbar');
   bar.style.display = 'flex';
   document.documentElement.style.setProperty('--wxh', bar.offsetHeight + 'px');
-}
-
-function hideWeatherBar() {
-  const bar = document.getElementById('weatherbar');
-  bar.style.display = 'none';
-  document.documentElement.style.setProperty('--wxh', '0px');
 }
 
 // ============================================================
