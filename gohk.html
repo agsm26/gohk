@@ -2589,7 +2589,7 @@ rmStations:'{n} 個站',
     favStopOpen:'查看此站班次', stopSavedMsg:'已收藏 {s}', stopRemovedMsg:'已移除 {s}',
     stopFull:'常用起點已滿（12 個），請先移除一個。',
     stopDestSaved:'常去的目的地', stopDestStar:'收藏此目的地', stopDestUnstar:'已收藏，按此移除',
-    stopBays:'{n} 個站位',
+    stopBays:'{n} 個上車點',
     stopDestFull:'常用目的地已滿（12 個），請先移除一個。',
     etaArrive:'{t} 到達 · 約 {n} 個站',
     stopDestSavedMsg:'已收藏目的地「{d}」。', stopDestRemovedMsg:'已移除「{d}」。',
@@ -2691,7 +2691,7 @@ rmStations:'{n} 個站',
     spotHotel:'酒店賓館', spotNone:'不顯示', spotPhone:'電話', fareUnknown:'未有公佈', spotHotelLoading:'正在取得酒店名單…',
     startNearestTo:'最近有直達 {d} 的車站：{s}（{m} 米）',
     startNoneReach:'你附近 {m} 米內，沒有車站有巴士直達 {d}。可考慮乘港鐵或轉搭其他交通工具。',
-    stopCrossOver:'→ 過對面', stopWholePlace:'全部 {n} 個站位',
+    stopCrossOver:'→ 過對面', stopWholePlace:'全部 {n} 個上車點',
     stopArriveBy:'{r} {w}後開 — {t} 到', stopArriveDue:'{r} 即將開 — {t} 到',
     stopRanking:'搵緊最快到嘅路線…', stopRoadSlow:'{s} 現時只有 {k} 公里/小時',
     journeyRoadSlow:'已計入路面實況：{s} 現時只有 {k} 公里/小時，車程已加 {n} 分鐘。',
@@ -17021,9 +17021,14 @@ function currentStopRide() {
     const seq = Number(row.seq) || (routesServing(from).find(r => r.key === key) || {}).seq || 0;
     const reach = routeReaches(key, seq, destIds);
     if (!reach) continue;
+    // Minutes exactly as the 巴士 page counts them (etaEntries): rounded,
+    // and a bus already due a minute ago is gone. Counting it here (it used
+    // to be kept for a minute) put a different bus on the map — 17:58 there
+    // against 18:03 on the page, on the owner's phone.
     const t = row.eta ? new Date(row.eta).getTime() : Infinity;
-    if (t < now - 60000) continue;
-    if (!best || t < best.t) best = { row, key, seq, reach, t };
+    const m = isFinite(t) ? Math.round((t - now) / 60000) : Infinity;
+    if (m < 0) continue;
+    if (!best || m < best.m) best = { row, key, seq, reach, t, m };
   }
   if (!best) return null;
   const toSeq = best.seq + best.reach.stopsAway;
@@ -17031,12 +17036,19 @@ function currentStopRide() {
   for (const e of routeIndex.get(best.key) || []) {
     if (e.seq >= best.seq && e.seq <= toSeq && !bySeq.has(e.seq)) bySeq.set(e.seq, e.stopId);
   }
-  const stops = [...bySeq.keys()].sort((a, b) => a - b).map(q => lookupStop(bySeq.get(q))).filter(hasPlace);
-  if (stops.length < 2) return null;
+  // Each stop keeps its number counted the 巴士 page's way — by its place on
+  // the route — so a stop with no map position leaves a gap in the dots, not
+  // a different count: 「約 13 個站」 on the page is 「坐 13 個站」 here.
+  const stops = [], nums = [];
+  for (const q of [...bySeq.keys()].sort((a, b) => a - b)) {
+    const x = lookupStop(bySeq.get(q));
+    if (hasPlace(x)) { stops.push(x); nums.push(q - best.seq); }
+  }
+  if (stops.length < 2 || nums[0] !== 0 || nums[nums.length - 1] !== best.reach.stopsAway) return null;
   const row = best.row;
-  return { route: String(row.route), stops, row, key: best.key, toEnd: false,
+  return { route: String(row.route), stops, nums, count: best.reach.stopsAway, row, key: best.key, toEnd: false,
            dest: lang === 'zh' ? (row.dest_tc || row.dest_en) : row.dest_en,
-           minutes: isFinite(best.t) ? Math.max(0, Math.round((best.t - now) / 60000)) : null,
+           minutes: isFinite(best.m) ? best.m : null,
            sig: 'stop|' + stopRideSig + '|' + best.key };
 }
 
@@ -17056,7 +17068,7 @@ function currentRouteRide() {
   if (row && typeof row.etaMinutes !== 'number') rsLoadRowFirst(st.boardAt);
   const minutes = row && typeof row.etaMinutes === 'number'
     ? Math.max(0, row.etaMinutes - Math.round((Date.now() - row.etaAt) / 60000)) : null;
-  return { route: String(st.context.routeNo), stops, toEnd, minutes,
+  return { route: String(st.context.routeNo), stops, count: end - st.boardAt, toEnd, minutes,
            dest: st.context.to, row: { co: st.context.co, seq: st.boardAt + 1 }, key: null,
            sig: 'route|' + routeRideSig };
 }
@@ -17092,15 +17104,16 @@ function drawRide(ride) {
   map.getContainer().classList.remove('ridetight');
   journeyMode = true;
   stopLayer.clearLayers();
-  const last = ride.stops.length - 1;
+  const last = ride.stops.length - 1, count = ride.count;
   const at = x => [Number(x.lat), Number(x.long)];
   const points = ride.stops.filter(hasPlace).map(at);
   L.polyline(points, { color:'#1d4ed8', weight:7, opacity:0.85 }).addTo(routeLayer);
   ride.stops.forEach((x, i) => {
     if (i === 0 || i === last || !hasPlace(x)) return;
+    const n = ride.nums ? ride.nums[i] : i;
     L.marker(at(x), { icon: L.divIcon({ className:'', iconSize:[30, 30], iconAnchor:[15, 15],
-      html:'<div class="ridenum">' + i + '</div>' }) })
-      .bindPopup('<b>' + esc(T('rideStopN').replace('{n}', i)) + '</b><br>' + esc(stopName(x)))
+      html:'<div class="ridenum">' + n + '</div>' }) })
+      .bindPopup('<b>' + esc(T('rideStopN').replace('{n}', n)) + '</b><br>' + esc(stopName(x)))
       .addTo(routeLayer);
   });
   // Each label reads away from the other end, so the one on the east side
@@ -17122,10 +17135,10 @@ function drawRide(ride) {
   const startSouth = first[0] <= final[0], eastStart = first[1] > final[1];
   rideEndLabel(first, 'start', '🚌', T('rideOn'), stopName(ride.stops[0]),
                startSouth ? 'down' : 'up', eastStart ? 'toleft' : 'toright');
-  rideEndLabel(final, 'end', String(last), T(ride.toEnd ? 'rideEnd' : 'rideOff').replace('{n}', last),
+  rideEndLabel(final, 'end', String(count), T(ride.toEnd ? 'rideEnd' : 'rideOff').replace('{n}', count),
                stopName(ride.stops[last]), startSouth ? 'up' : 'down', eastStart ? 'toright' : 'toleft');
   keepRideLabelsInView();
-  status.textContent = ride.route + ' · ' + T(ride.toEnd ? 'rideToEnd' : 'rideCount').replace('{n}', last);
+  status.textContent = ride.route + ' · ' + T(ride.toEnd ? 'rideToEnd' : 'rideCount').replace('{n}', count);
 }
 
 // The padding is a forecast; this is the check. After the labels are on,
@@ -17183,7 +17196,7 @@ map.on('zoomend', paintRideZoom);
 // for a crossing, MINUTES_PER_STOP a stop for a bus.
 function rideArrivalTime(ride) {
   if (ride.minutes === null) return '';
-  const stopsAway = ride.stops.length - 1;
+  const stopsAway = ride.count;
   const info = ride.row.co === 'FERRY' && ride.key ? ferryInfo.get(ride.key) : null;
   const at = Number(ride.row.seq) || 1;
   const rideMins = info && info.mins[at - 1 + stopsAway] !== undefined
@@ -17197,13 +17210,13 @@ function paintRideCard(ride) {
   const card = document.getElementById('ridecard');
   if (!card) return;
   if (!ride) { card.classList.remove('on'); card.innerHTML = ''; card.dataset.sig = ''; return; }
-  const last = ride.stops.length - 1;
+  const last = ride.stops.length - 1, count = ride.count;
   const arrive = rideArrivalTime(ride);
   const next = ride.minutes === null ? ''
     : ride.minutes <= 0 ? T('rideNextNow') : T('rideNext').replace('{m}', ride.minutes);
   card.innerHTML =
     '<div class="rchead">🚌 ' + esc(ride.route) + (ride.dest ? ' <span>' + esc(T('towards')) + ' ' + esc(ride.dest) + '</span>' : '') + '</div>' +
-    '<div class="rccount">' + esc(T(ride.toEnd ? 'rideToEnd' : 'rideCount').replace('{n}', last)) + '</div>' +
+    '<div class="rccount">' + esc(T(ride.toEnd ? 'rideToEnd' : 'rideCount').replace('{n}', count)) + '</div>' +
     (arrive ? '<div class="rcarrive">🏁 ' + T(ride.toEnd ? 'rideArriveEnd' : 'rideArrive').replace('{t}', '<b>' + esc(arrive) + '</b>') + '</div>' : '') +
     '<div class="rcends">🟢 ' + esc(stopName(ride.stops[0])) + ' → 🔴 ' + esc(stopName(ride.stops[last])) + '</div>' +
     (next ? '<div class="rcnext">' + esc(next) + '</div>' : '') +
