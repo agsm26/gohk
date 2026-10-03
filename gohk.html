@@ -1100,6 +1100,10 @@
   /* A THIRD OF THE BAR, GUARANTEED. Without a floor the news was handed
      whatever the chips left over — 9px behind a full-width update button —
      which is a marquee nobody can read. */
+  /* No open notices: a grey line in the news's place, not a chip — it is
+     the absence of news, and must not look like something to read. */
+  .wxnonews { flex:1 1 0; min-width:0; order:8; overflow:hidden; text-overflow:ellipsis;
+              text-align:right; color:var(--ink-3); font-weight:700; }
   .wxticker { flex:1 1 0; min-width:30%; order:8; overflow:hidden; white-space:nowrap;
               cursor:pointer; }
   .wxtickertext { display:inline-block; padding-left:100%; animation:wxscroll 30s linear infinite;
@@ -2172,7 +2176,7 @@ rmStations:'{n} stations',
     alertBanner:'⚠ Traffic notice: {x} · tap to read', alertSource:'Transport Department special traffic news',
     alertSourceMtr:'MTR next-train feed', alertSourceBus:'Bus company arrival feed', alertMtrDelay:'{line} is delayed at the moment',
     alertMyBus:'my bus {r}', alertSavedStop:'saved stop {s}', alertPlace:'saved place {s}', alertTrain:'my train at {s}', alertOnScreen:'on screen: {s}',
-    alertNearby:'Nearby: {x}', langTC:'繁體中文', langSC:'简体中文', langEN:'English',
+    alertNearby:'Nearby: {x}', noTrafficNews:'No traffic news right now', langTC:'繁體中文', langSC:'简体中文', langEN:'English',
     settingElderly:'Senior mode', elderOn:'On', elderOff:'Off', elderTag:'senior',
     elderNote:'When on, every fare is shown at the Government $2 scheme price: $2 for fares up to $10, 20% of the fare above $10.',
     elderOnMsg:'Senior mode on — fares now show the $2 scheme price.', elderOffMsg:'Senior mode off — fares show the full price.',
@@ -2527,7 +2531,7 @@ rmStations:'{n} 個站',
     alertBanner:'⚠ 交通消息：{x} · 按此查看', alertSource:'運輸署特別交通消息',
     alertSourceMtr:'港鐵列車班次資料', alertSourceBus:'巴士公司班次資料', alertMtrDelay:'{line} 現時延誤',
     alertMyBus:'我的巴士 {r}', alertSavedStop:'常用車站 {s}', alertPlace:'常去目的地 {s}', alertTrain:'我的列車 {s}', alertOnScreen:'現正查看 {s}',
-    alertNearby:'附近交通消息：{x}', langTC:'繁體中文', langSC:'简体中文', langEN:'English',
+    alertNearby:'附近交通消息：{x}', noTrafficNews:'暫無交通消息', langTC:'繁體中文', langSC:'简体中文', langEN:'English',
     settingElderly:'長者模式', elderOn:'開', elderOff:'關', elderTag:'長者',
     elderNote:'開啟後，所有車費按政府二元優惠計劃顯示：原價 $10 或以下收 $2，高於 $10 收原價兩折。',
     elderOnMsg:'已開啟長者模式，車費按二元優惠計劃顯示。', elderOffMsg:'已關閉長者模式，車費按原價顯示。',
@@ -4331,6 +4335,7 @@ document.getElementById('end-save').addEventListener('click', () => {
 // dead zone until then, and reading one throws — `typeof` included, which is
 // why the guards that were supposed to cover this did not.
 let tdNotices = [];
+let tdLoaded = false;   // the feed has answered at least once, empty or not
 let alertFlags = { mtr: {}, bus: {} };        // line → {since}; 'route|stop' → {since, text, label}
 let currentAlerts = [];
 let alertsSeen = {};
@@ -14722,6 +14727,7 @@ async function loadTdNews() {
       n.routes = routeTokens(n.content_tc + ' ' + n.content_en + ' ' + n.detail_tc + ' ' + n.detail_en);
       return n;
     }).filter(n => !/CLOSED|CANCEL/i.test(n.statusEn));
+    tdLoaded = true;
   } catch (error) { console.warn('TD news unavailable:', error); }
 }
 
@@ -14929,6 +14935,12 @@ function nearbyNotices() {
   // vanish. Each notice carries its own district in the text, so the wider
   // feed reads as what it is rather than as something happening here.
   return near.length ? near : tdNotices.slice(0, 8);
+}
+function noNewsChip() {
+  const span = document.createElement('span');
+  span.className = 'wxnonews';
+  span.textContent = sc(T('noTrafficNews'));
+  return span;
 }
 function tickerChip(list) {
   const wrap = document.createElement('div');
@@ -15139,6 +15151,10 @@ function renderWeatherBar() {
   if (currentAlerts.length) parts.push(alertChip());
   const near = tdNotices.length ? nearbyNotices() : [];
   if (near.length) parts.push(tickerChip(near));
+  // Nothing open in the feed: say so, quietly, where the news would be —
+  // an empty strip looked like the news had broken. Only once the feed has
+  // really answered, never while it is still loading or unreachable.
+  else if (tdLoaded) parts.push(noNewsChip());
 
   // Even with no parts the bar stays, empty, holding its line (see the HTML).
   for (const part of parts) bar.appendChild(part);
