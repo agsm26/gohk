@@ -484,6 +484,16 @@
   .rjline { font-size:1.0588rem; font-weight:800; }
   .rjfromto { font-size:0.94rem; font-weight:700; color:var(--ink-2); }
   .rjchange, .rjwalk { font-size:0.94rem; font-weight:700; color:var(--ink-3); padding:4px 0 4px 14px; }
+  /* THE WALK TO THE FIRST STATION: a link that opens the phone's own maps
+     app with walking directions. Green, the colour of 上車 on the map — it
+     is where the journey begins — and as big as the train buttons below. */
+  .rjgo { display:flex; flex-direction:column; align-items:flex-start; gap:2px; width:100%;
+          min-height:56px; padding:9px 12px; margin-bottom:8px; box-sizing:border-box;
+          border:2px solid var(--green); border-radius:10px; background:var(--green-tint);
+          color:var(--green); text-decoration:none; }
+  .rjgo:active { filter:brightness(.95); }
+  .rjgo .rjline { color:var(--green); }
+  .rjgosub { font-size:0.94rem; font-weight:700; color:var(--ink-2); }
 
   /* NEAREST, SAVED STATIONS AND SAVED TRAINS AS CHIPS.
      A station name is two or three characters and it was getting a whole row
@@ -2197,7 +2207,7 @@ rmStations:'{n} stations',
     railThere:'You are already at {b}.', railSame:'Start and destination are the same.',
     railNeedStart:'Allow location, or type a starting station.',
     railTotal:'about {n} min', railFareOct:'Octopus {o}', railFareTkt:'single ticket {t}',
-    railWalkOn:'Walk {n} min to {s} first', railWalkOff:'then walk {n} min',
+    railWalkOn:'Walk {n} min to {s} first', railGoTo:'🚶 Walk me to {s} station with Maps ›', railGoStep:'🧭 Walk me there with Maps ›', railGoFrom:'Opens your maps app, from where you are now', railGoFar:'About {d} on foot · about {n} min', unitM:' m', unitKm:' km', railWalkOff:'then walk {n} min',
     railChangeWalk:'Walk {n} min to change', railStep:'Step {n}',
     lrtCheckBoard:'Read the platform board for the next {n}',
     lrtOutDir:'Leave the platform and walk {d}',
@@ -2554,7 +2564,7 @@ rmStations:'{n} 個站',
     railThere:'你已經在 {b}。', railSame:'起點和目的地相同。',
     railNeedStart:'請先允許定位，或輸入起點車站。',
     railTotal:'約 {n} 分鐘', railFareOct:'八達通 {o}', railFareTkt:'單程票 {t}',
-    railWalkOn:'先步行 {n} 分鐘到 {s}', railWalkOff:'然後步行 {n} 分鐘',
+    railWalkOn:'先步行 {n} 分鐘到 {s}', railGoTo:'🚶 用地圖帶我行去 {s}站 ›', railGoStep:'🧭 用地圖帶我行去 ›', railGoFrom:'打開地圖 App，由你現在的位置帶路', railGoFar:'步行約 {d} · 約 {n} 分鐘', unitM:' 米', unitKm:' 公里', railWalkOff:'然後步行 {n} 分鐘',
     railChangeWalk:'步行 {n} 分鐘轉乘', railStep:'第 {n} 步',
     lrtCheckBoard:'請看月台顯示屏的下班 {n}',
     lrtOutDir:'落車後往{d}行',
@@ -14214,6 +14224,21 @@ function railHeadFor(leg) {
   return stationName(b > a ? order[order.length - 1] : order[0]);
 }
 
+// Walking directions to a station, or '' when it has no place on the map.
+function railWalkHref(station) {
+  const lat = Number(station && station.lat), lng = Number(station && station.long);
+  return isFinite(lat) && isFinite(lng) ? walkUrl(lat, lng) : '';
+}
+// Under the button: how far, when the phone knows where it is — so nobody
+// sets off on a 9 km "walk" to a station they meant to take a bus to.
+function railGoNote(station) {
+  if (!herePoint) return T('railGoFrom');
+  const walk = walkingEstimate(metresBetween(herePoint.lat, herePoint.lng, Number(station.lat), Number(station.long)));
+  const far = walk.metres < 1000 ? (Math.round(walk.metres / 10) * 10) + T('unitM')
+                                 : (walk.metres / 1000).toFixed(1) + T('unitKm');
+  return T('railGoFar').replace('{d}', far).replace('{n}', walk.minutes);
+}
+
 function railWayCard(j, n) {
   const oct = journeyFare(j);
   let fare = oct === null ? '' : fareText(oct);
@@ -14234,9 +14259,25 @@ function railWayCard(j, n) {
   // the arrow between them says so.
   let step = 0;
   const badge = () => '<span class="rjstep">' + T('railStep').replace('{n}', ++step) + '</span>';
-  if (j.walkOn && j.walkOn.minutes >= 2)
-    html += '<div class="rjwalk">' + badge() + '🚶 ' + T('railWalkOn').replace('{n}', j.walkOn.minutes)
-              .replace('{s}', esc(stopName(j.legs[0].on))) + '</div>';
+  // THE WALK TO THE FIRST STATION, AS DIRECTIONS. The card said where to
+  // start — 石硤尾 — and left the rider to find it. Now the first thing on it
+  // opens walking directions to that station from wherever the phone is:
+  // Apple Maps on an iPhone, Google Maps everywhere else (walkUrl, the same
+  // link the bus stops use). Starting from 📍 the card already had a walk
+  // step, 第 1 步 先步行 6 分鐘到 石硤尾; that step IS the button now.
+  const first = j.legs[0].on;
+  const go = railWalkHref(first);
+  if (j.walkOn && j.walkOn.minutes >= 2) {
+    const words = badge() + '🚶 ' + T('railWalkOn').replace('{n}', j.walkOn.minutes).replace('{s}', esc(stopName(first)));
+    html += go
+      ? '<a class="rjgo" href="' + esc(go) + '" target="_blank" rel="noopener">' +
+          '<span class="rjline">' + words + '</span><span class="rjgosub">' + esc(T('railGoStep')) + '</span></a>'
+      : '<div class="rjwalk">' + words + '</div>';
+  } else if (go) {
+    html += '<a class="rjgo" href="' + esc(go) + '" target="_blank" rel="noopener">' +
+      '<span class="rjline">' + esc(T('railGoTo').replace('{s}', stopName(first))) + '</span>' +
+      '<span class="rjgosub">' + esc(railGoNote(first)) + '</span></a>';
+  }
   j.legs.forEach((leg, i) => {
     if (i > 0) {
       const hop = (j.transferWalks || [])[i - 1];
