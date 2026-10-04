@@ -1788,6 +1788,29 @@
   .maphint:active { filter:brightness(.95); }
   .mhmain { display:block; font-size:1.06rem; font-weight:800; color:var(--blue); }
   .mhsub { display:block; font-size:0.94rem; font-weight:700; color:var(--ink-2); margin-top:2px; }
+  /* NO BUS GOES THERE: the MTR instead. Navy, the app's colour for "do
+     this", with the trip in brief and one big button that opens it on the
+     港鐵 tab, step by step. */
+  .mtrinstead { border:2px solid var(--navy); border-radius:14px; background:var(--navy-tint);
+                padding:12px; margin:12px 0 6px; }
+  .mihead { font-size:1.06rem; font-weight:800; color:var(--navy); margin-bottom:6px; line-height:1.35; }
+  .miroute { display:flex; align-items:baseline; gap:4px 10px; flex-wrap:wrap; font-size:1.06rem;
+             font-weight:800; color:var(--ink); overflow-wrap:anywhere; }
+  .mitime { margin-left:auto; white-space:nowrap; }
+  .milines { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:6px 0 2px; }
+  .miline { display:inline-block; padding:2px 8px; border:2px solid var(--line); border-left-width:8px;
+            border-radius:8px; background:white; color:var(--ink); font-size:0.94rem; font-weight:800; }
+  .miarrow { font-size:0.94rem; font-weight:800; color:var(--ink-3); }
+  .mimeta { font-size:0.94rem; font-weight:700; color:var(--ink-2); margin-top:2px; overflow-wrap:anywhere; }
+  .mimeta .rjfare { margin-left:2px; }
+  .miwarn { font-size:0.94rem; font-weight:800; color:var(--amber); margin-top:6px; }
+  .mibtn { display:block; width:100%; box-sizing:border-box; min-height:56px; margin-top:10px;
+           padding:10px 14px; text-align:left; cursor:pointer; border:0; border-radius:12px;
+           background:var(--navy); color:white; text-decoration:none; font:inherit; }
+  .mibtn:active { filter:brightness(1.2); }
+  .mibmain { display:block; font-size:1.12rem; font-weight:800; overflow-wrap:anywhere; }
+  .mibsub { display:block; font-size:0.94rem; font-weight:700; opacity:.92; margin-top:2px; }
+  .rjgo.last { margin:8px 0 0; }
   /* THE TWO ENDS OF A RIDE on the map: a dot on the stop and, beside it, what
      happens there (上車 / 第 13 站 下車) over the stop's name in large type.
      The marker is a zero-size point; the box hangs above or below it and
@@ -2207,7 +2230,7 @@ rmStations:'{n} stations',
     railThere:'You are already at {b}.', railSame:'Start and destination are the same.',
     railNeedStart:'Allow location, or type a starting station.',
     railTotal:'about {n} min', railFareOct:'Octopus {o}', railFareTkt:'single ticket {t}',
-    railWalkOn:'Walk {n} min to {s} first', railGoTo:'🚶 Walk me to {s} station with Maps ›', railGoStep:'🧭 Walk me there with Maps ›', railGoFrom:'Opens your maps app, from where you are now', railGoFar:'About {d} on foot · about {n} min', unitM:' m', unitKm:' km', railWalkOff:'then walk {n} min',
+    railWalkOn:'Walk {n} min to {s} first', railGoTo:'🚶 Walk me to {s} station with Maps ›', railGoStep:'🧭 Walk me there with Maps ›', railGoFrom:'Opens your maps app, from where you are now', railGoFar:'About {d} on foot · about {n} min', railGoAway:'About {d} from where you are now', unitM:' m', unitKm:' km', railWalkOff:'then walk {n} min', railWalkOffTo:'Walk {n} min to {d}', railWalkAll:'Walk about {n} min to {d}',
     railChangeWalk:'Walk {n} min to change', railStep:'Step {n}',
     lrtCheckBoard:'Read the platform board for the next {n}',
     lrtOutDir:'Leave the platform and walk {d}',
@@ -2243,6 +2266,7 @@ rmStations:'{n} stations',
     stopStartLabel:'From', stopSearchPhShort:'stop name',
     stopDestNeedLoc:'Tap 📍 to find which stops near you have a direct bus.',
     stopFilterPh:'Only buses towards…', stopFilterNone:'No bus from this stop towards {d}.',
+    miTitle:'No direct bus — take the MTR instead', miTitleSaved:'No direct bus from your saved stops — take the MTR instead', miWalkTitle:'{d} is close by — about {n} min on foot', miWalkTitleFar:'Walk to {d}: about {n} min — as quick as the train or quicker', miWalkTitleOnly:'Walk to {d}: about {n} min', miChanges:'{n} change', miChangesN:'{n} changes', miNoChange:'no change', miWalkOff:'then walk about {n} min to {d}', miNear:'Nearest station to {d}: {s}, about {n} min walk', miBtn:'🚇 Go by MTR to {d} ›', miBtnSub:'Every step, with walking directions', miClosed:'⚠ The MTR is closed now. First trains are around 6 am.', startOtherCo:'A direct bus to {d} leaves from {s}, about {m} m away.', miMoved:'You have moved, so the MTR trip has been updated — please tap again.',
     stopFilterOn:'Showing buses towards {d}', stopsAwayShort:'{n} stops', stopMore:'+{n} more',
     stopIndexing:'Loading the bus network — first time only…',
     stopDestNoName:'No stop called "{d}" — try a shorter name.',
@@ -2564,7 +2588,7 @@ rmStations:'{n} 個站',
     railThere:'你已經在 {b}。', railSame:'起點和目的地相同。',
     railNeedStart:'請先允許定位，或輸入起點車站。',
     railTotal:'約 {n} 分鐘', railFareOct:'八達通 {o}', railFareTkt:'單程票 {t}',
-    railWalkOn:'先步行 {n} 分鐘到 {s}', railGoTo:'🚶 用地圖帶我行去 {s}站 ›', railGoStep:'🧭 用地圖帶我行去 ›', railGoFrom:'打開地圖 App，由你現在的位置帶路', railGoFar:'步行約 {d} · 約 {n} 分鐘', unitM:' 米', unitKm:' 公里', railWalkOff:'然後步行 {n} 分鐘',
+    railWalkOn:'先步行 {n} 分鐘到 {s}', railGoTo:'🚶 用地圖帶我行去 {s}站 ›', railGoStep:'🧭 用地圖帶我行去 ›', railGoFrom:'打開地圖 App，由你現在的位置帶路', railGoFar:'步行約 {d} · 約 {n} 分鐘', railGoAway:'離你現在的位置約 {d}', unitM:' 米', unitKm:' 公里', railWalkOff:'然後步行 {n} 分鐘', railWalkOffTo:'出站後步行 {n} 分鐘到 {d}', railWalkAll:'步行約 {n} 分鐘到 {d}',
     railChangeWalk:'步行 {n} 分鐘轉乘', railStep:'第 {n} 步',
     lrtCheckBoard:'請看月台顯示屏的下班 {n}',
     lrtOutDir:'落車後往{d}行',
@@ -2598,6 +2622,7 @@ rmStations:'{n} 個站',
     stopStartLabel:'起點', stopSearchPhShort:'車站名稱',
     stopDestNeedLoc:'按 📍 就可找出你附近哪個站有直達巴士。',
     stopFilterPh:'只顯示往…', stopFilterNone:'此站沒有往 {d} 的巴士。',
+    miTitle:'沒有巴士直達，可以改搭港鐵', miTitleSaved:'你收藏的車站沒有巴士直達，可以改搭港鐵', miWalkTitle:'{d} 就在附近，步行約 {n} 分鐘', miWalkTitleFar:'步行去 {d} 約 {n} 分鐘，不比搭港鐵慢', miWalkTitleOnly:'步行去 {d} 約 {n} 分鐘', miChanges:'轉車 {n} 次', miChangesN:'轉車 {n} 次', miNoChange:'不用轉車', miWalkOff:'出站後步行約 {n} 分鐘到 {d}', miNear:'最近 {d} 的車站：{s}站，步行約 {n} 分鐘', miBtn:'🚇 用港鐵去 {d} ›', miBtnSub:'一步一步教你怎樣去，連步行路線', miClosed:'⚠ 港鐵現在已停駛，頭班車約早上 6 時。', startOtherCo:'{s}（約 {m} 米）有巴士直達 {d}。', miMoved:'你的位置變了，港鐵路線已更新，請再按一次。',
     stopFilterOn:'只顯示往 {d} 的巴士', stopsAwayShort:'{n} 個站', stopMore:'另有 {n} 條',
     stopIndexing:'正在載入巴士路線網絡（只需一次）…',
     stopDestNoName:'找不到叫「{d}」的車站，試試較短的名稱。',
@@ -5544,6 +5569,9 @@ function addLrtStopsToSearch() {
 
 function buildRailGraph() {
   railGraph = new Map();
+  // Whether this graph already holds the Light Rail. The 巴士 tab's MTR
+  // suggestion waits for it, so its answer is the one the 港鐵 tab gives.
+  railGraph.withLrt = false;
   if (!mtrData) return;
 
   const link = (a, b, line, minutes, extra) => {
@@ -5598,6 +5626,7 @@ function buildRailGraph() {
       link(code, LR_NODE + id, RAIL_WALK, minutes, { metres });
     }
   }
+  railGraph.withLrt = true;
 }
 
 // ONE SEARCH FROM ONE STARTING POINT, settling the whole network.
@@ -5946,6 +5975,10 @@ function railJourneys(startLat, startLng, endLat, endLng) {
   const fromList = railNodesNear(startLat, startLng);
   const toList   = railNodesNear(endLat, endLng);
   if (fromList.length === 0 || toList.length === 0) return [];
+  // Starting AT a station (a chosen 起點), a trip that ends back at it is a
+  // joke — walk to the next station, ride one stop home, walk on. Whoever
+  // asks, the same rule, so the 巴士 tab's card and the 港鐵 tab agree.
+  const startNode = fromList[0].metres < 1 ? fromList[0].node : null;
 
   const found = [];
   for (const a of fromList) {
@@ -5955,7 +5988,7 @@ function railJourneys(startLat, startLng, endLat, endLng) {
     const best = railSearch(a.node);
     if (!best) continue;
     for (const b of toList) {
-      if (a.node === b.node) continue;
+      if (a.node === b.node || b.node === startNode) continue;
       const path = railPathTo(best, b.node);
       if (!path) continue;
 
@@ -11395,8 +11428,7 @@ function arriveBest(ids, destIds, walkMin) {
       const wait = Math.round((new Date(row.eta).getTime() - now) / 60000);
       if (wait < 0) continue;
       const key = routeKeyForRow(row);
-      const seq = Number(row.seq) ||
-                  (routesServing(row.stop || id).find(r => r.key === key) || {}).seq || 0;
+      const seq = rowSeq(row, key, id);
       const reach = routeReaches(key, seq, destIds);
       if (!reach) continue;
       const held = trafficPenalty(row.route);
@@ -11545,6 +11577,22 @@ function routeKeyForRow(row) {
 }
 
 function findStopById(id) { return lookupStop(id); }
+
+// WHERE THIS ROW'S BUS IS ON ITS ROUTE, in the numbering routeReaches reads.
+// KMB's arrival feed and KMB's route file count stops the same way, so its
+// own number stands. Citybus's feed does not: the 7 at 國際金融中心商場 is
+// stop 30 in the feed and 26 in the route file, which put the pier "behind"
+// it and hid a bus going there. Every other company takes the index's own
+// number for this pole, and the feed's only when the index has none. One
+// helper for the filter, the arrival estimate, the bus list and the map
+// ride, so the four can never count differently.
+function rowSeq(row, key, stopId) {
+  const feed = Number(row.seq) || 0;
+  const co = String(row.co || 'KMB').toUpperCase();
+  if (feed && (co === 'KMB' || co === 'LWB')) return feed;
+  const at = stopIndex && (stopIndex.get(row.stop || stopId) || []).find(e => e.routeKey === key);
+  return (at && at.seq) || feed;
+}
 
 function openStopView() {
   const panel = document.getElementById('panel');
@@ -12173,6 +12221,11 @@ function stopPickerParts() {
           ' aria-label="' + esc(T('stopSearchPh')) + '" autocomplete="off">' +
           clearBtn('clear-start', false) + '</div>' +
           '<div class="mtrpick" id="stop-search-results"></div>';
+  // Where the MTR card goes when no bus does: under 起點, above the stops it
+  // is the answer to, so it is on the screen without scrolling. Decided at
+  // the end, once the stops have been judged.
+  const insteadAt = rest.length;
+  let savedReach = false, nearFound = 0;
   // Saved poles as one-tap pills, same shape as the saved places above.
   // YOUR SAVED STOPS, ALWAYS SHOWN — but greyed when they cannot get you
   // where you just said you were going. Hiding them was tried and was worse:
@@ -12194,6 +12247,7 @@ function stopPickerParts() {
         const found = reachingBays(f, filtering ? destIds : null);
         const ids = found.bays.map(g => g.stop);
         const reaches = !filtering || reachingRoutes(ids, destIds).length > 0;
+        if (filtering && reaches) savedReach = true;
         // Both halves of the answer are marked, not just the bad half. Greying
         // the wrong ones tells you where NOT to go; lighting the right ones
         // tells you where to go, which is the question actually being asked.
@@ -12242,10 +12296,27 @@ function stopPickerParts() {
       ensureArrivals(near.slice(0, ARRIVE_MAX_GROUPS).flatMap(n => baysToAsk(n.group, destIds)), stamp)
         .then(fresh => { if (fresh && arriveStamp === stamp) stopScheduleRefresh(); });
     }
+    nearFound = near.length;
     if (near.length)
       rest += '<div class="mtrsub sectionbreak">' + T('stopNearby') + '</div><div class="mtrpick">' + near.map(n => poleButton(n.group, n.metres, n.eta)).join('') + '</div>';
     else
       rest += '<div class="favempty">' + (filtering ? T('stopNearNoneTo').replace('{d}', esc(st.destQuery)) : T('stopNoneNear')) + '</div>';
+  }
+  // NO BUS GOES THERE: say what does. Never above a saved stop lit ✓.
+  // With the phone's position, "no bus" means none within the 📍 pin's
+  // reach; without it, none within that reach of any saved stop — and the
+  // card's title says it is the saved stops that were judged. Not while the
+  // index is still being built, nor before every bus company is in it,
+  // when every stop would look like a no.
+  if (filtering && stopIndex && !st.indexing && !savedReach && miBusReady()) {
+    const noBus = herePoint
+      ? (!nearFound && !busWithinReach(herePoint, destIds, st.destQuery))
+      : (savedShown.length > 0 && !savedShown.some(f => {
+          const at = { lat: Number(f.lat), lng: Number(f.long) };
+          return isFinite(at.lat) && isFinite(at.lng) && busWithinReach(at, destIds, st.destQuery);
+        }));
+    const card = noBus ? mtrInsteadHtml(st.destQuery, { saved: !herePoint }) : '';
+    if (card) rest = rest.slice(0, insteadAt) + card + rest.slice(insteadAt);
   }
   return { top, rest, star };
 }
@@ -12340,6 +12411,322 @@ function mapHintHtml() {
          '<span class="mhsub">' + esc(T('mapHintSwipe')) + '</span></button>';
 }
 
+// ============================================================
+// NO BUS GOES THERE — THE MTR INSTEAD
+// ============================================================
+// 「附近沒有直達」 used to be the end of the conversation: the screen said
+// no and left an older rider standing there. The trains are already on the
+// phone, so the answer comes with it — the trip in brief, worked out by the
+// same search the 港鐵 tab runs, from the same spot to the same place, and a
+// button that opens that tab with the plan filled in. Two screens, one trip.
+const MI_CLUSTER_M = 500;    // poles this close together are one place
+const MI_WALK_MIN  = 10;     // a walk this short is "close by" and beats any train
+const MI_WALK_MAX  = 20;     // up to this, a walk is offered when it beats the train
+
+// WHERE THE TYPED NAME IS. A name can match poles all over the territory,
+// so the thickest cluster of them wins — ties to the one nearer the rider —
+// and the middle of that cluster is the place.
+function placePointOf(query) {
+  const found = stopsNamed(query);
+  const pts = (found.all.length ? found.all : found.named)
+    .map(s => [Number(s.lat), Number(s.long)])
+    .filter(p => isFinite(p[0]) && isFinite(p[1]));
+  if (!pts.length) return null;
+  // Every pole is a candidate middle only while that stays cheap; past a
+  // couple of hundred, an even sample of them is.
+  const step = Math.ceil(pts.length / 200);
+  const toHere = p => herePoint ? metresBetween(herePoint.lat, herePoint.lng, p[0], p[1]) : 0;
+  let best = null, bestFrom = Infinity;
+  for (let i = 0; i < pts.length; i += step) {
+    const p = pts[i];
+    const near = pts.filter(q => metresBetween(p[0], p[1], q[0], q[1]) <= MI_CLUSTER_M);
+    const from = toHere(p);
+    if (!best || near.length > best.length || (near.length === best.length && from < bestFrom)) {
+      best = near; bestFrom = from;
+    }
+  }
+  return { lat: best.reduce((t, q) => t + q[0], 0) / best.length,
+           lng: best.reduce((t, q) => t + q[1], 0) / best.length };
+}
+
+// A NAME THAT IS A STATION. 「旺角站」 typed into 我要去 means the station,
+// not the bus poles that carry its name 150 m away — so it is the station's
+// own point, with no made-up walk at the end. Only with 站 / Station on the
+// end: a bare 旺角 is a district. A train station before a Light Rail stop
+// of the same name, as the 港鐵 tab's own search does.
+function stationNamed(query) {
+  if (!mtrData) return null;
+  const q = needleOf(query);
+  if (!q) return null;
+  const hit = (zh, en) => q === needleOf(zh + '站') || q === needleOf(en + ' station');
+  for (const code of Object.keys(mtrData.stations)) {
+    const s = mtrData.stations[code];
+    if (hit(s[1] || s[0], s[0])) return { kind: 'mtr', id: code, lat: s[2], lng: s[3] };
+  }
+  if (lrtData) for (const id of Object.keys(lrtData.stops)) {
+    const r = lrtData.stops[id];
+    if (hit(r[1] || r[0], r[0])) return { kind: 'lrt', id, lat: r[2], lng: r[3] };
+  }
+  return null;
+}
+// The one answer to "where is it" that BOTH screens use: the card here, and
+// the 港鐵 tab every time it draws the plan the card sent it.
+function placeOf(query) {
+  const stn = stationNamed(query);
+  if (stn) return { lat: stn.lat, lng: stn.lng, station: { kind: stn.kind, id: stn.id } };
+  return placePointOf(query);
+}
+
+// A rail stop as the 港鐵 tab's plan names one.
+function railNodeOfStop(stop) {
+  return isLrtNode(stop.stop) ? { kind: 'lrt', id: lrtIdOf(stop.stop) } : { kind: 'mtr', id: stop.stop };
+}
+
+// The rail files. The Light Rail is waited for too, the first time: without
+// it a trip from Tuen Mun could differ from the one the 港鐵 tab shows a
+// second later. Once one try has finished, what there is answers — the
+// trains alone when that file would not come — and keeps answering while a
+// later try runs, so the card does not blink out under a finger once a
+// minute. One try a minute at most, so a phone offline is not asked on every
+// redraw.
+let miWaiting = false, miRailTried = 0, miRailAnswered = false;
+function miRailReady() {
+  if (mtrData && railGraph && railGraph.withLrt) return true;
+  if (mtrData && lrtData && railGraph && !miWaiting) {    // landed; the graph has not caught up yet
+    buildRailGraph(); addLrtStopsToSearch();
+    return true;
+  }
+  if (!miWaiting && Date.now() - miRailTried > 60000) {
+    miWaiting = true; miRailTried = Date.now();
+    loadMtr()
+      .then(() => (mtrData && !lrtData) ? loadLrt().catch(() => null) : null)
+      .catch(() => null)
+      .then(() => {
+        miWaiting = false; miRailAnswered = true;
+        if (mtrData && lrtData && !(railGraph && railGraph.withLrt)) { buildRailGraph(); addLrtStopsToSearch(); }
+        if (mtrData) miRefresh();
+      });
+  }
+  return miRailAnswered && !!(mtrData && railGraph);
+}
+
+// EVERY BUS COMPANY, BEFORE SAYING THERE IS NO BUS. This tab's index is
+// KMB's; Citybus, NLB, the minibuses, the MTR's feeder buses and the ferries
+// are in hk-bus-lite.json, and busWithinReach reads them straight from it.
+// They are NOT folded into the tab's index for this: that index also groups
+// bays into stops and ranks them, and other companies' bays and piers in it
+// split KMB stops and timed ferries as buses. Until that file has come,
+// 「沒有巴士直達」 could be a Citybus route nobody had looked at, so the card
+// waits — and if it never comes, the card never claims there is no bus.
+let miBusTried = 0;
+function miBusReady() {
+  if (hkbusRoutes) return true;
+  if (Date.now() - miBusTried > 60000) {
+    miBusTried = Date.now();
+    loadFareData().catch(() => null).then(() => { if (hkbusRoutes) miRefresh(); });
+  }
+  return false;
+}
+
+function miRefresh() {
+  if (activeMode !== 'stop') return;
+  // The picker's lower half holds the 起點 box: not rebuilt while somebody
+  // is typing in it (the keyboard would drop). The next keystroke or visit
+  // draws the card anyway.
+  if (!stopState.stop) {
+    const typing = document.activeElement;
+    if (typing && typing.id === 'stop-search') return;
+    stopScheduleRefresh();
+    return;
+  }
+  // On a pole's screen only the rows: the 往… box keeps its keyboard.
+  const rows = document.getElementById('stop-rows');
+  if (rows) rows.innerHTML = stopRowsHtml();
+}
+
+// What to offer when no bus goes to `query`: a walk when that is close or
+// quicker, the railway when it is not, or null when neither is worth saying.
+// `from` is where the trip starts: null for the phone, or { at, node } — an
+// opened stop the rider is not standing at, and the rail stop nearest it.
+// Either way they are the two points the 港鐵 tab is given, so the two
+// screens compute the same trip. Worked out once per place and start, not
+// once per redraw; keyed on the EXACT position, because a fix a few metres
+// on can change a walk by a minute.
+let miMemo = { key: '', model: null };
+function mtrInsteadModel(query, from) {
+  const name = String(query || '').trim();
+  if (!name || !miRailReady()) return null;
+  const here = herePoint ? herePoint.lat + ',' + herePoint.lng : '-';
+  const fromKey = from ? from.at.lat + ',' + from.at.lng + '>' + (from.node ? railNodeId(from.node) : '-') : 'phone';
+  const key = name + '|' + here + '|' + fromKey + '|' + lang + script + '|' + dataStamp() +
+              (railGraph.withLrt ? '+lrt' : '') + (railRunningNow() ? '' : '|closed');
+  if (miMemo.key === key) return miMemo.model;
+  let model = null;
+  const place = placeOf(name);
+  if (place) {
+    const base = { name, lat: place.lat, lng: place.lng, closed: !railRunningNow() };
+    const at = from ? from.at : herePoint;          // where the rider sets off on foot
+    const walk = at ? walkingEstimate(metresBetween(at.lat, at.lng, place.lat, place.lng)) : null;
+    const start = from ? (from.node ? railNodePos(railNodeId(from.node)) : null)
+                       : (herePoint ? [herePoint.lat, herePoint.lng] : null);
+    // The same call, with the same two points, that the 港鐵 tab makes once
+    // the button has filled its plan in (railWaysHtml).
+    const j = (start && !(walk && walk.minutes <= MI_WALK_MIN))
+      ? (railJourneys(start[0], start[1], place.lat, place.lng) || [])[0] : null;
+    // WALKING, WHEN IT IS THE BETTER ANSWER: always when close; up to
+    // MI_WALK_MAX when the train is no quicker; and at any length when the
+    // train has the rider walking at least as far anyway.
+    if (walk && (walk.minutes <= MI_WALK_MIN ||
+        (j && walk.minutes <= totalWalkMinutes(j)) ||
+        (walk.minutes <= MI_WALK_MAX && (!j || walk.minutes <= j.total + 2)))) {
+      model = Object.assign(base, { kind: 'walk', walk, origin: from ? from.at : null, beatsTrain: !!j });
+    } else if (j) {
+      model = Object.assign(base, { kind: 'ride', j, node: railNodeOfStop(j.legs[j.legs.length - 1].off),
+                                    start: from ? from.node : null });
+    } else if (!at) {
+      // Nowhere to start from at all (no position, no opened stop): the
+      // station for the place, and the 港鐵 tab asks where from. An opened
+      // stop with no railway in reach gets no card — the same answer a
+      // rider standing there would get — rather than a trip from home.
+      const n = place.station ? { node: railNodeId(place.station), metres: 0 }
+                              : railNodesNear(place.lat, place.lng)[0];
+      const stop = n && railStop(n.node);
+      if (stop) model = Object.assign(base, { kind: 'near', node: railNodeOfStop(stop),
+                                              walk: walkingEstimate(n.metres), atStation: !!place.station });
+    }
+  }
+  miMemo = { key, model };
+  return model;
+}
+
+// What the card said, in one string: checked again when the button is
+// pressed, because the phone's position can move on (a get-off alarm moves
+// it every second) without anything redrawing this screen.
+function miSig(m) {
+  if (!m) return '';
+  if (m.kind !== 'ride') return m.kind + '|' + railNodeId(m.node || { kind: 'mtr', id: '' });
+  const j = m.j;
+  return 'ride|' + j.legs[0].on.stop + '>' + j.legs[j.legs.length - 1].off.stop + '|' + j.total;
+}
+
+// opts.from — as mtrInsteadModel; opts.saved — judged from the saved stops
+// only (no position), which the title then says rather than claiming more.
+function mtrInsteadHtml(query, opts) {
+  const o = opts || {};
+  const m = mtrInsteadModel(query, o.from || null);
+  if (!m) return '';
+  if (m.kind === 'walk') {
+    const origin = m.origin;
+    return '<div class="mtrinstead"><div class="mihead">🚶 ' +
+      esc(T(m.walk.minutes <= MI_WALK_MIN ? 'miWalkTitle' : m.beatsTrain ? 'miWalkTitleFar' : 'miWalkTitleOnly')
+        .replace('{d}', m.name).replace('{n}', m.walk.minutes)) + '</div>' +
+      '<a class="mibtn" href="' + esc(origin ? walkUrl(m.lat, m.lng, origin.lat, origin.lng) : walkUrl(m.lat, m.lng)) +
+        '" target="_blank" rel="noopener">' +
+      '<span class="mibmain">' + esc(T('railGoStep')) + '</span>' +
+      (origin ? '' : '<span class="mibsub">' + esc(T('railGoFrom')) + '</span>') + '</a></div>';
+  }
+  let html = '<div class="mtrinstead"><div class="mihead">🚇 ' + esc(T(o.saved ? 'miTitleSaved' : 'miTitle')) + '</div>';
+  if (m.kind === 'ride') {
+    const j = m.j, first = j.legs[0].on, last = j.legs[j.legs.length - 1].off;
+    const oct = journeyFare(j);
+    const changes = j.legs.length - 1;
+    html += '<div class="miroute"><span>' + esc(stopName(first)) + ' → ' + esc(stopName(last)) + '</span>' +
+              '<span class="mitime">' + esc(T('railTotal').replace('{n}', j.total)) + '</span></div>' +
+            // The lines in their own colours, the same stripes as the 港鐵 tab.
+            '<div class="milines">' + j.legs.map(leg => {
+              const colour = leg.co === 'lrt' ? '#b45309' : (MTR_LINE_COLOURS[leg.lineCode] || '#999');
+              return '<span class="miline" style="border-left-color:' + colour + '">' +
+                     (leg.co === 'lrt' ? '🚈 ' : '') + esc(leg.route) + '</span>';
+            }).join('<span class="miarrow" aria-hidden="true">→</span>') + '</div>' +
+            '<div class="mimeta">' +
+              esc(changes ? T(changes === 1 ? 'miChanges' : 'miChangesN').replace('{n}', changes) : T('miNoChange')) +
+              (oct !== null ? ' · <span class="rjfare">' + fareText(oct) + '</span>' : '') + '</div>';
+    if (j.walkOff && j.walkOff.minutes >= 2)
+      html += '<div class="mimeta">🚶 ' + esc(T('miWalkOff').replace('{n}', j.walkOff.minutes).replace('{d}', m.name)) + '</div>';
+  } else if (!m.atStation) {
+    html += '<div class="mimeta">' + esc(T('miNear').replace('{d}', m.name)
+      .replace('{s}', railNodeName(m.node)).replace('{n}', m.walk.minutes)) + '</div>';
+  }
+  if (m.closed) html += '<div class="miwarn">' + esc(T('miClosed')) + '</div>';
+  return html +
+    '<button type="button" class="mibtn" data-stop-act="mtrgo" data-kind="' + m.node.kind +
+      '" data-id="' + esc(m.node.id) + '" data-name="' + esc(m.name) +
+      '" data-lat="' + m.lat + '" data-lng="' + m.lng + '" data-sig="' + esc(miSig(m)) + '"' +
+      (m.start ? ' data-from-kind="' + m.start.kind + '" data-from-id="' + esc(m.start.id) + '"' : '') + '>' +
+    '<span class="mibmain">' + esc(T('miBtn').replace('{d}', m.name)) + '</span>' +
+    '<span class="mibsub">' + esc(T('miBtnSub')) + '</span></button></div>';
+}
+
+// THE NEAREST POLE WITHIN START_REACH_M WITH A BUS THAT GOES THERE, or null.
+// Every company: KMB from this tab's index, worked from the place backwards
+// (every route calling there, every stop before it); Citybus, NLB, the
+// minibuses, the MTR's feeder buses and the ferries straight from
+// hk-bus-lite.json (see miBusReady for why not via the index). Nothing in
+// reach is missed — stopsNear keeps only the 25 nearest poles, and in 旺角
+// those are all inside 200 m. `indexed` says whether the pole's routes are in
+// this tab's index, i.e. whether its own screen can show them.
+// Remembered per name, spot and network.
+const reachMemo = new Map();
+function poleIdsWithin(here, radius) {
+  const grid = stopGridNow();
+  const ring = Math.max(1, Math.ceil(radius / 1000));
+  const cy = Math.floor(here.lat / GRID_DEG), cx = Math.floor(here.lng / GRID_DEG);
+  const out = new Map();
+  for (let y = cy - ring; y <= cy + ring; y++) {
+    for (let x = cx - ring; x <= cx + ring; x++) {
+      for (const stop of (grid.get(y + ',' + x) || [])) {
+        if (stop.isStation) continue;
+        const metres = metresBetween(here.lat, here.lng, Number(stop.lat), Number(stop.long));
+        if (metres <= radius) out.set(stop.stop, { stop, metres });
+      }
+    }
+  }
+  return out;
+}
+function busWithinReach(here, destIds, name) {
+  if (!destIds || !destIds.size) return null;
+  const key = String(name || '') + '|' + here.lat + ',' + here.lng + '|' + dataStamp() + '|' +
+              (stopIndex ? stopIndex.size : 0) + (hkbusRoutes ? '+lite' : '');
+  if (reachMemo.has(key)) return reachMemo.get(key);
+  const near = poleIdsWithin(here, START_REACH_M);
+  let best = null;
+  const take = (hit, indexed) => {
+    if (hit && (!best || hit.metres < best.metres)) best = { stop: hit.stop, metres: hit.metres, indexed };
+  };
+  // KMB (and whatever else this tab's index holds), from the place backwards.
+  if (stopIndex && routeIndex) {
+    for (const destId of destIds) {
+      for (const at of (stopIndex.get(destId) || [])) {
+        for (const e of (routeIndex.get(at.routeKey) || [])) {
+          // Only stops before the place on this route, and not the place's
+          // own poles: riding from one bay of it to another is not getting there.
+          if (e.seq < at.seq && !destIds.has(e.stopId)) take(near.get(e.stopId), true);
+        }
+      }
+    }
+  }
+  // Every other company, from its own stop lists: a pole in reach that comes
+  // before one of the place's poles on the same list.
+  if (hkbusRoutes) {
+    for (const entry of Object.values(hkbusRoutes)) {
+      if (!entry || !entry.stops) continue;
+      for (const co of PLANNED_OPERATORS) {
+        const list = entry.stops[co];
+        if (!list || list.length < 2) continue;
+        let seen = null;                        // the nearest pole in reach so far on this list
+        for (const id of list) {
+          if (destIds.has(id)) { if (seen) take(seen, false); continue; }
+          const hit = near.get(id);
+          if (hit && (!seen || hit.metres < seen.metres)) seen = hit;
+        }
+      }
+    }
+  }
+  if (reachMemo.size >= 60) reachMemo.clear();
+  reachMemo.set(key, best);
+  return best;
+}
+
 // The route rows for the chosen pole, filtered by destination when one is
 // typed. Kept separate so typing in the filter redraws only this part and
 // the box keeps focus.
@@ -12386,10 +12773,30 @@ function stopRowsHtml() {
     }).join('') + '</div>';
   };
 
+  // NOTHING FROM THIS STOP GOES THERE. When nothing within the 📍 pin's
+  // reach of it does either, the MTR card, as on the picker: the place is
+  // what the rider wants, not this pole. A bus from a stop round the corner
+  // is a bus, so then the card stays away rather than say there is none.
+  // The trip starts where the rider will: from the phone when it is near
+  // this stop, and otherwise from the rail stop nearest the stop — a rider
+  // at home looking up a stop across town is not sent from home.
+  const insteadHtml = () => {
+    if (!destIds || !destIds.size || !stopIndex || st.indexing || !miBusReady()) return '';
+    const at = { lat: Number(stop.lat), lng: Number(stop.long) };
+    if (!isFinite(at.lat) || !isFinite(at.lng) || busWithinReach(at, destIds, st.destFilter)) return '';
+    // Planning from the phone means "no bus" must hold around the phone too:
+    // a stop near home with a direct bus is still a bus.
+    if (herePoint && metresBetween(herePoint.lat, herePoint.lng, at.lat, at.lng) <= START_REACH_M)
+      return busWithinReach(herePoint, destIds, st.destFilter) ? '' : mtrInsteadHtml(st.destFilter);
+    const n = mtrData ? railNodesNear(at.lat, at.lng)[0] : null;
+    const rail = n && railStop(n.node);
+    return mtrInsteadHtml(st.destFilter, { from: { at, node: rail ? railNodeOfStop(rail) : null } });
+  };
+
   if (st.noLive) {
     let routes = routesServingAny(groupIds);
     if (destIds) routes = routes.filter(r => routeReaches(r.key, r.seq, destIds));
-    if (!routes.length && destIds) return '<div class="favempty">' + T('stopFilterNone').replace('{d}', esc(st.destFilter)) + '</div>';
+    if (!routes.length && destIds) return '<div class="favempty">' + T('stopFilterNone').replace('{d}', esc(st.destFilter)) + '</div>' + insteadHtml();
     return '<div class="rshint">' + T('stopNoLive') + '</div>' +
       routes.map(r => '<div class="stoproute"><span class="rt">' + esc(routeTag(r)) + '</span>' +
         '<span class="quiet">' + (r.dest ? T('towards') + ' ' + esc(r.dest) + ' · ' : '') + esc(coName(String(r.co).toLowerCase())) + '</span></div>').join('');
@@ -12401,7 +12808,7 @@ function stopRowsHtml() {
       arrive = new Map();                       // route key → stops from here to the place
       rows = rows.filter(row => {
         const key = routeKeyForRow(row);
-        const seq = Number(row.seq) || (routesServing(row.stop || stop.stop).find(r => r.key === key) || {}).seq || 0;
+        const seq = rowSeq(row, key, stop.stop);
         const reach = routeReaches(key, seq, destIds);
         if (reach) arrive.set(key, reach.stopsAway);
         return !!reach;
@@ -12410,7 +12817,7 @@ function stopRowsHtml() {
         const fallback = routeFallbackHtml(groupIds, destIds);
         return fallback
           ? '<div class="rshint">' + T('stopNoneDueNow').replace('{d}', esc(st.destFilter)) + '</div>' + fallback
-          : '<div class="favempty">' + T('stopFilterNone').replace('{d}', esc(st.destFilter)) + '</div>';
+          : '<div class="favempty">' + T('stopFilterNone').replace('{d}', esc(st.destFilter)) + '</div>' + insteadHtml();
       }
       html += '<div class="rshint">' + T('stopFilterOn').replace('{d}', esc(st.destFilter)) + '</div>';
     } else {
@@ -12824,6 +13231,37 @@ document.getElementById('stopview').addEventListener('click', event => {
   }
   switch (el.dataset.stopAct) {
     case 'tomap':   swipeToTab(-1); break;   // slides in from the left, as the swipe does
+    // NO BUS GOES THERE: the MTR card's button. The 港鐵 tab opens on its
+    // plan with the trip filled in — the station in 我要去, from where the
+    // phone is, and the walk from the station to the place as the last step
+    // — and scrolled to the steps. Same two points as the card, same trip.
+    case 'mtrgo': {
+      const node = { kind: el.dataset.kind, id: el.dataset.id };
+      if (!node.id || (node.kind !== 'mtr' && node.kind !== 'lrt')) break;
+      // Planned from the phone: if the phone has moved since the card was
+      // drawn (a get-off alarm moves it every second and redraws nothing
+      // here), the 港鐵 tab would show a different trip from the one just
+      // tapped. Redraw the card with the new one instead, and say so.
+      if (!el.dataset.fromKind && el.dataset.sig !== miSig(mtrInsteadModel(el.dataset.name))) {
+        miRefresh();
+        status.textContent = T('miMoved');
+        break;
+      }
+      const lat = Number(el.dataset.lat), lng = Number(el.dataset.lng);
+      const fk = el.dataset.fromKind;
+      railPlan.to = node; railPlan.toQuery = '';
+      railPlan.place = (isFinite(lat) && isFinite(lng)) ? { name: el.dataset.name || '', lat, lng, node } : null;
+      // The start the card planned from — the rail stop by an opened stop,
+      // or the phone — and never one left over from an earlier trip.
+      railPlan.from = ((fk === 'mtr' || fk === 'lrt') && el.dataset.fromId) ? { kind: fk, id: el.dataset.fromId } : null;
+      railPlan.fromQuery = '';
+      railPlan.wayKey = '';
+      // The plan, not whichever station or Light Rail stop was open last.
+      mtrState = Object.assign(freshMtrState(), { locateTried: mtrState.locateTried });
+      railWaysWanted = Date.now();           // showRailWays, once the plan is drawn
+      swipeToTab(1);                         // 港鐵 is the next tab to the right
+      break;
+    }
     case 'change':  stopState = Object.assign(freshStopState(), { locateTried: true, destQuery: stopState.destQuery, destPicked: stopState.destPicked, indexing: stopState.indexing }); renderStopView(); break;
     case 'refresh': stopLoadRows(true); break;
     case 'geo-yes': rememberGeoChoice('yes'); stopLocate(); break;
@@ -12880,6 +13318,31 @@ document.getElementById('stopview').addEventListener('click', event => {
         status.textContent = T('startNearestTo')
           .replace('{s}', stopName(n.stop))
           .replace('{m}', Math.round(n.metres))
+          .replace('{d}', stopState.destQuery);
+        return;
+      }
+
+      // The 25 nearest poles are all inside 200 m in a busy district. The
+      // card's own search looks the whole START_REACH_M, every company; when
+      // it finds a stop, so does this pin, and the two never disagree about
+      // whether there is a bus. A stop whose buses this tab's index cannot
+      // show (Citybus, minibus…) is named rather than opened: its own screen
+      // would say there is no bus.
+      const far = busWithinReach(here, destIds, stopState.destQuery);
+      if (far && !far.indexed) {
+        status.textContent = T('startOtherCo')
+          .replace('{s}', stopName(far.stop))
+          .replace('{m}', Math.round(far.metres))
+          .replace('{d}', stopState.destQuery);
+        return;
+      }
+      if (far) {
+        stopSetStop(far.stop);
+        stopState.destFilter = stopState.destQuery;
+        renderStopView();
+        status.textContent = T('startNearestTo')
+          .replace('{s}', stopName(far.stop))
+          .replace('{m}', Math.round(far.metres))
           .replace('{d}', stopState.destQuery);
         return;
       }
@@ -13010,7 +13473,11 @@ function freshMtrState() {
 // planned. `to` and `from` are { kind:'mtr'|'lrt', id }; `from` null means
 // where the phone is. `ways` is the last answer, keyed so it is worked out
 // once per question and not once per redraw.
-let railPlan = { to: null, toQuery: '', from: null, fromQuery: '', wayKey: '', ways: [] };
+// `place` is set only by the 巴士 tab's MTR card: the place the rider is
+// really going to (國際金融中心商場), for which `to` is the station. It holds
+// only while `to` is still that station, and every way of changing `to`
+// clears it.
+let railPlan = { to: null, toQuery: '', from: null, fromQuery: '', wayKey: '', ways: [], place: null };
 
 // FOUR PLACES YOU GO, one tap each. Four and not twelve: they sit in one row
 // under the box, and a row is what a thumb can pick from without reading a
@@ -14192,26 +14659,96 @@ function railPlanHtml() {
 function railWaysHtml() {
   const p = railPlan;
   if (!p.to) return '';
-  const toName = railNodeName(p.to);
+  // Sent from the 巴士 tab: the way is to the PLACE, so the trip — and its
+  // last walk — is the one the 巴士 tab's card gave. Where the place is, is
+  // worked out again here by the card's own function (placeOf), not taken
+  // from the moment the button was pressed: in the first seconds after
+  // opening the app more of its stops are still arriving, and a point
+  // frozen early made this tab say 64 minutes while the card said 62.
+  const sent = (p.place && railSameNode(p.place.node, p.to)) ? p.place : null;
+  const place = sent ? Object.assign({}, sent, placeOf(sent.name) || {}) : null;
+  const toName = place ? place.name : railNodeName(p.to);
+  // Named by the place alone: the options can end at different stations
+  // (香港 or 中環 for the IFC), and a heading naming one would be wrong for
+  // the other.
   const head = '<div class="mtrsub">' + T('railWaysTo').replace('{b}', esc(toName)) + '</div>';
 
-  if (p.from && railSameNode(p.from, p.to))
+  // Going to a place, the station in 我要去 is only the app's way in: a
+  // start at that station is not "the same place", it is a walk away.
+  if (!place && p.from && railSameNode(p.from, p.to))
     return head + '<div class="favempty">' + T('railSame') + '</div>';
   const fromPos = p.from ? railNodePos(railNodeId(p.from)) : (herePoint ? [herePoint.lat, herePoint.lng] : null);
-  const toPos = railNodePos(railNodeId(p.to));
+  const toPos = place ? [place.lat, place.lng] : railNodePos(railNodeId(p.to));
   if (!toPos) return '';
   if (!fromPos) return head + '<div class="favempty">' + T('railNeedStart') + '</div>';
-  if (!p.from) {
+  if (place) {
+    if (metresBetween(fromPos[0], fromPos[1], place.lat, place.lng) < 300)
+      return head + '<div class="favempty">' + T('railThere').replace('{b}', esc(toName)) + '</div>';
+  } else if (!p.from) {
     const nearest = railNear(herePoint)[0];
     if (nearest && railSameNode(nearest, p.to) && nearest.metres < 300)
       return head + '<div class="favempty">' + T('railThere').replace('{b}', esc(toName)) + '</div>';
   }
 
-  const key = railNodeId(p.to) + '|' + (p.from ? railNodeId(p.from) : fromPos.map(v => v.toFixed(4)).join(',')) +
-              '|' + lang + script + (lrtData ? '+lrt' : '');
+  // Keyed on the place itself when there is one, not the station in the
+  // box — that follows the trip (below), and must not force a second search.
+  // And on whether the graph holds the Light Rail, not whether its file has
+  // come: the card keys on the same thing.
+  const key = (place ? 'place@' + place.lat + ',' + place.lng : railNodeId(p.to)) +
+              '|' + (p.from ? railNodeId(p.from) : fromPos.join(',')) +
+              '|' + lang + script + (railGraph && railGraph.withLrt ? '+lrt' : '');
   if (p.wayKey !== key) { p.wayKey = key; p.ways = railJourneys(fromPos[0], fromPos[1], toPos[0], toPos[1]) || []; }
-  if (!p.ways.length) return head + '<div class="favempty">' + T('railNoWay').replace('{b}', esc(toName)) + '</div>';
-  return head + p.ways.slice(0, 2).map((j, n) => railWayCard(j, n)).join('');
+  // GOING TO A PLACE, WALKING CAN BE THE ANSWER — by the 巴士 card's own
+  // rule: always when close, up to MI_WALK_MAX when the train is no quicker,
+  // and whenever the train walks the rider as far anyway. First, as a step
+  // with walking directions, and the trains under it for anyone who would
+  // still rather ride.
+  let walkHtml = '', walkMin = Infinity;
+  if (place) {
+    const walk = walkingEstimate(metresBetween(fromPos[0], fromPos[1], place.lat, place.lng));
+    const j0 = p.ways[0];
+    if (walk.minutes <= MI_WALK_MIN || (j0 && walk.minutes <= totalWalkMinutes(j0)) ||
+        (walk.minutes <= MI_WALK_MAX && (!j0 || walk.minutes <= j0.total + 2))) {
+      const href = p.from ? walkUrl(place.lat, place.lng, fromPos[0], fromPos[1]) : walkUrl(place.lat, place.lng);
+      walkMin = walk.minutes;
+      walkHtml = '<div class="rjcard"><a class="rjgo" href="' + esc(href) + '" target="_blank" rel="noopener">' +
+        '<span class="rjline">🚶 ' + esc(T('railWalkAll').replace('{n}', walk.minutes).replace('{d}', place.name)) + '</span>' +
+        '<span class="rjgosub">' + esc(T('railGoStep')) + '</span></a></div>';
+    }
+  }
+  if (!p.ways.length)
+    return head + (walkHtml || '<div class="favempty">' + T('railNoWay').replace('{b}', esc(toName)) + '</div>');
+  // Going to a place, the station in 我要去 is whichever the best trip gets
+  // off at — the app chose it, so the app keeps it true.
+  if (sent) {
+    const best = p.ways[0];
+    const end = railNodeOfStop(best.legs[best.legs.length - 1].off);
+    if (!railSameNode(end, p.to)) { p.to = end; p.place = Object.assign({}, p.place, { node: end }); }
+  }
+  // Under a walk, only trains that are actually quicker — not 中環 → 上環
+  // and fourteen minutes back on foot. Each keeps its own index: the leg
+  // buttons find their train by it.
+  return head + walkHtml + p.ways.slice(0, 2)
+    .map((j, n) => (walkHtml && j.total >= walkMin) ? '' : railWayCard(j, n, place)).join('');
+}
+
+// Straight to the steps, for a rider sent here by the 巴士 tab's MTR card:
+// the plan's boxes are filled in already, so the first thing on the screen
+// is the way there. Asked for by the button and done by the first drawing of
+// the plan that is not still waiting for the phone's position — scrolled any
+// earlier, the 正在定位… line above it goes away and takes the heading
+// half off the top. A request older than half a minute is dropped, so a
+// rider who left the tab is not scrolled about when they come back.
+let railWaysWanted = 0;
+function showRailWays() {
+  if (!railWaysWanted || mtrState.locating || mtrState.station || mtrState.lrt) return;
+  const fresh = Date.now() - railWaysWanted < 30000;
+  railWaysWanted = 0;
+  const panel = document.getElementById('panel'), ways = document.getElementById('mtr-ways');
+  // Only to a trip. With no start yet, the 起點 box, the 允許定位 card and
+  // the "say where from" line all sit above the ways and must stay in view.
+  if (!fresh || activeMode !== 'mtr' || !panel || !ways || !ways.querySelector('.rjcard')) return;
+  panel.scrollTop += ways.getBoundingClientRect().top - panel.getBoundingClientRect().top - 8;
 }
 
 // Where a train on this leg is heading: the end of the line in the direction
@@ -14236,10 +14773,14 @@ function railGoNote(station) {
   const walk = walkingEstimate(metresBetween(herePoint.lat, herePoint.lng, Number(station.lat), Number(station.long)));
   const far = walk.metres < 1000 ? (Math.round(walk.metres / 10) * 10) + T('unitM')
                                  : (walk.metres / 1000).toFixed(1) + T('unitKm');
+  // Past an hour it is not a walk anybody will take — the station is across
+  // town from the phone (a trip planned for later, from somewhere else).
+  // 「約 493 分鐘」 read as a fault; the distance alone says it plainly.
+  if (walk.minutes > 60) return T('railGoAway').replace('{d}', far);
   return T('railGoFar').replace('{d}', far).replace('{n}', walk.minutes);
 }
 
-function railWayCard(j, n) {
+function railWayCard(j, n, place) {
   const oct = journeyFare(j);
   let fare = oct === null ? '' : fareText(oct);
   // The single-journey ticket beside the Octopus fare when they differ, as
@@ -14266,7 +14807,12 @@ function railWayCard(j, n) {
   // link the bus stops use). Starting from 📍 the card already had a walk
   // step, 第 1 步 先步行 6 分鐘到 石硤尾; that step IS the button now.
   const first = j.legs[0].on;
-  const go = railWalkHref(first);
+  // From a chosen 起點 station the first walk starts THERE (香港 to 中環),
+  // not wherever the phone happens to be — which may be across town.
+  const fromAt = (railPlan.from && j.walkOn && j.walkOn.minutes >= 2) ? railNodePos(railNodeId(railPlan.from)) : null;
+  const go = fromAt && isFinite(Number(first.lat)) && isFinite(Number(first.long))
+    ? walkUrl(Number(first.lat), Number(first.long), fromAt[0], fromAt[1])
+    : railWalkHref(first);
   if (j.walkOn && j.walkOn.minutes >= 2) {
     const words = badge() + '🚶 ' + T('railWalkOn').replace('{n}', j.walkOn.minutes).replace('{s}', esc(stopName(first)));
     html += go
@@ -14296,7 +14842,17 @@ function railWayCard(j, n) {
         (leg.stops === 1 && lang === 'en' ? '1 stop' : T('stopsAwayShort').replace('{n}', leg.stops)) +
         '</span></button>';
   });
-  if (j.walkOff && j.walkOff.minutes >= 2)
+  // THE LAST WALK. Going to a place rather than a station (sent from the
+  // 巴士 tab), it is a step like the first: where to, and a button for
+  // walking directions from the station's door — the rider is reading it
+  // before they get there, so the station is named as the start.
+  const last = j.legs[j.legs.length - 1].off;
+  const lastLat = Number(last.lat), lastLng = Number(last.long);
+  if (place && j.walkOff && j.walkOff.minutes >= 2 && isFinite(lastLat) && isFinite(lastLng)) {
+    html += '<a class="rjgo last" href="' + esc(walkUrl(place.lat, place.lng, lastLat, lastLng)) + '" target="_blank" rel="noopener">' +
+      '<span class="rjline">' + badge() + '🚶 ' + esc(T('railWalkOffTo').replace('{n}', j.walkOff.minutes).replace('{d}', place.name)) + '</span>' +
+      '<span class="rjgosub">' + esc(T('railGoStep')) + '</span></a>';
+  } else if (j.walkOff && j.walkOff.minutes >= 2)
     html += '<div class="rjwalk">' + badge() + '🚶 ' + T('railWalkOff').replace('{n}', j.walkOff.minutes) + '</div>';
   return html + '</div>';
 }
@@ -14358,6 +14914,9 @@ function renderMtrView() {
     // the phone is still finding itself. Waiting on the GPS used to blank the
     // whole screen, so somebody who already knew they wanted 尖沙咀 had to
     // wait for an answer to a question they had not asked.
+    // The way there is worked out FIRST: going to a place sent from the 巴士
+    // tab, it settles which station goes in the 我要去 box drawn just below.
+    const waysHtml = railPlan.to ? railWaysHtml() : '';
     html += railPlanHtml();
 
     if (navigator.geolocation && geoChoice() !== 'no' && geoChoice() !== 'yes' && !herePoint) {
@@ -14370,7 +14929,7 @@ function renderMtrView() {
     if (st.locating) html += '<div class="favempty">' + T('findingYou') + '</div>';
 
     // THE WAY THERE, as soon as both ends are known.
-    html += '<div id="mtr-ways">' + (railPlan.to ? railWaysHtml() : '') + '</div>';
+    html += '<div id="mtr-ways">' + waysHtml + '</div>';
 
     // The nearest stations and stops: the answer to "where am I" when nowhere
     // has been named, and the starting points to pick from when it has.
@@ -14409,6 +14968,7 @@ function renderMtrView() {
     if (railPlan.fromQuery && !railPlan.from) mtrRenderSearch(railPlan.fromQuery, 'from');
     centreRailNet();
     wireRailNetGestures();
+    showRailWays();
     return;
   }
 
@@ -14634,7 +15194,7 @@ document.getElementById('mtrview').addEventListener('click', event => {
   // station — open it, which is what searching a station always did.
   if (d.mtrPick) {
     const node = { kind: d.kind, id: d.id };
-    if (d.mtrPick === 'to') { railPlan.to = node; railPlan.toQuery = ''; renderMtrView(); return; }
+    if (d.mtrPick === 'to') { railPlan.to = node; railPlan.toQuery = ''; railPlan.place = null; renderMtrView(); return; }
     // From the station screen's own box: straight to that station.
     if (d.mtrPick === 'jump') {
       if (node.kind === 'lrt') { mtrState = Object.assign(freshMtrState(), { locateTried: true }); lrtOpen(node.id); }
@@ -14714,7 +15274,7 @@ document.getElementById('mtrview').addEventListener('click', event => {
     // ✕ empties the box and the list under it. Deliberately does NOT put
     // the keyboard back up: somebody who has just cleared a search usually
     // wants to see the screen they cleared it off.
-    case 'clear-to':   railPlan.to = null;   railPlan.toQuery = '';   renderMtrView(); break;
+    case 'clear-to':   railPlan.to = null;   railPlan.toQuery = '';   railPlan.place = null; renderMtrView(); break;
     case 'clear-from': railPlan.from = null; railPlan.fromQuery = ''; renderMtrView(); break;
     // THE PIN ON 我要去: the station you are standing at, into the box — which
     // is what makes the ★ beside it useful. Stand somewhere once, save it,
@@ -14722,7 +15282,7 @@ document.getElementById('mtrview').addEventListener('click', event => {
     case 'here-to': withHere(here => {
       const near = railNear(here)[0];
       if (!near) { status.textContent = T('mtrNoneNear'); return; }
-      railPlan.to = { kind: near.kind, id: near.id }; railPlan.toQuery = '';
+      railPlan.to = { kind: near.kind, id: near.id }; railPlan.toQuery = ''; railPlan.place = null;
       renderMtrView();
       status.textContent = T('hereIs').replace('{s}', near.name);
     }); break;
@@ -14758,7 +15318,7 @@ document.getElementById('mtrview').addEventListener('click', event => {
       const dest = railDests[Number(d.index)];
       if (!dest) break;
       railPlan.to = railSameNode(railPlan.to, dest) ? null : { kind: dest.kind, id: dest.id };
-      railPlan.toQuery = '';
+      railPlan.toQuery = ''; railPlan.place = null;
       renderMtrView();
       break;
     }
@@ -14794,6 +15354,7 @@ document.getElementById('mtrview').addEventListener('input', event => {
   // redrawn here, so the box keeps its focus and the keyboard stays up.
   railPlan[which] = null;
   railPlan[which + 'Query'] = event.target.value;
+  if (which === 'to') railPlan.place = null;
   mtrRenderSearch(event.target.value, which);
   if (which === 'to') {
     const ways = document.getElementById('mtr-ways');
@@ -14920,8 +15481,7 @@ function routesOnScreen() {
     for (const row of rows) {
       if (filtering) {
         const key = routeKeyForRow(row);
-        const seq = Number(row.seq) ||
-                    (routesServing(row.stop || stopState.stop.stop).find(r => r.key === key) || {}).seq || 0;
+        const seq = rowSeq(row, key, stopState.stop.stop);
         if (!routeReaches(key, seq, destIds)) continue;
       }
       const r = String(row.route || '').toUpperCase();
@@ -17018,7 +17578,7 @@ function currentStopRide() {
   for (const row of st.rows) {
     const key = routeKeyForRow(row);
     const from = row.stop || stop.stop;
-    const seq = Number(row.seq) || (routesServing(from).find(r => r.key === key) || {}).seq || 0;
+    const seq = rowSeq(row, key, from);
     const reach = routeReaches(key, seq, destIds);
     if (!reach) continue;
     // Minutes exactly as the 巴士 page counts them (etaEntries): rounded,
