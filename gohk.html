@@ -1810,6 +1810,55 @@
   .mibtn:active { filter:brightness(1.2); }
   .mibmain { display:block; font-size:1.12rem; font-weight:800; overflow-wrap:anywhere; }
   .mibsub { display:block; font-size:0.94rem; font-weight:700; opacity:.92; margin-top:2px; }
+  /* 去 X 的路線 — whole trips, the way MyRapid PULSE lists them: how long,
+     how much, then the steps as one line of chips (🚶 3 › 🚌 A21 38 › 🚶 1)
+     that wraps onto a second line rather than scrolling sideways. Tap one for
+     the steps under it. */
+  .tripbox { margin:12px 0 6px; }
+  .triphead { font-size:1.06rem; font-weight:800; color:var(--navy); margin:0 0 8px; line-height:1.35;
+              overflow-wrap:anywhere; }
+  .tripwait { font-size:0.94rem; font-weight:700; color:var(--ink-3); padding:4px 0; }
+  .tripopt { display:block; width:100%; box-sizing:border-box; margin:0 0 8px; padding:10px 12px;
+             text-align:left; cursor:pointer; background:white; color:var(--ink); font:inherit;
+             border:2px solid var(--line); border-radius:14px; }
+  .tripopt.open { border-color:var(--navy); border-radius:14px 14px 0 0; margin-bottom:0; background:var(--navy-tint); }
+  .trtop { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; }
+  .trtotal { font-size:1.3rem; font-weight:800; color:var(--ink); }
+  .trfare { font-size:1.06rem; font-weight:800; color:var(--teal); }
+  .trtag { font-size:0.94rem; font-weight:800; color:white; background:var(--green); border-radius:var(--r-sm);
+           padding:1px 8px; }
+  .trchips { display:flex; flex-wrap:wrap; align-items:center; gap:6px 4px; margin:8px 0 6px; }
+  .tchip { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:10px;
+           border:2px solid var(--line); background:white; color:var(--ink); font-size:1rem; font-weight:800;
+           white-space:nowrap; }
+  .tchip.walk { background:var(--surface-2); border-color:var(--surface-2); color:var(--ink-2); }
+  .tchip.bus { border-color:#d97706; background:var(--amber-tint); }
+  .tchip.ferry { border-color:var(--teal); background:var(--teal-tint); }
+  .tchip.rail { border-left-width:8px; }
+  .tchip .tmin { font-weight:700; color:var(--ink-3); }
+  .tsep { font-weight:800; color:var(--ink-3); }
+  .trtimes { display:block; font-size:1.06rem; font-weight:800; color:var(--green); }
+  .trtimes.est { color:var(--ink-2); }
+  .trdetail { border:2px solid var(--navy); border-top:0; border-radius:0 0 14px 14px; background:white;
+              padding:4px 12px 12px; margin:0 0 10px; }
+  .tsteps { list-style:none; margin:0; padding:0; }
+  .tstep { padding:9px 0; border-bottom:1px solid var(--line-soft); font-size:1rem; font-weight:700;
+           color:var(--ink); line-height:1.4; overflow-wrap:anywhere; }
+  .tstep.end { border-bottom:0; font-weight:800; }
+  .tstep small { display:block; font-size:0.94rem; font-weight:700; color:var(--ink-2); margin-top:2px; }
+  .tstep small.tlive { color:var(--green); font-weight:800; }
+  .tstep small.test { color:var(--ink-3); }
+  .tline { display:block; border-left:6px solid var(--line); padding-left:10px; }
+  .tmaplink { display:inline-block; padding:6px 2px; color:var(--blue); font-weight:800; white-space:nowrap; }
+  .tstepbtn { display:inline-block; margin-top:6px; min-height:44px; padding:8px 12px; cursor:pointer;
+              border:2px solid var(--blue); border-radius:10px; background:var(--blue-tint); color:var(--blue);
+              font:inherit; font-size:0.94rem; font-weight:800; }
+  .tnote { font-size:0.94rem; font-weight:700; color:var(--ink-3); margin-top:8px; }
+  .tripdot { width:34px; height:34px; box-sizing:border-box; border-radius:17px; border:3px solid white; color:white;
+             font-weight:800; font-size:16px; line-height:28px; text-align:center; box-shadow:0 1px 5px rgba(0,0,0,.45); }
+  #ridecard.trip .trchips { margin:6px 0 4px; gap:4px 3px; }
+  #ridecard.trip .tchip { font-size:0.94rem; padding:1px 6px; }
+  #ridecard.trip .rcarrive { margin:2px 0 0; }
   .rjgo.last { margin:8px 0 0; }
   /* THE TWO ENDS OF A RIDE on the map: a dot on the stop and, beside it, what
      happens there (上車 / 第 13 站 下車) over the stop's name in large type.
@@ -2000,6 +2049,79 @@
   .spotshut { display:block; width:100%; min-height:48px; margin-top:8px; border:none;
               background:transparent; font-size:1.02rem; font-weight:800; color:var(--ink-3); }
   .spotwait { font-size:0.98rem; font-weight:700; color:var(--ink-3); margin-top:10px; }
+
+  /* ==========================================================
+     BUG REPORTS (tester mode). Nothing here shows unless SETTINGS has
+     tester mode on, which puts .bugtester on <body>.
+     The button is a tab on the LEFT edge: the right edge already carries
+     the map's three bubbles and the licence notice, and a tab half the size
+     of a bubble covers less of the cards underneath. It can be dragged up
+     and down out of the way. It sits ABOVE the sheets (2000), so a bug
+     inside a sheet can still be reported.
+     ========================================================== */
+  #bugbtn { display:none; position:fixed; left:0; z-index:2500;
+            top:calc(100% - var(--bottomh) - 150px);
+            width:46px; height:52px; padding:0 0 0 4px; border:2px solid var(--line);
+            border-left:none; border-radius:0 14px 14px 0; background:var(--amber-tint);
+            font-size:1.5rem; line-height:1; align-items:center; justify-content:center;
+            box-shadow:0 3px 12px rgba(0,0,0,.28); opacity:.88; touch-action:none; }
+  body.bugtester #bugbtn { display:flex; }
+  #bugbtn .bugcount { position:absolute; top:-6px; right:-6px; min-width:20px; height:20px;
+                      border-radius:10px; background:var(--red); color:white; font-size:12px;
+                      font-weight:800; line-height:20px; text-align:center; padding:0 4px; }
+  /* The frozen screen. The screenshot fills it at exactly the size it was
+     taken, so what the tester boxes is what they were looking at. */
+  #bugshot { display:none; position:fixed; inset:0; z-index:3000; background:rgba(15,23,42,.35);
+             touch-action:none; user-select:none; -webkit-user-select:none; }
+  #bugshot.open { display:block; }
+  #bugshot canvas { position:absolute; left:0; top:0; }
+  #bugshot .bughint { position:absolute; left:50%; top:calc(env(safe-area-inset-top, 0px) + 10px);
+                      transform:translateX(-50%); max-width:calc(100% - 24px); pointer-events:none;
+                      background:rgba(17,24,39,.88); color:white; border-radius:12px;
+                      padding:8px 14px; font-size:1rem; font-weight:800; text-align:center; }
+  #bugshot .bugbar { position:absolute; left:10px; right:10px;
+                     bottom:calc(env(safe-area-inset-bottom, 0px) + 10px); display:flex; gap:8px; }
+  #bugshot .bugbar button { flex:1; min-height:52px; border-radius:12px; border:2px solid var(--line);
+                            background:white; color:var(--ink); font-size:1rem; font-weight:800; }
+  #bugshot .bugbar button.go { background:var(--navy); border-color:var(--navy); color:white; }
+  /* Solid, not faded: a see-through button let the tab bar show through it. */
+  #bugshot .bugbar button.go:disabled { background:#e5e7eb; border-color:#e5e7eb; color:var(--ink-3); }
+  #bugsheet { display:none; position:fixed; inset:0; z-index:3100; background:rgba(15,23,42,.55);
+              align-items:flex-end; justify-content:center; padding:10px; }
+  #bugsheet.open { display:flex; }
+  .bugtitle { font-size:1.18rem; font-weight:800; color:var(--ink); margin-bottom:10px; }
+  .bugthumb { display:block; max-width:100%; max-height:28vh; margin:0 auto 6px; border-radius:8px;
+              border:2px solid var(--line); }
+  .bugcheck { display:flex; align-items:center; gap:10px; min-height:44px; font-size:1rem;
+              font-weight:700; color:var(--ink-2); }
+  .bugcheck input { width:24px; height:24px; }
+  .buglabel { display:block; font-size:1rem; font-weight:800; color:var(--ink); margin:10px 0 6px; }
+  #bugnote { display:block; width:100%; box-sizing:border-box; min-height:96px; resize:vertical;
+             border:2px solid var(--line); border-radius:12px; padding:10px 12px;
+             font:inherit; font-size:1rem; color:var(--ink); }
+  .bugtip, .bugalso { font-size:0.9rem; font-weight:700; color:var(--ink-3); line-height:1.45; margin-top:6px; }
+  .bugvoice { display:flex; gap:8px; margin-top:10px; }
+  .bugvoice button { flex:1; min-height:50px; border-radius:12px; border:2px solid var(--line);
+                     background:white; color:var(--ink); font-size:1rem; font-weight:800; }
+  .bugvoice button.rec { background:var(--red); border-color:var(--red); color:white; }
+  .bugsave { display:block; width:100%; min-height:54px; border:none; border-radius:12px;
+             background:var(--navy); color:white; font-size:1.06rem; font-weight:800; }
+  /* Save and Cancel stay in sight while the sheet scrolls: at 特大 the sheet
+     is taller than the screen and Save used to sit below the fold. */
+  .bugactions { position:sticky; bottom:-14px; background:white; margin:14px -16px -14px;
+                padding:10px 16px 14px; border-top:2px solid var(--line-soft); }
+  .bugactions .dircancel { margin-top:8px; }
+  /* SETTINGS: the tester's own reports. */
+  .bugitem { border:2px solid var(--line-soft); border-radius:12px; padding:10px 12px; margin-bottom:8px; }
+  .bugitem .bugwhen { font-size:0.9rem; font-weight:800; color:var(--ink-3); }
+  .bugitem .bugtext { font-size:1rem; color:var(--ink); margin-top:3px; overflow-wrap:anywhere; }
+  .bugitem .bugrow { display:flex; align-items:center; gap:8px; margin-top:6px; }
+  .bugtag { font-size:0.88rem; font-weight:800; border-radius:8px; padding:2px 8px; }
+  .bugtag.wait { color:var(--amber); background:var(--amber-tint); }
+  .bugtag.sent { color:var(--green); background:var(--green-tint); }
+  .bugitem .bugdel { margin-left:auto; min-height:40px; padding:0 12px; border-radius:10px;
+                     border:2px solid var(--line); background:white; color:var(--red);
+                     font-size:0.94rem; font-weight:800; }
 </style>
 </head>
 <body>
@@ -2183,9 +2305,63 @@
      rider's stop. Filled by ridePaint(); hidden when no alarm is set. -->
 <div id="ridebar" role="status" aria-live="assertive" style="display:none"></div>
 
+<!-- Tester mode only: report a problem. See "BUG REPORTS" at the bottom of
+     the script. The button, the frozen screen to box the problem on, and the
+     sheet the report is written in. -->
+<button id="bugbtn" type="button">🐞</button>
+<div id="bugshot"></div>
+<div id="bugsheet" role="dialog" aria-modal="true"><div class="dircard" id="bugcard"></div></div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
+// ============================================================
+// BUG REPORTS — the part that has to run first
+// ============================================================
+// Every 🐞 report (tester mode; the rest is under "BUG REPORTS" at the
+// bottom of this file) carries the last few error messages. An error thrown
+// while the page is starting is the one most worth having, so the listener
+// goes in before any other line of the app runs. The report state is up here
+// for the same reason mtrData is declared early further down: SETTINGS reads
+// it, and SETTINGS can be drawn before the bottom of the file has run.
+const bugErrors = [];             // { t, msg, at } — the last 20, oldest first
+function bugNoteError(msg, at) {
+  bugErrors.push({ t: new Date().toISOString(), msg: String(msg || '').slice(0, 300),
+                   at: String(at || '').slice(0, 160) });
+  if (bugErrors.length > 20) bugErrors.shift();
+}
+// Script errors only. A map tile that fails also fires 'error', but on its
+// own <img> without bubbling, so this listener never hears it — which is
+// right: the label layer 404s by the dozen at zoom 11, and that is noise.
+window.addEventListener('error', e => {
+  if (e && e.message) bugNoteError(e.message, String(e.filename || '').split('/').pop() + ':' + (e.lineno || 0));
+});
+window.addEventListener('unhandledrejection', e => {
+  const r = e && e.reason;
+  bugNoteError('(promise) ' + (r && r.message ? r.message : String(r)),
+               r && r.stack ? String(r.stack).split('\n').slice(0, 2).join(' | ') : '');
+});
+// And the app's own console.error lines: that is where it records a feed
+// that failed to load ("kmb-stops failed: …"), which is often the whole story
+// behind "the stop list is empty". Passed straight on to the real console.
+const bugConsoleError = console.error;
+console.error = function () {
+  try { bugNoteError(Array.from(arguments).map(a => (a && a.message) ? a.message : String(a)).join(' '), 'console'); } catch (e) {}
+  return bugConsoleError.apply(console, arguments);
+};
+// WHERE REPORTS GO. The /exec address of the Google Apps Script in
+// bug-inbox/Code.gs, pasted here after it is deployed (bug-inbox/SETUP.md).
+// Empty means "not set up yet": reports are still saved, and wait on the
+// phone until an address is here. The key must match BUG_KEY in Code.gs. It
+// is NOT a secret — this page is public — it only turns away robots that
+// find the address and post junk to it.
+const BUG_INBOX_URL = 'https://script.google.com/macros/s/AKfycbyuWCSk_F9lEfVPr2uWE2jx1kY16CMS42UHxxdVFI53JMoUMJi5oRAfkPhA4ITzAQ6G/exec';
+const BUG_INBOX_KEY = 'gohk-bug-7Qm2xV9c';
+let bugDbReady = null;            // the IndexedDB holding the tester's reports
+let bugSending = null;            // the send in progress, shared by every caller
+let bugShooterLoading = null;     // html2canvas, fetched only once tester mode is on
+let bugDraft = null;              // the report being written, while the sheet is open
+const bugTrail = [];              // the last 10 messages the app showed, oldest first
 // ============================================================
 // 0. LANGUAGE (English / 繁體中文)
 // ============================================================
@@ -2267,6 +2443,7 @@ rmStations:'{n} stations',
     stopDestNeedLoc:'Tap 📍 to find which stops near you have a direct bus.',
     stopFilterPh:'Only buses towards…', stopFilterNone:'No bus from this stop towards {d}.',
     miTitle:'No direct bus — take the MTR instead', miTitleSaved:'No direct bus from your saved stops — take the MTR instead', miWalkTitle:'{d} is close by — about {n} min on foot', miWalkTitleFar:'Walk to {d}: about {n} min — as quick as the train or quicker', miWalkTitleOnly:'Walk to {d}: about {n} min', miChanges:'{n} change', miChangesN:'{n} changes', miNoChange:'no change', miWalkOff:'then walk about {n} min to {d}', miNear:'Nearest station to {d}: {s}, about {n} min walk', miBtn:'🚇 Go by MTR to {d} ›', miBtnSub:'Every step, with walking directions', miClosed:'⚠ The MTR is closed now. First trains are around 6 am.', startOtherCo:'A direct bus to {d} leaves from {s}, about {m} m away.', miMoved:'You have moved, so the MTR trip has been updated — please tap again.',
+    tripHead:'Ways to {d}', tripWorking:'Finding ways there…', tripNone:'No way there by bus, MTR or ferry from here right now.', tripMins:'about {n} min', tripLeave:'Leave {a} → arrive {b}', tripLeaveNow:'Leave now → arrive about {b}', tagFastest:'Fastest', tagCheapest:'Cheapest', tagLeastWalk:'Least walking', tripWalkOnly:'Walk all the way', tripWalkTo:'Walk about {n} min to {s}', tripRouteLink:'Directions ›', tripRide:'{n} stops · about {m} min', tripGetOff:'Get off at {s}', tripRail:'{a} → {b} · {n} stops · about {m} min', tripChangeAt:'Change at {s} to the {l}', tripChangeSame:'Change to the next bus at the same stop', tripNextBus:'Next one in {m} min — leave by {t}', tripNextNow:'Next one is due — leave now', tripNoNext:'No departure reported in the live times just now', tripNoLive:'This company gives no live times; the time is an estimate', tripStopTimes:'Live times at this stop ›', tripArrive:'Arrive about {t} at {d}', tripMapBtn:'🗺️ See this route on the map', tripMapSub:'Every leg drawn: where to get on, change and get off', tripFerry:'Ferry', tripEstimate:'Times are estimates. Where a bus has live times, its next departure is used.', tripStart:'Your position', tripDest:'Destination', tagNoChange:'No change', tripFareFrom:'from {f}', tripChipMin:'{n} min', tripLocate:'📍 Use my location to find a way there', tripLocateSub:'Bus, MTR and walking to {d}, from where you are', tripChanges:'{n} change', tripChangesN:'{n} changes', tripDirect:'no change',
     stopFilterOn:'Showing buses towards {d}', stopsAwayShort:'{n} stops', stopMore:'+{n} more',
     stopIndexing:'Loading the bus network — first time only…',
     stopDestNoName:'No stop called "{d}" — try a shorter name.',
@@ -2549,7 +2726,29 @@ rmStations:'{n} stations',
     updateReady:'⬆ New version — tap to update',
     settingInstall:'Add to home screen', install:'Install',
     installNote:'Installs like an app, with its own icon. It then opens without the browser bar, and works without a connection except for live times and the map.',
-    installedAlready:'✓ Already installed'
+    installedAlready:'✓ Already installed',
+    bugTester:'Tester mode (report problems)', bugOn:'On', bugOff:'Off',
+    bugTesterNote:'Puts a 🐞 button on every screen. When something looks wrong, tap it: it takes a screenshot, you draw a box round the problem and write or record what happened. Reports wait on this phone and are sent when there is a connection. Drag the 🐞 up or down if it is in the way.',
+    bugBtn:'Report a problem', bugShooting:'Taking a screenshot…',
+    bugDrawHint:'Drag a box round the problem',
+    bugNoShot:'No screenshot this time — drag a box round the problem on the screen',
+    bugNoBox:'No box', bugNext:'Next', bugCancel:'Cancel',
+    bugTitle:'🐞 Report a problem', bugWhat:'What went wrong?',
+    bugPlaceholder:'e.g. The 60X is missing at Prince Edward',
+    bugMicTip:'Tip: the 🎤 on your keyboard types what you say.',
+    bugRecord:'🎙 Record voice', bugStop:'■ Stop', bugPlay:'▶ Play', bugDelVoice:'🗑 Delete',
+    bugMicDenied:'The microphone is not allowed. Type instead, or allow the microphone for this site in the phone settings.',
+    bugNoMic:'This phone cannot record here. Please type instead.',
+    bugIncludeShot:'Send the screenshot',
+    bugAlsoSent:'Also sent: app version, which screen, language, text size, screen size, your start and destination, the words in the search boxes, the last messages and errors. Not sent: your GPS position.',
+    bugNeedNote:'Write or record what went wrong first.',
+    bugSave:'Save and send',
+    bugSavedOffline:'Report saved on this phone. It will be sent when there is a connection.',
+    bugNoInbox:'Report saved on this phone. The report inbox is not set up yet, so it waits here.',
+    bugSentMsg:'Report sent ✓', bugSendFailed:'Could not send the report yet — it is kept and will be tried again.',
+    bugSaveFailed:'This phone could not save the report.',
+    bugMine:'My reports', bugNone:'No reports yet.', bugWaitTag:'Waiting to send', bugSentTag:'Sent ✓',
+    bugSendNow:'Send now', bugDelete:'Delete', bugVoiceTag:'🎙 voice', bugShotTag:'📷 screenshot'
   },
   zh: {
     appname:'GO香港', start:'起點', destination:'目的地',
@@ -2623,6 +2822,7 @@ rmStations:'{n} 個站',
     stopDestNeedLoc:'按 📍 就可找出你附近哪個站有直達巴士。',
     stopFilterPh:'只顯示往…', stopFilterNone:'此站沒有往 {d} 的巴士。',
     miTitle:'沒有巴士直達，可以改搭港鐵', miTitleSaved:'你收藏的車站沒有巴士直達，可以改搭港鐵', miWalkTitle:'{d} 就在附近，步行約 {n} 分鐘', miWalkTitleFar:'步行去 {d} 約 {n} 分鐘，不比搭港鐵慢', miWalkTitleOnly:'步行去 {d} 約 {n} 分鐘', miChanges:'轉車 {n} 次', miChangesN:'轉車 {n} 次', miNoChange:'不用轉車', miWalkOff:'出站後步行約 {n} 分鐘到 {d}', miNear:'最近 {d} 的車站：{s}站，步行約 {n} 分鐘', miBtn:'🚇 用港鐵去 {d} ›', miBtnSub:'一步一步教你怎樣去，連步行路線', miClosed:'⚠ 港鐵現在已停駛，頭班車約早上 6 時。', startOtherCo:'{s}（約 {m} 米）有巴士直達 {d}。', miMoved:'你的位置變了，港鐵路線已更新，請再按一次。',
+    tripHead:'去 {d} 的路線', tripWorking:'正在找路線…', tripNone:'現在由這裡沒有巴士、港鐵或渡輪可以去。', tripMins:'約 {n} 分鐘', tripLeave:'{a} 出發 → {b} 到', tripLeaveNow:'現在出發 → 約 {b} 到', tagFastest:'最快', tagCheapest:'最平', tagLeastWalk:'最少步行', tripWalkOnly:'全程步行', tripWalkTo:'步行約 {n} 分鐘到 {s}', tripRouteLink:'路線 ›', tripRide:'坐 {n} 個站 · 約 {m} 分鐘', tripGetOff:'在 {s} 下車', tripRail:'{a} → {b} · {n} 個站 · 約 {m} 分鐘', tripChangeAt:'在 {s} 轉乘{l}', tripChangeSame:'在同一個站轉乘下一程車', tripNextBus:'下一班 {m} 分鐘後開，{t} 前出發', tripNextNow:'下一班即將開出，現在出發', tripNoNext:'實時資料暫時沒有下一班', tripNoLive:'此公司沒有實時班次，時間為估計', tripStopTimes:'看這個站的班次 ›', tripArrive:'約 {t} 到達 {d}', tripMapBtn:'🗺️ 在地圖上看這條路線', tripMapSub:'每一段都畫出：在哪裡上車、轉車、下車', tripFerry:'渡輪', tripEstimate:'時間為估計；有實時班次的巴士，以下一班車計算。', tripStart:'你的位置', tripDest:'目的地', tagNoChange:'不用轉車', tripFareFrom:'{f} 起', tripChipMin:'{n} 分', tripLocate:'📍 用我的位置找路線', tripLocateSub:'由你現在的位置去 {d}：巴士、港鐵、步行', tripChanges:'轉車 {n} 次', tripChangesN:'轉車 {n} 次', tripDirect:'不用轉車',
     stopFilterOn:'只顯示往 {d} 的巴士', stopsAwayShort:'{n} 個站', stopMore:'另有 {n} 條',
     stopIndexing:'正在載入巴士路線網絡（只需一次）…',
     stopDestNoName:'找不到叫「{d}」的車站，試試較短的名稱。',
@@ -2896,7 +3096,29 @@ rmStations:'{n} 個站',
     updateReady:'⬆ 有新版本 — 按此更新',
     settingInstall:'加到主畫面', install:'安裝',
     installNote:'像應用程式一樣安裝，有自己的圖示。開啟時沒有瀏覽器的網址列，除即時到站時間及地圖外，沒有網絡也可使用。',
-    installedAlready:'✓ 已安裝'
+    installedAlready:'✓ 已安裝',
+    bugTester:'測試模式（回報問題）', bugOn:'開', bugOff:'關',
+    bugTesterNote:'每個畫面都會有一個 🐞 按鈕。發現問題時按一下：程式會先截圖，你在問題位置畫一個框，再寫下或錄音說明發生了甚麼事。回報會先存在這部手機，有網絡時自動送出。🐞 擋住內容的話，可以上下拖動。',
+    bugBtn:'回報問題', bugShooting:'正在截圖…',
+    bugDrawHint:'在有問題的地方畫一個框',
+    bugNoShot:'這次未能截圖 — 請直接在畫面上框出問題位置',
+    bugNoBox:'不畫框', bugNext:'下一步', bugCancel:'取消',
+    bugTitle:'🐞 回報問題', bugWhat:'發生了甚麼事？',
+    bugPlaceholder:'例如：太子站找不到 60X',
+    bugMicTip:'提示：按鍵盤上的 🎤，說話就會變成文字。',
+    bugRecord:'🎙 錄音', bugStop:'■ 停止', bugPlay:'▶ 播放', bugDelVoice:'🗑 刪除',
+    bugMicDenied:'未獲准使用咪高峰。請改用文字，或在手機設定中允許此網站使用咪高峰。',
+    bugNoMic:'這部手機在這裡不能錄音，請改用文字。',
+    bugIncludeShot:'一併送出截圖',
+    bugAlsoSent:'同時送出：程式版本、所在畫面、語言、字體大小、螢幕大小、起點及目的地、搜尋欄內的文字、最近的訊息及錯誤。不會送出：你的 GPS 位置。',
+    bugNeedNote:'請先寫下或錄音說明發生了甚麼事。',
+    bugSave:'儲存並送出',
+    bugSavedOffline:'回報已存在這部手機，有網絡時會自動送出。',
+    bugNoInbox:'回報已存在這部手機。回報收件處尚未設定，暫時留在這裡。',
+    bugSentMsg:'回報已送出 ✓', bugSendFailed:'暫時未能送出回報 — 已保留，稍後會再試。',
+    bugSaveFailed:'這部手機未能儲存回報。',
+    bugMine:'我的回報', bugNone:'暫時沒有回報。', bugWaitTag:'等待送出', bugSentTag:'已送出 ✓',
+    bugSendNow:'立即送出', bugDelete:'刪除', bugVoiceTag:'🎙 錄音', bugShotTag:'📷 截圖'
   }
 };
 
@@ -4376,6 +4598,10 @@ document.getElementById('setview').addEventListener('click', event => {
     return;
   }
 
+  // TESTER MODE and the tester's own reports. Drawn by bugSettingsRows().
+  const bug = event.target.closest('[data-bug]');
+  if (bug) { bugSettingsAction(bug.dataset.bug, bug.dataset.id); return; }
+
   const eld = event.target.closest('[data-elderly]');
   if (eld) {
     elderly = eld.dataset.elderly === '1';
@@ -4442,6 +4668,8 @@ let tdNotices = [];
 // destination), when that last changed, and when anything was last drawn
 // on the map. Whichever is newer wins when the map opens.
 let stopRideSig = '', stopRideAt = 0, routeRideSig = '', routeRideAt = 0, mapDrawnAt = 0, mapSeq = 0;
+// A whole trip from 去 X 的路線 on the 巴士 page, sent to the map by its 🗺️ button.
+let tripRide = null, tripRideAt = 0;
 let pendingFit = null;   // bounds to frame once the map is on screen (fitMapTo)
 let tdLoaded = false;   // the feed has answered at least once, empty or not
 let alertFlags = { mtr: {}, bus: {} };        // line → {since}; 'route|stop' → {since, text, label}
@@ -5412,6 +5640,10 @@ const TRANSFER_WALK_M = 200;     // how far we allow walking between two buses
 
 let stopIndex  = null;   // stopId  -> [{routeKey, seq}]
 let routeIndex = null;   // routeKey -> [{stopId, seq}]
+// Goes up every time the two indexes change — built, or the other companies
+// folded in. The folding happens IN PLACE, so anything remembered against the
+// index object itself would keep its old answers; remember against this.
+let indexVersion = 0;
 
 // ============================================================
 // THE RAILWAY
@@ -6056,9 +6288,14 @@ function buildRailJourney(found, walkOn, walkOff) {
     pending = null;
 
     const lrt = isLrtLine(line);
+    // This leg's own riding time — the hops on it, no waits — for the step
+    // chips of 去 X 的路線 (🚇 東涌綫 18).
+    let rideMins = 0;
+    for (let k = startAt + 1; k < i; k++) rideMins += (path[k].edge && path[k].edge.minutes) || 0;
     legs.push({
       route: railLineName(line),
       lineCode: lrt ? line.slice(LR_LINE.length) : line,
+      minutes: Math.max(1, Math.round(rideMins)),
       on, off, stops: (i - 1) - startAt,
       path: path.slice(startAt, i).map(p => railStop(p.station)).filter(Boolean),
       bound: 'O', serviceType: '1', co: lrt ? 'lrt' : 'mtr',
@@ -6182,6 +6419,7 @@ async function buildIndexesNow() {
     if (!routeIndex.has(routeKey)) routeIndex.set(routeKey, []);
     routeIndex.get(routeKey).push({ stopId: row.stop, seq });
   }
+  indexVersion++;
 
   addOperatorsToIndexes();
 }
@@ -6202,15 +6440,18 @@ const PLANNED_OPERATORS = ['ctb', 'nlb', 'gmb', 'lrtfeeder', 'ferry'];
 // Citybus, NLB and minibus join the index once their file has loaded. The
 // index is built at start-up, before that file is fetched, and it was never
 // built again — so those buses never appeared in any journey.
+// The 巴士 tab folds them in too (stopEnsureNetwork) — see poleGroup and
+// rideMinutesFrom for what that needed first.
 let operatorsIndexed = false;
 function addOperatorsOnce() {
   if (!operatorsIndexed && hkbusRoutes && stopIndex) addOperatorsToIndexes();
 }
 
 function addOperatorsToIndexes() {
-  if (!hkbusRoutes) return;
+  if (!hkbusRoutes || !stopIndex || !routeIndex) return;
   operatorsIndexed = true;
   const counts = {};
+  let any = 0;
 
   for (const co of PLANNED_OPERATORS) {
     let added = 0;
@@ -6239,9 +6480,13 @@ function addOperatorsToIndexes() {
       added++;
     }
     counts[co] = added;
+    any += added;
   }
 
   console.log('Routes added to journey search:', counts);
+  // Called again with nothing new (ensureSpotNetwork does), it changes nothing
+  // and must not throw away every remembered answer.
+  if (any) { indexVersion++; indexChanged(); }
 }
 
 // ASSUMPTION: about 2 minutes riding per stop, plus 5 minutes to change buses.
@@ -6249,6 +6494,21 @@ function addOperatorsToIndexes() {
 // not promises of arrival.
 const MINUTES_PER_STOP = 2;
 const TRANSFER_PENALTY_MIN = 5;
+
+// THE RIDE FROM A STOP, `stopsAway` stops on, in minutes — one answer for the
+// 巴士 page's rows (formatArrivals), its ranking (arriveBest) and its ride on
+// the map (rideArrivalTime), so the three time a ride the same way. (The
+// ranking then adds what the road and TD notices cost, on purpose.) `seq` is the
+// stop's place on the route in the index's numbering (rowSeq). A crossing
+// comes from the ferry table: 長洲 is a long way more than two minutes from
+// 中環, and two minutes "a stop" put a pier above every bus.
+function rideMinutesFrom(routeKey, seq, stopsAway) {
+  const info = /\|ferry$/.test(String(routeKey || '')) ? ferryInfo.get(routeKey) : null;
+  const at = Number(seq) || 1;
+  if (info && info.mins[at - 1 + stopsAway] !== undefined)
+    return Number(info.mins[at - 1 + stopsAway]) - Number(info.mins[at - 1] || 0);
+  return stopsAway * MINUTES_PER_STOP;
+}
 
 // A bus leg shorter than this is not worth boarding: by the time you wait,
 // board, pay and get off, you could have walked. Riding one stop and then
@@ -7953,7 +8213,9 @@ function renderSettings() {
       '<div class="setnote">' + T('elderNote') + '</div>' +
     '</div>' +
     installRow() +
-    '<div class="setnote">' + T('settingsNote') + '</div>';
+    '<div class="setnote">' + T('settingsNote') + '</div>' +
+    bugSettingsRows();
+  bugPaintList();
 }
 
 // ADD TO HOME SCREEN. Three states, and only two of them are worth a row:
@@ -9776,7 +10038,12 @@ function formatArrivals(entries, opts) {
     // per direction, and then showed that same English name to everyone.
     const dest = esc(lang === 'zh' ? (sample.dest_tc || sample.dest_en || '')
                                    : (sample.dest_en || sample.dest_tc || ''));
-    const fare = stopFare(sample.route, sample.dir, sample.service_type, sample.seq, sample.co);
+    // Where this pole is on the route, counted the way the fare table and the
+    // index count it: Citybus's feed calls the 7 at 國際金融中心商場 stop 30,
+    // its route file 26, and the fare is the route file's 26th.
+    const rowKey = routeKeyForRow(sample);
+    const seqHere = rowSeq(sample, rowKey, sample.stop);
+    const fare = stopFare(sample.route, sample.dir, sample.service_type, seqHere, sample.co);
     const fareTag = fare === null ? ''
       : '<span class="eta-fare">' + fareText(fare) + '</span>';
 
@@ -9817,21 +10084,15 @@ function formatArrivals(entries, opts) {
     }
 
     // With a place set on the 車站 tab: how many stops, and roughly when the
-    // first bus gets there. MINUTES_PER_STOP is the planner's own rough figure.
+    // first bus gets there — the ride timed by rideMinutesFrom, as the
+    // ranking times it (a crossing from the ferry table).
     let arriveTag = '';
-    const stopsAway = opts && opts.arrive ? opts.arrive.get(routeKeyForRow(sample)) : undefined;
+    const stopsAway = opts && opts.arrive ? opts.arrive.get(rowKey) : undefined;
     const isFerry = sample.co === 'FERRY';
-    // A crossing's length comes from the ferry table, not two minutes a stop.
-    const rideMins = stopsAway === undefined ? 0 : (() => {
-      const info = isFerry ? ferryInfo.get(routeKeyForRow(sample)) : null;
-      const at = Number(sample.seq) || 1;
-      return info && info.mins[at - 1 + stopsAway] !== undefined
-        ? Number(info.mins[at - 1 + stopsAway]) - Number(info.mins[at - 1] || 0)
-        : stopsAway * MINUTES_PER_STOP;
-    })();
+    const rideMins = stopsAway === undefined ? 0 : rideMinutesFrom(rowKey, seqHere, stopsAway);
     if (stopsAway !== undefined) {
-      const at = new Date(now + (group.minutes[0].m + rideMins) * 60000);
-      const hhmm = at.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+      const when = new Date(now + (group.minutes[0].m + rideMins) * 60000);
+      const hhmm = when.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
       // THE ANSWER, AT THE SIZE OF AN ANSWER.
       // "when do I get there" is the whole reason the rider opened this
       // screen, and it was set in the smallest type on the row — smaller than
@@ -10366,8 +10627,10 @@ const STOP_NEAR_M = 500;
 
 let stopState = freshStopState();
 function freshStopState() {
+  // groupFixed: the bays were chosen for the rider (a search card, the other
+  // bank of a station) rather than worked out from the pole, and are kept.
   return { stop:null, rows:null, noLive:false, loading:false, alert:null,
-           fetchedAt:0, locating:false, locateTried:false, destFilter:'', destQuery:'', destPicked:false, indexing:false, group:null };
+           fetchedAt:0, locating:false, locateTried:false, destFilter:'', destQuery:'', destPicked:false, indexing:false, group:null, groupFixed:false };
 }
 
 // Which company runs the buses at this pole, from the planner's own index.
@@ -10402,13 +10665,15 @@ function poleCodeOf(stop) {
 // The far end of a route is its last stop. The trimmed data carries no
 // destination names, but it carries every route's stop order, and the last
 // stop IS the destination — for all four companies alike, with no fetch.
-// Remembered per route and language: the index never changes once built,
-// and finding the last stop of a route means walking the whole route.
-const terminusMemo = new Map(); let terminusMemoIndex = null;
+// Remembered per route and language, until the index changes (indexVersion:
+// the other companies are folded into the SAME object, so comparing objects
+// kept the answers from before they came), and finding the last stop of a
+// route means walking the whole route.
+const terminusMemo = new Map(); let terminusMemoIndex = -1;
 function routeTerminus(routeKey) {
   const index = (typeof routeIndex !== 'undefined' && routeIndex) || null;
   if (!index) return '';
-  if (terminusMemoIndex !== index) { terminusMemo.clear(); terminusMemoIndex = index; }
+  if (terminusMemoIndex !== indexVersion) { terminusMemo.clear(); terminusMemoIndex = indexVersion; }
   const k = lang + '|' + routeKey;
   const hit = terminusMemo.get(k);
   if (hit !== undefined) return hit;
@@ -10429,12 +10694,14 @@ function lookupStop(id) {
 // Transport Department's (7005) and nobody on a pier knows it: ⛴ and where it
 // goes say it instead.
 function routeTag(r) { return String(r.co).toUpperCase() === 'FERRY' ? '\u26F4' : String(r.route); }
-// Every route leaving a pole, with where it ends up.
-const servingMemo = new Map(); let servingMemoIndex = null;
+// Every route leaving a pole, with where it ends up. Remembered until the
+// index changes — a Citybus pole asked before Citybus was folded in has no
+// routes, and that empty answer must not outlive the fold.
+const servingMemo = new Map(); let servingMemoIndex = -1;
 function routesServing(stopId) {
   const index = (typeof stopIndex !== 'undefined' && stopIndex) || null;
   if (!index) return [];
-  if (servingMemoIndex !== index) { servingMemo.clear(); servingMemoIndex = index; }
+  if (servingMemoIndex !== indexVersion) { servingMemo.clear(); servingMemoIndex = indexVersion; }
   const memoKey = lang + '|' + stopId;
   const hit = servingMemo.get(memoKey);
   if (hit) return hit;
@@ -10480,7 +10747,18 @@ function bearingBetween(lat1, lng1, lat2, lng2) {
 // whole station's bays can be pooled into ONE average — averaging the bays'
 // separate answers instead blanks the 屯門公路轉車站 card, because two of its
 // thirteen eastbound bays measure a few degrees off the other eleven.
+// Remembered per pole until the stops or the index change: grouping a
+// stop compares every pole's heading with every other's, and working one out
+// walks every route through the pole. Callers only read the answer.
+const vectorsMemo = new Map(); let vectorsMemoStamp = '';
 function poleVectors(stopId) {
+  const stamp = dataStamp() + '|' + indexVersion;
+  if (vectorsMemoStamp !== stamp) { vectorsMemo.clear(); vectorsMemoStamp = stamp; }
+  let out = vectorsMemo.get(stopId);
+  if (!out) { out = poleVectorsNow(stopId); vectorsMemo.set(stopId, out); }
+  return out;
+}
+function poleVectorsNow(stopId) {
   const out = { sin: 0, cos: 0, n: 0, octants: [] };
   const me = lookupStop(stopId);
   if (!me) return out;
@@ -10542,7 +10820,7 @@ function facingOf(v) {
 const facingMemo = new Map(); let facingMemoStamp = null;
 function poleFacing(stopId) {
   if (!stopIndex) return -1;
-  const stamp = dataStamp();
+  const stamp = dataStamp() + '|' + indexVersion;
   if (facingMemoStamp !== stamp) { facingMemo.clear(); facingMemoStamp = stamp; }
   const hit = facingMemo.get(stopId);
   if (hit !== undefined) return hit;
@@ -10776,6 +11054,62 @@ function memoKeys(stop) {
   if (m.nks === undefined) m.nks = sc(m.nk);
   return [m.nks, m.ne];
 }
+// WHERE A FERRY FROM HERE GOES IS NOT WHERE HERE IS.
+// Citybus names a pole "<place> - <landmark>": 金鐘 - 海富中心, 天水圍站 -
+// 天盛苑. At the Central piers the landmark is the ferry that leaves there —
+// 中環碼頭 - 長洲及南丫島渡輪, 中環碼頭 - 愉景灣渡輪, 中環碼頭 - 天星小輪 — and
+// the words in front of 渡輪 are where that ferry SAILS TO. As a plain
+// substring, 長洲 named two bus stops in Central, and once Citybus joined the
+// 巴士 tab a one-stop route 4 came top for 我要去 長洲, as if a bus crossed to
+// Cheung Chau; the map's search put Central first too.
+// So in any part of a name AFTER THE FIRST that ends in a ferry word — the
+// service, never a pier: 馬料水渡輪碼頭 is at 馬料水, and KMB's "KWUN TONG
+// FERRY" and "STAR FERRY, HARBOUR CITY" lead their names, so they are the
+// place — the words in front are a destination. Text that lands only inside
+// them does not name the stop. Text reaching past them still does —
+// 長洲及南丫島渡輪, or the whole name tapped from the list — because that is
+// the ferry, and it does leave from here.
+const FERRY_SERVICE_TC = /^(.+?)(?:渡輪|小輪)$/;
+const FERRY_SERVICE_EN = /^(.+) ferry$/;
+function ferryServedOf(stop) {
+  const m = memoOf(stop);
+  if (m.fs === undefined) {
+    const tc = [], en = [];
+    // The same key as tidyName(name_tc) — the split characters are ones it
+    // drops anyway — less the destinations, for the gapped match below.
+    const here = String(stop.name_tc || '').split(/[-–—,，]/).map((part, i) => {
+      const key = tidyName(part), hit = i ? key.match(FERRY_SERVICE_TC) : null;
+      if (!hit) return key;
+      tc.push(hit[1]);
+      return key.slice(hit[1].length);
+    }).join('');
+    String(stop.name_en || '').split(/[-–—,，]/).forEach((part, i) => {
+      const hit = i ? tidyWords(part).match(FERRY_SERVICE_EN) : null;
+      if (hit) en.push(tidyName(hit[1]));
+    });
+    m.fs = (tc.length || en.length) ? { tc, en, here } : null;
+  }
+  return m.fs;
+}
+function countIn(hay, needle) {
+  let n = 0;
+  for (let at = hay.indexOf(needle); at >= 0; at = hay.indexOf(needle, at + 1)) n++;
+  return n;
+}
+// Is every place this text appears in the stop's name inside a ferry's
+// destination? Counted, not located: those words are pieces of the key, so
+// if the key holds the text no more often than they do, none of it is
+// anywhere else.
+function onlyFerryServed(stop, needle) {
+  const fs = ferryServedOf(stop);
+  if (!fs || !needle) return false;
+  let inside = 0;
+  for (const s of fs.tc) inside += countIn(sc(s), needle);
+  for (const s of fs.en) inside += countIn(s, needle);
+  if (!inside) return false;
+  const [nk, ne] = memoKeys(stop);
+  return countIn(nk, needle) + countIn(ne, needle) <= inside;
+}
 // STRICT: does this stop's name really contain the words the rider typed?
 // Used where a name is turned into actual stop ids — which is what decides
 // "this bus goes there". A false positive here is the app telling somebody a
@@ -10786,10 +11120,11 @@ function nameIsNamed(stop, needle, rawQuery) {
     // Chinese (or digits-free) query: the old substring rule, which is
     // correct for a script written without spaces.
     const [nk, ne] = memoKeys(stop);
-    return nk.includes(needle) || ne.includes(needle);
+    return (nk.includes(needle) || ne.includes(needle)) && !onlyFerryServed(stop, needle);
   }
   const words = tidyWords(rawQuery);
-  return namesTheSamePlace(m.pe, words) || namesTheSamePlace(m.pc, words);
+  return (namesTheSamePlace(m.pe, words) || namesTheSamePlace(m.pc, words)) &&
+         !onlyFerryServed(stop, needle);
 }
 
 // Does this name mean the place the rider typed, rather than merely contain
@@ -10825,12 +11160,14 @@ function namesTheSamePlace(phrases, words) {
   return false;
 }
 
+// The fallbacks keep the ferry rule: a guess must not rest on where a ferry goes.
 function nameMatches(stop, needle, loose) {
   const [nk, ne] = memoKeys(stop);
-  if (nk.includes(needle) || ne.includes(needle)) return true;
+  if ((nk.includes(needle) || ne.includes(needle)) && !onlyFerryServed(stop, needle)) return true;
   if (!loose) return false;
+  const fs = ferryServedOf(stop);
   let i = 0;
-  for (const ch of nk) if (ch === needle[i]) { i++; if (i === needle.length) return true; }
+  for (const ch of (fs ? sc(fs.here) : nk)) if (ch === needle[i]) { i++; if (i === needle.length) return true; }
   return false;
 }
 // Stop ids whose name matches what was typed — "the place I am going to".
@@ -10862,7 +11199,7 @@ function stopsNamed(q) {
   // Whole words, not a bare substring. The typing boxes stay forgiving — you
   // are picking from a list you can see — but the moment a name is turned
   // into stop ids, and from there into "this bus reaches it", it has to be
-  // the place the rider actually named.
+  // the place the rider actually named — not where a ferry from it goes.
   let named = stops.filter(stop => nameIsNamed(stop, needle, q));
   // Nothing at all: fall back to the old loose rule rather than leave the
   // rider with no answer, since a half-typed name should still find its place.
@@ -10953,16 +11290,18 @@ function startShare(stopId) {
 // 沙田市中心總站 in six pieces. A through bay standing inside a terminus is
 // still inside the terminus.
 function terminusGroup(g, stop) {
-  if (!stop || stop.isStation) return false;
+  if (!stop || stop.isStation || isPier(stop)) return false;
   const k = stationKey(stop);
   if (!k) return false;
   for (const m of g) {
-    if (m.isStation || stationKey(m) !== k) return false;   // one named place
+    if (m.isStation || isPier(m) || stationKey(m) !== k) return false;   // one named place
     if (metresApart(m, stop) > TERMINUS_M) return false;    // and a small one
   }
   return startShare(stop.stop) >= TERMINUS_START_SHARE ||
          g.some(m => startShare(m.stop) >= TERMINUS_START_SHARE);
 }
+// A pier's id is "F" and the Transport Department's number (see FERRY_PREFIX).
+function isPier(stop) { return !!stop && /^F\d{6,8}$/.test(String(stop.stop)); }
 function metresApart(a, b) {
   return metresBetween(Number(a.lat), Number(a.long), Number(b.lat), Number(b.long));
 }
@@ -11015,33 +11354,89 @@ function degreesApart(a, b) {
 // Two bays in one card may never point this far apart. A terminus is exempt —
 // its bays genuinely do — which is precisely why a terminus is then sealed.
 const MERGE_OPPOSED_DEG = 110;
-function clusterPoles(list) {
+// MAY THIS POLE JOIN THIS STOP? The one set of tests, for the search cards
+// (clusterPoles) and the stop around a pole (poleGroup) alike: 'terminus' when
+// it joins on its name inside a terminus, 'kerb' when it is the same side of
+// the road a step away, false when it is not this stop.
+// `sealed`: the stop is a terminus. `byName: false`: the name alone may not let
+// it in (another company's bay at a stop that is not this company's terminus).
+function poleJoins(members, other, sealed, byName) {
+  // A PIER IS ITS OWN STOP. 中環四、五、六號碼頭 stand side by side, and a
+  // ferry leaves from one of them — which a row in a merged card could not
+  // say (a pier has no pole code). And a ferry is not a bus bay, however close.
+  if (isPier(other) || members.some(isPier)) return false;
+  // One terminus, one stop — whichever way its bays happen to point.
+  if (byName !== false && terminusGroup(members, other)) return 'terminus';
+  // A TERMINUS IS SEALED TO OUTSIDERS.
+  // Its bays are allowed to face every way, which makes its average
+  // heading meaningless — and 長沙灣巴士總站 (bays at 85° and 281°) used
+  // that average to swallow 荔枝角站, a different place 77 m away, leaving
+  // two bays 166° apart inside one card. A named facility takes its own
+  // bays and nobody else's.
+  if (sealed) return false;
+  // Hard evidence first, pairwise and non-negotiable: one route running
+  // opposite ways at two poles means they are not one stop.
+  if (members.some(m => boundsClash(boundsByRoute(m.stop), boundsByRoute(other.stop)))) return false;
+  const h = poleHeading(other.stop), gh = clusterHeading(members);
+  if (h === null || gh === null || degreesApart(h, gh) > MERGE_DEG) return false;
+  // ...and never opposed to any single member, however the average falls.
+  if (members.some(m => { const hm = poleHeading(m.stop);
+                          return hm !== null && degreesApart(h, hm) > MERGE_OPPOSED_DEG; })) return false;
+  if (!members.some(m => metresApart(m, other) <= MERGE_M)) return false;
+  if (members.some(m => metresApart(m, other) > MERGE_SPAN_M)) return false;
+  return 'kerb';
+}
+// ONE COMPANY'S STOP IS NEVER SPLIT BY ANOTHER COMPANY.
+// Folding Citybus, NLB, the minibuses, the MTR's buses and the ferries into
+// this tab's index was tried on 3 Oct 2026 and taken out again: a Citybus bay
+// that joined a KMB stop first moved the stop's average heading and turned
+// KMB's own bays away, and its different name broke a terminus apart; and
+// 101, which KMB and Citybus run jointly under OPPOSITE O/I letters, made a
+// KMB bay and a Citybus bay on one kerb look like two sides of the road.
+// So each company's poles are grouped among themselves first, exactly as if
+// it ran alone, and another company's stop then joins WHOLE or not at all —
+// every bay of it judged by the leading company's bays and by its own
+// company's, never by a third's. It may join; it can never turn anyone away.
+// Says 'terminus' when any bay got in on its name, 'kerb' otherwise, false
+// when the stop did not join — and a stop that took bays on their name is a
+// terminus from then on, sealed to every later pole, exactly as when its own
+// company's bays do it (長沙灣巴士總站 must not then take 荔枝角站).
+function joinWhole(members, own, sealed, bays) {
+  if (!bays.length) return false;
+  const co = stopCompany(bays[0].stop);
+  if (co === own) return false;
+  // On its NAME alone only inside this company's own terminus: a minibus that
+  // starts from a roadside pole across the road makes nobody a terminus.
+  const byName = members.some(m => stopCompany(m.stop) === own && startShare(m.stop) >= TERMINUS_START_SHARE);
+  const trial = members.slice();
+  let rest = bays, moved = true, seal = sealed;
+  // Round again until nothing moves: a bay may be next to nothing in the stop
+  // but the bay of its own company that only got in after it was asked.
+  while (rest.length && moved) {
+    moved = false;
+    rest = rest.filter(b => {
+      const judges = trial.filter(m => { const c = stopCompany(m.stop); return c === own || c === co; });
+      const how = poleJoins(judges, b, seal, byName);
+      if (!how) return true;
+      if (how === 'terminus') seal = true;
+      trial.push(b); moved = true; return false;
+    });
+  }
+  if (rest.length) return false;
+  members.splice(0, members.length, ...trial);
+  return seal && !sealed ? 'terminus' : 'kerb';
+}
+// One company's poles, clustered as if no other company existed. In list order.
+function clusterOwn(list) {
   const out = [], isTerminus = [];
   for (const stop of list) {
-    const h = poleHeading(stop.stop);
     let placed = false;
     for (let gi = 0; gi < out.length; gi++) {
-      const g = out[gi];
-      // One terminus, one stop — whichever way its bays happen to point.
-      if (terminusGroup(g, stop)) { g.push(stop); isTerminus[gi] = true; placed = true; break; }
-      // A TERMINUS IS SEALED TO OUTSIDERS.
-      // Its bays are allowed to face every way, which makes its average
-      // heading meaningless — and 長沙灣巴士總站 (bays at 85° and 281°) used
-      // that average to swallow 荔枝角站, a different place 77 m away, leaving
-      // two bays 166° apart inside one card. A named facility takes its own
-      // bays and nobody else's.
-      if (isTerminus[gi]) continue;
-      // Hard evidence first, pairwise and non-negotiable: one route running
-      // opposite ways at two poles means they are not one stop.
-      if (g.some(m => boundsClash(boundsByRoute(m.stop), boundsByRoute(stop.stop)))) continue;
-      const gh = clusterHeading(g);
-      if (h === null || gh === null || degreesApart(h, gh) > MERGE_DEG) continue;
-      // ...and never opposed to any single member, however the average falls.
-      if (g.some(m => { const hm = poleHeading(m.stop);
-                        return hm !== null && degreesApart(h, hm) > MERGE_OPPOSED_DEG; })) continue;
-      if (!g.some(m => metresApart(m, stop) <= MERGE_M)) continue;
-      if (g.some(m => metresApart(m, stop) > MERGE_SPAN_M)) continue;
-      g.push(stop); placed = true; break;
+      const how = poleJoins(out[gi], stop, isTerminus[gi]);
+      if (!how) continue;
+      out[gi].push(stop); placed = true;
+      if (how === 'terminus') isTerminus[gi] = true;
+      break;
     }
     if (!placed) { out.push([stop]); isTerminus.push(false); }
   }
@@ -11053,10 +11448,34 @@ function clusterPoles(list) {
   for (let i = 0; i < out.length; i++)
     for (let j = out.length - 1; j > i; j--)
       if (out[j].every(stop => terminusGroup(out[i], stop))) {
-        out[i] = out[i].concat(out[j]);
-        out.splice(j, 1);
+        out[i] = out[i].concat(out[j]); isTerminus[i] = true;
+        out.splice(j, 1); isTerminus.splice(j, 1);
       }
-  return out;
+  return out.map((bays, i) => ({ bays, terminus: isTerminus[i] }));
+}
+function clusterPoles(list) {
+  // Each company on its own first...
+  const byCo = new Map();
+  for (const stop of list) {
+    const co = stopCompany(stop.stop);
+    if (!byCo.has(co)) byCo.set(co, []);
+    byCo.get(co).push(stop);
+  }
+  const at = new Map(list.map((stop, i) => [stop.stop, i]));
+  const groups = [];
+  for (const [co, stops] of byCo)
+    for (const g of clusterOwn(stops)) groups.push({ co, bays: g.bays, terminus: g.terminus });
+  // ...back in the order the list met them, so the cards keep their order...
+  groups.sort((a, b) => at.get(a.bays[0].stop) - at.get(b.bays[0].stop));
+  // ...then one company's stop takes another's in whole, wherever every bay of it fits.
+  for (let i = 0; i < groups.length; i++)
+    for (let j = i + 1; j < groups.length; j++) {
+      const how = joinWhole(groups[i].bays, groups[i].co, groups[i].terminus, groups[j].bays);
+      if (!how) continue;
+      if (how === 'terminus') groups[i].terminus = true;
+      groups.splice(j--, 1);
+    }
+  return groups.map(g => g.bays);
 }
 // What to call a group whose poles disagree about their own name: the name
 // most of them use, preferring one the rider actually typed.
@@ -11073,9 +11492,16 @@ function clusterName(stops, needle) {
 // bays of 屯門市中心總站 (one option, not six) — and NOT the twins across the
 // road at 太子站, where the 60X leaves one pole outbound and the other inbound.
 const POLE_GROUP_M = 100;
+// Per route AND COMPANY. KMB and Citybus run 101 jointly and file it under
+// opposite letters (KMB's O is Citybus's I), so the same number running "both
+// ways" at a KMB bay and a Citybus bay says nothing about the road between them.
 function boundsByRoute(stopId, into) {
   const map = into || new Map();
-  for (const r of routesServing(stopId)) { if (!map.has(r.route)) map.set(r.route, new Set()); map.get(r.route).add(r.bound); }
+  for (const r of routesServing(stopId)) {
+    const k = r.route + '|' + r.co;
+    if (!map.has(k)) map.set(k, new Set());
+    map.get(k).add(r.bound);
+  }
   return map;
 }
 function boundsClash(mine, theirs) {
@@ -11085,25 +11511,59 @@ function boundsClash(mine, theirs) {
   }
   return false;
 }
-function poleGroup(stop) {
-  if (!stop || stop.isStation || !stopIndex) return [stop];
+// A stop is asked for again and again — every saved pill and nearby card on
+// every keystroke — and working one out means asking the poles round it about
+// theirs. Remembered until the stops or the index change.
+const groupMemo = new Map(); let groupMemoStamp = '';
+function groupMemoNow() {
+  const stamp = dataStamp() + '|' + indexVersion;
+  if (groupMemoStamp !== stamp) { groupMemo.clear(); groupMemoStamp = stamp; }
+  return groupMemo;
+}
+// The bays of this pole's own company that are one stop with it.
+function ownGroup(stop) {
+  const memo = groupMemoNow(), k = 'own|' + stop.stop;
+  if (memo.has(k)) return memo.get(k);
+  const own = stopCompany(stop.stop);
   const members = [stop];
   let terminus = false;
   for (const n of stopsNear(Number(stop.lat), Number(stop.long), Math.max(MERGE_SPAN_M, TERMINUS_M))) {
     const other = n.stop;
-    if (other.isStation || members.some(m => m.stop === other.stop)) continue;
-    if (terminusGroup(members, other)) { members.push(other); terminus = true; continue; }
-    if (terminus) continue;                       // a named facility takes only its own bays
-    if (members.some(m => boundsClash(boundsByRoute(m.stop), boundsByRoute(other.stop)))) continue;
-    const h = poleHeading(other.stop), gh = clusterHeading(members);
-    if (h === null || gh === null || degreesApart(h, gh) > MERGE_DEG) continue;
-    if (members.some(m => { const hm = poleHeading(m.stop);
-                           return hm !== null && degreesApart(h, hm) > MERGE_OPPOSED_DEG; })) continue;
-    if (!members.some(m => metresApart(m, other) <= MERGE_M)) continue;
-    if (members.some(m => metresApart(m, other) > MERGE_SPAN_M)) continue;
-    members.push(other);
+    if (other.isStation || stopCompany(other.stop) !== own || members.some(m => m.stop === other.stop)) continue;
+    const how = poleJoins(members, other, terminus);
+    if (how === 'terminus') terminus = true;
+    if (how) members.push(other);
   }
-  return members;
+  const out = { bays: members, terminus };
+  memo.set(k, out);
+  return out;
+}
+// The whole stop: its own company's bays, then every other company's stop
+// round it, nearest first, that fits in whole (joinWhole).
+function poleGroup(stop) {
+  if (!stop || stop.isStation || !stopIndex) return [stop];
+  const memo = groupMemoNow(), k = 'all|' + stop.stop;
+  // The pole asked about stays first, as the very object passed in: a saved
+  // stop is its own record, and the screen it opens is built from bays[0].
+  if (memo.has(k)) { const out = memo.get(k).slice(); out[0] = stop; return out; }
+  const own = stopCompany(stop.stop);
+  const mine = ownGroup(stop);
+  const members = mine.bays.slice();
+  let sealed = mine.terminus;
+  const tried = new Set(members.map(m => m.stop));
+  for (const n of stopsNear(Number(stop.lat), Number(stop.long), Math.max(MERGE_SPAN_M, TERMINUS_M))) {
+    const other = n.stop;
+    if (other.isStation || tried.has(other.stop) || stopCompany(other.stop) === own) continue;
+    const theirs = ownGroup(other).bays;
+    // Part of their stop already asked about: the rest of it is not offered
+    // on its own, or it would join as a piece.
+    const whole = !theirs.some(b => tried.has(b.stop));
+    theirs.forEach(b => tried.add(b.stop));
+    if (whole && joinWhole(members, own, sealed, theirs) === 'terminus') sealed = true;
+  }
+  memo.set(k, members);
+  const out = members.slice(); out[0] = stop;
+  return out;
 }
 // THE OTHER BANK OF THE SAME STATION.
 // A saved stop is one pole, and at a big interchange that pole may be the
@@ -11166,7 +11626,8 @@ function stopGroupNow() {
 // Answers are cached briefly because the picker redraws on every keystroke
 // and must not hit the network again for each letter.
 //
-// The ride is still MINUTES_PER_STOP × stops — the planner's rough figure.
+// The ride is still MINUTES_PER_STOP × stops for a bus — the planner's rough
+// figure — and the ferry table's time for a crossing (rideMinutesFrom).
 // The Transport Department's speed-map feed would sharpen it; see
 // trafficPenalty below for why it is not wired in.
 const ARRIVE_CACHE_MS = 45000;
@@ -11431,7 +11892,10 @@ function arriveBest(ids, destIds, walkMin) {
       const seq = rowSeq(row, key, id);
       const reach = routeReaches(key, seq, destIds);
       if (!reach) continue;
-      const held = trafficPenalty(row.route);
+      // A boat is on no road and under no road notice: the crossing is the
+      // ferry table's, as the stop's own rows time it (rideMinutesFrom).
+      const ferry = String(row.co || '').toUpperCase() === 'FERRY';
+      const held = ferry ? 0 : trafficPenalty(row.route);
       // The walk is part of the wait: a bus you cannot reach in time is not
       // the next bus. Anything you would miss is simply not a candidate.
       const walk = walkMin || 0;
@@ -11439,11 +11903,12 @@ function arriveBest(ids, destIds, walkMin) {
       // The ride, stretched by how the road is ACTUALLY moving over the part
       // of the route this rider will sit through — not the whole line, and
       // not the other carriageway.
-      const road = roadDrag(key, seq, seq + reach.stopsAway);
-      const ride = reach.stopsAway * MINUTES_PER_STOP * (1 + (road ? road.drag * ROAD_DRAG : 0));
+      const road = ferry ? null : roadDrag(key, seq, seq + reach.stopsAway);
+      const ride = rideMinutesFrom(key, seq, reach.stopsAway) * (1 + (road ? road.drag * ROAD_DRAG : 0));
       const total = wait + ride + held;
       if (!best || total < best.total)
-        best = { total, wait, walk, held, road, ride, route: row.route, stopsAway: reach.stopsAway, stopId: id };
+        best = { total, wait, walk, held, road, ride, route: row.route, co: String(row.co || 'KMB').toUpperCase(),
+                 stopsAway: reach.stopsAway, stopId: id };
     }
   }
   if (best) return best;
@@ -11454,10 +11919,10 @@ function arriveBest(ids, destIds, walkMin) {
     const reach = reachingRoutes(ids, destIds);
     if (reach.length) {
       const near = reach.reduce((a, b) => a.reach.stopsAway <= b.reach.stopsAway ? a : b);
-      const ride = near.reach.stopsAway * MINUTES_PER_STOP;
+      const ride = rideMinutesFrom(near.r.key, near.r.seq, near.reach.stopsAway);
       return { noFeed: true, total: (walkMin || 0) + NO_FEED_WAIT_MIN + ride, ride,
                walk: walkMin || 0, held: 0, road: null,
-               route: near.r.route, stopsAway: near.reach.stopsAway, stopId: ids[0] };
+               route: near.r.route, co: near.r.co, stopsAway: near.reach.stopsAway, stopId: ids[0] };
     }
   }
   return asked ? best : undefined;
@@ -11524,18 +11989,21 @@ function askAttrs(best) {
 
 function arriveTagHtml(best) {
   if (!best) return '';
+  // A ferry by its ⛴, as the stop's own rows show it — never the Transport
+  // Department's number (7006), which nobody on a pier knows.
+  const tag = routeTag(best);
   // No live feed: say so, and give the stop count rather than a clock time.
   // An estimated arrival printed as "12:47" is a promise the data cannot keep.
   if (best.noFeed)
     return '<small class="arrivetag nofeed">⏱ ' +
-      esc(T('stopNoFeedEta').replace('{r}', best.route).replace('{n}', best.stopsAway)) + '</small>';
+      esc(T('stopNoFeedEta').replace('{r}', tag).replace('{n}', best.stopsAway)) + '</small>';
   const at = new Date(Date.now() + best.total * 60000);
   const hhmm = at.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   // "in 0 minutes" is not something anyone says: a bus at the stop now gets
   // its own wording rather than the countdown template with a zero in it.
   const line = best.wait === 0
-    ? T('stopArriveDue').replace('{r}', best.route).replace('{t}', hhmm)
-    : T('stopArriveBy').replace('{r}', best.route).replace('{w}', best.wait + T('min')).replace('{t}', hhmm);
+    ? T('stopArriveDue').replace('{r}', tag).replace('{t}', hhmm)
+    : T('stopArriveBy').replace('{r}', tag).replace('{w}', best.wait + T('min')).replace('{t}', hhmm);
   // The road, when it is the reason the number looks worse than the
   // timetable would suggest. Named and measured, so it can be judged.
   let road = '';
@@ -11584,8 +12052,9 @@ function findStopById(id) { return lookupStop(id); }
 // stop 30 in the feed and 26 in the route file, which put the pier "behind"
 // it and hid a bus going there. Every other company takes the index's own
 // number for this pole, and the feed's only when the index has none. One
-// helper for the filter, the arrival estimate, the bus list and the map
-// ride, so the four can never count differently.
+// helper for the filter, the arrival estimate, the bus list (and its fare,
+// which the route file prices by the same count) and the map ride, so they
+// can never count differently.
 function rowSeq(row, key, stopId) {
   const feed = Number(row.seq) || 0;
   const co = String(row.co || 'KMB').toUpperCase();
@@ -11602,22 +12071,70 @@ function openStopView() {
   view.style.display = 'block';
   panel.classList.add('stopmode');
   panel.scrollTop = 0;
-  // The planner builds the route index the first time a trip is searched.
-  // This tab reads the same index, so it has to be built here too — without
-  // it no pole can say where its buses go and the destination search has
-  // nothing to walk. Cached after the first time, so this is a one-off wait.
-  if (!stopIndex && !stopState.indexing) {
-    stopState.indexing = true;
-    buildIndexes().catch(error => console.warn('Index unavailable:', error))
-      .then(() => { stopState.indexing = false; if (activeMode === 'stop') renderStopView(); });
-  }
+  stopEnsureNetwork();
   if (!stopState.stop && !herePoint && navigator.geolocation && geoChoice() === 'yes'
       && !stopState.locating && !stopState.locateTried) {
     stopState.locateTried = true;
     stopLocate();
   }
   renderStopView();
-  if (stopState.stop && !stopState.rows && !stopState.loading) stopLoadRows();
+  if (stopState.stop && !stopState.loading && (!stopState.rows || !stopState.fetchedAt)) stopLoadRows();
+}
+
+// EVERY BUS COMPANY ON THIS TAB.
+// The planner builds the route index the first time a trip is searched.
+// This tab reads the same index, so it has to be built here too — without
+// it no pole can say where its buses go and the destination search has
+// nothing to walk. Cached after the first time, so this is a one-off wait.
+// KMB's comes first because it is what the screen needs to say anything;
+// Citybus, NLB, the minibuses, the MTR's buses and the ferries are folded in
+// the moment hk-bus-lite.json is here too. Without them a Citybus pole said
+// 「此站沒有班次資料」, a saved stop served only by Citybus said 冇直達, and
+// the 往… filter dropped their buses. (They were kept out until 4 Oct 2026
+// because folding them in split KMB stops and timed ferries as buses — see
+// joinWhole and rideMinutesFrom for how neither can happen now.)
+let stopLiteAsked = false;
+function stopEnsureNetwork() {
+  if (!stopIndex && !stopState.indexing) {
+    stopState.indexing = true;
+    buildIndexes().catch(error => console.warn('Index unavailable:', error))
+      .then(() => { stopState.indexing = false; addOperatorsOnce(); if (activeMode === 'stop') renderStopView(); });
+  }
+  if (hkbusRoutes) { addOperatorsOnce(); return; }
+  if (stopLiteAsked) return;
+  stopLiteAsked = true;
+  loadFareData()
+    .catch(error => console.warn('Other bus companies unavailable:', error))
+    .then(() => { stopLiteAsked = false; addOperatorsOnce(); });
+}
+
+// The index just took in the other companies. Answers worked out before it
+// did are wrong now: a Citybus pole asked about had no routes, so its live
+// times came back empty and its stop was one bay. Ask again and redraw.
+function indexChanged() {
+  arriveRows.clear();
+  reachMemo.clear();
+  const st = stopState;
+  if (st.stop) {
+    // Whichever tab is showing: the open stop is worked out again
+    // (stopGroupNow) and its times count as stale, so coming back to it —
+    // openStopView, stopTick — asks again.
+    if (!st.groupFixed) st.group = null;
+    st.fetchedAt = 0;
+    if (activeMode !== 'stop') return;
+    // Not under a finger typing in the 往… box (the keyboard would drop):
+    // stopTick asks once the box is left.
+    const typing = document.activeElement;
+    if (typing && typing.id === 'stop-filter') return;
+    stopLoadRows(true);
+    return;
+  }
+  if (activeMode !== 'stop') return;
+  // The picker: not rebuilt under a finger typing in 起點 (the keyboard would
+  // drop); the next keystroke draws it anyway.
+  const typing = document.activeElement;
+  if (typing && typing.id === 'stop-search') return;
+  stopScheduleRefresh();
 }
 
 function stopLocate() {
@@ -11678,8 +12195,9 @@ function nearestPoleTo(here) {
 }
 
 function stopSetStop(stop, groupStops) {
-  const group = groupStops && groupStops.length > 1 ? groupStops : poleGroup(stop);
-  stopState = Object.assign(freshStopState(), { locateTried: true, stop, group, destQuery: stopState.destQuery, destPicked: stopState.destPicked, indexing: stopState.indexing });
+  const groupFixed = !!(groupStops && groupStops.length > 1);
+  const group = groupFixed ? groupStops : poleGroup(stop);
+  stopState = Object.assign(freshStopState(), { locateTried: true, stop, group, groupFixed, destQuery: stopState.destQuery, destPicked: stopState.destPicked, indexing: stopState.indexing });
   renderStopView();
   stopLoadRows();
 }
@@ -11697,6 +12215,7 @@ function stopOpenSaved(sf, noFilter, group) {
   // bus the rider wants actually leaves from. Open THAT, not the saved pole.
   const bays = (group && group.length) ? group : poleGroup(sf);
   stopState = Object.assign(freshStopState(), { locateTried: true, stop: bays[0], group: bays,
+                                                groupFixed: !!(group && group.length),
                                                 destQuery: dest, destFilter: noFilter ? '' : dest,
                                                 destPicked: stopState.destPicked, indexing: stopState.indexing });
   if (activeMode !== 'stop') { showMode('stop'); return; }
@@ -12090,10 +12609,16 @@ async function fetchPoleRows(stop, wantRoutes) {
     { stop: stop.stop, stopName_en: stop.name_en, stopName_tc: stop.name_tc, co: row.co || co }));
 }
 
+// The newest load of the stop screen is the only one allowed to answer: the
+// fold (indexChanged) asks again while the load before it may still be out,
+// and whichever came back last used to win — the old bays, sometimes.
+let stopLoadTicket = 0;
 async function stopLoadRows(force) {
   const stop = stopState.stop;
   if (!stop) return;
   if (!force && stopState.rows && Date.now() - stopState.fetchedAt < 30000) return;
+  const ticket = ++stopLoadTicket, version = indexVersion;
+  const current = () => stopState.stop === stop && ticket === stopLoadTicket;
   stopState.loading = true; stopState.alert = null; renderStopView();
   // One screen for every bay of the group: ask each, and show each bay's
   // buses the moment they arrive instead of waiting for the slowest bay.
@@ -12101,7 +12626,7 @@ async function stopLoadRows(force) {
   const results = new Array(group.length).fill(null);
   const settled = new Array(group.length).fill(false);
   const paintSoFar = () => {
-    if (stopState.stop !== stop) return;
+    if (!current()) return;
     const live = results.filter(Array.isArray);
     if (!live.length) return;
     stopState.rows = live.flat();
@@ -12111,7 +12636,7 @@ async function stopLoadRows(force) {
   await Promise.all(group.map((s, i) => fetchPoleRows(s)
     .then(r => { results[i] = r; }, () => { results[i] = undefined; })
     .then(() => { settled[i] = true; if (settled.some(x => !x)) paintSoFar(); })));
-  if (stopState.stop !== stop) return;                   // moved on meanwhile
+  if (!current()) return;                    // moved on, or asked again, meanwhile
   const failed = results.filter(r => r === undefined).length;
   if (failed === results.length) {
     stopState.rows = []; stopState.alert = T('etaOffline');
@@ -12120,7 +12645,10 @@ async function stopLoadRows(force) {
     stopState.noLive = !live.length;
     stopState.rows = live.flat();
   }
-  stopState.fetchedAt = Date.now(); stopState.loading = false;
+  // Asked before the other companies were folded in: their bays and buses
+  // are missing, so it counts as stale and the next look asks again.
+  stopState.fetchedAt = version === indexVersion ? Date.now() : 0;
+  stopState.loading = false;
   const rowsBox = document.getElementById('stop-rows');
   if (rowsBox && document.activeElement && document.activeElement.id === 'stop-filter') rowsBox.innerHTML = stopRowsHtml();
   else renderStopView();
@@ -12225,6 +12753,24 @@ function stopPickerParts() {
   // is the answer to, so it is on the screen without scrolling. Decided at
   // the end, once the stops have been judged.
   const insteadAt = rest.length;
+  // EVERY WAY THERE (去 X 的路線), from the phone, once a place is named — in
+  // the same spot, and in place of the MTR card: the MTR is one of its
+  // options. Not before every bus company is here (miBusReady): a list
+  // without Citybus would leave out the A21 to the airport.
+  const trips = (filtering && herePoint)
+    ? (miBusReady() ? tripSectionHtml(destTyped, destIds)
+                    : '<div class="tripbox"><div class="triphead">🧭 ' + esc(T('tripHead').replace('{d}', destTyped)) +
+                      '</div><div class="tripwait">' + esc(T('tripWorking')) + '</div></div>')
+    : '';
+  // No position, so no "from where" — ask, in the same spot, rather than
+  // leave the rider to find the 📍 pins. Not when the first-visit card at
+  // the top is already asking the same question.
+  const tripAsk = (filtering && !herePoint && navigator.geolocation &&
+                   (geoChoice() === 'yes' || geoChoice() === 'no'))
+    ? '<div class="tripbox"><button type="button" class="mibtn" data-stop-act="triplocate">' +
+      '<span class="mibmain">' + esc(T('tripLocate')) + '</span>' +
+      '<span class="mibsub">' + esc(T('tripLocateSub').replace('{d}', destTyped)) + '</span></button></div>'
+    : '';
   let savedReach = false, nearFound = 0;
   // Saved poles as one-tap pills, same shape as the saved places above.
   // YOUR SAVED STOPS, ALWAYS SHOWN — but greyed when they cannot get you
@@ -12276,7 +12822,9 @@ function stopPickerParts() {
   }
   if (st.destQuery && destIds && !destIds.size)
     rest += '<div class="favempty">' + T('stopDestNoName').replace('{d}', esc(st.destQuery)) + '</div>';
+  const hintAt = rest.length;
   if (filtering) rest += '<div class="rshint">' + T('stopShowingTo').replace('{d}', esc(st.destQuery)) + '</div>';
+  const hintEnd = rest.length;
   if (herePoint) {
     const nearAll = stopsNear(herePoint.lat, herePoint.lng, filtering ? 600 : STOP_NEAR_M).filter(n => !n.stop.isStation);
     let near = groupPoles(nearAll, keep, filtering ? 6 : 4);
@@ -12299,7 +12847,8 @@ function stopPickerParts() {
     nearFound = near.length;
     if (near.length)
       rest += '<div class="mtrsub sectionbreak">' + T('stopNearby') + '</div><div class="mtrpick">' + near.map(n => poleButton(n.group, n.metres, n.eta)).join('') + '</div>';
-    else
+    // 「附近沒有直達」 under a list of ways there would read as "no way there".
+    else if (!trips)
       rest += '<div class="favempty">' + (filtering ? T('stopNearNoneTo').replace('{d}', esc(st.destQuery)) : T('stopNoneNear')) + '</div>';
   }
   // NO BUS GOES THERE: say what does. Never above a saved stop lit ✓.
@@ -12308,7 +12857,11 @@ function stopPickerParts() {
   // card's title says it is the saved stops that were judged. Not while the
   // index is still being built, nor before every bus company is in it,
   // when every stop would look like a no.
-  if (filtering && stopIndex && !st.indexing && !savedReach && miBusReady()) {
+  // 「只顯示有巴士直達…」 with no stop under it, beneath the ways there, is a
+  // heading for nothing.
+  if (trips && !nearFound && !savedShown.length) rest = rest.slice(0, hintAt) + rest.slice(hintEnd);
+  if (trips) rest = rest.slice(0, insteadAt) + trips + rest.slice(insteadAt);
+  else if (filtering && stopIndex && !st.indexing && !savedReach && miBusReady()) {
     const noBus = herePoint
       ? (!nearFound && !busWithinReach(herePoint, destIds, st.destQuery))
       : (savedShown.length > 0 && !savedShown.some(f => {
@@ -12318,6 +12871,7 @@ function stopPickerParts() {
     const card = noBus ? mtrInsteadHtml(st.destQuery, { saved: !herePoint }) : '';
     if (card) rest = rest.slice(0, insteadAt) + card + rest.slice(insteadAt);
   }
+  if (tripAsk) rest = rest.slice(0, insteadAt) + tripAsk + rest.slice(insteadAt);
   return { top, rest, star };
 }
 
@@ -12510,20 +13064,19 @@ function miRailReady() {
   return miRailAnswered && !!(mtrData && railGraph);
 }
 
-// EVERY BUS COMPANY, BEFORE SAYING THERE IS NO BUS. This tab's index is
-// KMB's; Citybus, NLB, the minibuses, the MTR's feeder buses and the ferries
-// are in hk-bus-lite.json, and busWithinReach reads them straight from it.
-// They are NOT folded into the tab's index for this: that index also groups
-// bays into stops and ranks them, and other companies' bays and piers in it
-// split KMB stops and timed ferries as buses. Until that file has come,
-// 「沒有巴士直達」 could be a Citybus route nobody had looked at, so the card
-// waits — and if it never comes, the card never claims there is no bus.
+// EVERY BUS COMPANY, BEFORE SAYING THERE IS NO BUS. Citybus, NLB, the
+// minibuses, the MTR's feeder buses and the ferries are in hk-bus-lite.json:
+// folded into this tab's index once it is here (stopEnsureNetwork), and read
+// straight from it by busWithinReach in the moment before that. Until that
+// file has come, 「沒有巴士直達」 could be a Citybus route nobody had looked
+// at, so the card waits — and if it never comes, the card never claims there
+// is no bus.
 let miBusTried = 0;
 function miBusReady() {
   if (hkbusRoutes) return true;
   if (Date.now() - miBusTried > 60000) {
     miBusTried = Date.now();
-    loadFareData().catch(() => null).then(() => { if (hkbusRoutes) miRefresh(); });
+    loadFareData().catch(() => null).then(() => { if (hkbusRoutes) { addOperatorsOnce(); miRefresh(); } });
   }
   return false;
 }
@@ -12658,14 +13211,15 @@ function mtrInsteadHtml(query, opts) {
 }
 
 // THE NEAREST POLE WITHIN START_REACH_M WITH A BUS THAT GOES THERE, or null.
-// Every company: KMB from this tab's index, worked from the place backwards
-// (every route calling there, every stop before it); Citybus, NLB, the
+// Every company, from this tab's index, worked from the place backwards
+// (every route calling there, every stop before it) — and, in the moment
+// before the other companies are folded into it, Citybus, NLB, the
 // minibuses, the MTR's feeder buses and the ferries straight from
-// hk-bus-lite.json (see miBusReady for why not via the index). Nothing in
-// reach is missed — stopsNear keeps only the 25 nearest poles, and in 旺角
-// those are all inside 200 m. `indexed` says whether the pole's routes are in
-// this tab's index, i.e. whether its own screen can show them.
-// Remembered per name, spot and network.
+// hk-bus-lite.json. The two are the same lists, so once the fold is done the
+// file is not read twice. Nothing in reach is missed — stopsNear keeps only
+// the 25 nearest poles, and in 旺角 those are all inside 200 m. `indexed` says
+// whether the pole's routes are in this tab's index, i.e. whether its own
+// screen can show them. Remembered per name, spot and network.
 const reachMemo = new Map();
 function poleIdsWithin(here, radius) {
   const grid = stopGridNow();
@@ -12693,7 +13247,7 @@ function busWithinReach(here, destIds, name) {
   const take = (hit, indexed) => {
     if (hit && (!best || hit.metres < best.metres)) best = { stop: hit.stop, metres: hit.metres, indexed };
   };
-  // KMB (and whatever else this tab's index holds), from the place backwards.
+  // Everything this tab's index holds, from the place backwards.
   if (stopIndex && routeIndex) {
     for (const destId of destIds) {
       for (const at of (stopIndex.get(destId) || [])) {
@@ -12705,9 +13259,10 @@ function busWithinReach(here, destIds, name) {
       }
     }
   }
-  // Every other company, from its own stop lists: a pole in reach that comes
-  // before one of the place's poles on the same list.
-  if (hkbusRoutes) {
+  // Every other company, from its own stop lists, while the index does not
+  // have them yet: a pole in reach that comes before one of the place's poles
+  // on the same list.
+  if (hkbusRoutes && !operatorsIndexed) {
     for (const entry of Object.values(hkbusRoutes)) {
       if (!entry || !entry.stops) continue;
       for (const co of PLANNED_OPERATORS) {
@@ -12725,6 +13280,763 @@ function busWithinReach(here, destIds, name) {
   if (reachMemo.size >= 60) reachMemo.clear();
   reachMemo.set(key, best);
   return best;
+}
+
+// ============================================================
+// 去 X 的路線 — EVERY WAY THERE, NOT ONLY THE DIRECT BUS
+// ============================================================
+// The owner, 4 Oct 2026, at 九龍塘, 我要去 機場地面運輸中心 (落客站): every saved
+// stop 冇直達 or miles away, 「附近沒有直達…」, and nothing else on the screen —
+// two saved stops lit ✓, so even the MTR card stood down. The app has long
+// planned changes and trains (findBuses on the map, railJourneys on the 港鐵
+// tab); this tab, the one people land on, never asked either of them.
+//
+// The model is MyRapid PULSE (Kuala Lumpur), which the owner sent: a short
+// list of whole trips, each in one line of steps — 🚶 3 › 🚌 T808 7 › 🚶 5 ›
+// 🚇 KGL 27 — with the total, the fare, and when to leave and arrive; tap
+// one for the steps, and the map. What it does well and this app lacked:
+// a bus to the station and the train on is ONE trip, not a bus answer and a
+// train answer on two different tabs; and every option says up front what
+// it costs in minutes, money and walking.
+//
+// Five kinds of trip, all from where the phone is, plus walking when close:
+//   a bus all the way · a bus and another bus · the railway (MTR and Light
+//   Rail, the 港鐵 tab's own search) · a bus to a station, then the train ·
+//   the train to a station, then a bus.
+// Each is the planner's journey object, so the fares, the walking and the
+// road's drag come from the functions the map's planner already uses.
+//
+// WHERE YOU GET OFF: the poles the name names (you are there: no walk), and
+// any other pole within TRIP_ARRIVE_M of the place, with the walk from it —
+// another company's included, because they do not agree on names: KMB's
+// 機場地面運輸中心 is Citybus's 機場 (地面運輸中心), 90 m away, and without
+// it no Citybus A-route reached the airport.
+const TRIP_MAX = 3;              // options on the screen
+const TRIP_ARRIVE_M = 300;       // a pole this close to the place is arriving there
+const TRIP_BOARD_M = 600;        // every pole this close to the phone is somewhere to get on
+// A pole the name names is "there" only this close to the place: 西貢 also
+// names 西貢街 in 油麻地, six kilometres from Sai Kung.
+const TRIP_NAMED_M = 1500;
+const TRIP_STATION_M = 250;      // a bus stop this close to a station is a change to the train
+const TRIP_SLACK_MIN = 30;       // an option this much later than the best is not offered
+const TRIP_WALK_ONLY_MIN = 20;   // walking the whole way is offered up to this
+const TRIP_TRAINS_TRIED = 8;     // stations tried after a bus, soonest reached first
+const TRIP_BUS_WAIT_MIN = 5;     // the first bus's wait, for ordering, until its live time is in
+const TRIP_TRAIN_WAIT_MIN = 2;   // the first train's (headways of 2–4 minutes)
+const TRIP_LIVE_ASK = 6;         // first buses asked about, best options first
+const TRIP_LIVE_MS = 45000;
+const TRIP_SETTLE_MS = 450;      // worked out once the typing stops, not per keystroke
+const TRIP_NO_WALK = { metres: 0, minutes: 0 };
+
+function tripHasPlace(x) { return !!x && isFinite(Number(x.lat)) && isFinite(Number(x.long)); }
+function tripIsRail(leg) { return leg.co === 'mtr' || leg.co === 'lrt'; }
+
+// The heavy-rail station beside a pole, within TRIP_STATION_M, or null —
+// where a bus can hand over to the train or take over from it.
+const stationBySide = new Map();
+function stationBesideStop(stopId) {
+  if (!mtrData) return null;
+  if (stationBySide.has(stopId)) return stationBySide.get(stopId);
+  const stop = lookupStop(stopId);
+  let best = null;
+  if (tripHasPlace(stop)) {
+    const lat = Number(stop.lat), lng = Number(stop.long);
+    for (const code of Object.keys(mtrData.stations)) {
+      const s = mtrData.stations[code];
+      const metres = metresBetween(lat, lng, s[2], s[3]);
+      if (metres <= TRIP_STATION_M && (!best || metres < best.metres)) best = { code, metres };
+    }
+  }
+  if (stationBySide.size > 20000) stationBySide.clear();
+  stationBySide.set(stopId, best);
+  return best;
+}
+
+function tripBusLeg(key, fromSeq, toSeq, on, off) {
+  const p = key.split('|');
+  return { route: routeNumberOf(key), on, off, stops: toSeq - fromSeq,
+           path: pathBetween(key, fromSeq, toSeq), bound: p[1], serviceType: p[2], co: p[3] || 'kmb',
+           key, seq: fromSeq, minutes: rideMinutesOn(key, metresAlongRoute(key, fromSeq, toSeq)) };
+}
+
+// Every candidate trip from `from` to `place`. Nothing is chosen here.
+function tripCandidates(from, place, destIds) {
+  stopMapNow();                     // pathBetween and metresAlongRoute read stopById
+  const out = [];
+  const runMemo = new Map();
+  const running = key => {
+    if (!runMemo.has(key)) runMemo.set(key, isRunningNow(key));
+    return runMemo.get(key);
+  };
+
+  // WHERE TO GET ON: each route once, at its pole nearest the phone — from
+  // EVERY pole in reach. stopsNear keeps the 25 nearest, which in 旺角 are all
+  // within 200 m and left out the Citybus A21 a block further on.
+  const boardable = new Map();
+  for (const near of poleIdsWithin(from, TRIP_BOARD_M).values()) {
+    for (const s of (stopIndex.get(near.stop.stop) || [])) {
+      const have = boardable.get(s.routeKey);
+      if (!have || near.metres < have.metres)
+        boardable.set(s.routeKey, { stop: near.stop, metres: near.metres, seq: s.seq });
+    }
+  }
+
+  // WHERE TO GET OFF (see the heading), and per route every chance to.
+  const offWalk = new Map();
+  for (const id of destIds) {
+    const st = lookupStop(id);
+    if (tripHasPlace(st) && metresBetween(place.lat, place.lng, Number(st.lat), Number(st.long)) <= TRIP_NAMED_M)
+      offWalk.set(id, TRIP_NO_WALK);
+  }
+  for (const [id, hit] of poleIdsWithin(place, TRIP_ARRIVE_M))
+    if (!offWalk.has(id)) offWalk.set(id, walkingEstimate(hit.metres));
+  const offOn = new Map();          // routeKey -> [{ seq, stopId, walk }], in route order
+  for (const [id, walk] of offWalk)
+    for (const s of (stopIndex.get(id) || [])) {
+      if (!offOn.has(s.routeKey)) offOn.set(s.routeKey, []);
+      offOn.get(s.routeKey).push({ seq: s.seq, stopId: id, walk });
+    }
+  for (const list of offOn.values()) list.sort((a, b) => a.seq - b.seq);
+  // The best place to get off `key` after boarding at `seq`: least riding plus walking.
+  const bestOff = (key, seq) => {
+    let best = null;
+    for (const o of (offOn.get(key) || [])) {
+      if (o.seq <= seq) continue;
+      const ride = rideMinutesOn(key, metresAlongRoute(key, seq, o.seq));
+      const cost = ride + o.walk.minutes;
+      if (!best || cost < best.cost) best = { seq: o.seq, stopId: o.stopId, walk: o.walk, ride, cost };
+    }
+    return best;
+  };
+
+  // ---- WALKING, when it is close ----
+  const walkAll = walkingEstimate(metresBetween(from.lat, from.lng, place.lat, place.lng));
+  if (walkAll.minutes <= TRIP_WALK_ONLY_MIN)
+    out.push({ kind: 'walk', walkOnly: true, legs: [], walkOn: walkAll, walkOff: TRIP_NO_WALK,
+               transferWalks: [], total: walkAll.minutes });
+
+  // ---- ONE BUS ----
+  // Even a route the timetable says has stopped for the night: the timetable
+  // judges at the terminus, and at 23:54 an A33X was 6 minutes from 安定邨.
+  // Such a trip stands only if the live feed shows one coming (tripTimes).
+  for (const [key, board] of boardable) {
+    const off = bestOff(key, board.seq);
+    const offStop = off && lookupStop(off.stopId);
+    if (!tripHasPlace(offStop)) continue;
+    const walkOn = walkingEstimate(board.metres);
+    out.push({ kind: 'bus', legs: [tripBusLeg(key, board.seq, off.seq, board.stop, offStop)],
+               walkOn, walkOff: off.walk, transferWalks: [], offTimetable: !running(key),
+               total: walkOn.minutes + off.ride + off.walk.minutes });
+  }
+
+  // ---- A BUS, THEN ANOTHER ----
+  // The map planner's search (findBuses), meeting the place's routes at any
+  // stop of theirs within TRANSFER_WALK_M of a stop the first bus calls at.
+  const secondBuses = [];
+  for (const [keyB, offs] of offOn) {
+    if (!running(keyB)) continue;
+    const lastSeq = offs[offs.length - 1].seq;
+    const targets = [];
+    for (const e of (routeIndex.get(keyB) || [])) {
+      if (e.seq >= lastSeq || offWalk.has(e.stopId)) continue;
+      const stop = stopById.get(e.stopId);
+      if (!stop) continue;
+      const off = bestOff(keyB, e.seq);
+      if (!off || metresAlongRoute(keyB, e.seq, off.seq) < MIN_USEFUL_LEG_M) continue;
+      const lat = Number(stop.lat), lng = Number(stop.long);
+      targets.push({ e, stop, lat, lng, off,
+                     row: Math.floor(lat / TRANSFER_GRID_DEG), col: Math.floor(lng / TRANSFER_GRID_DEG) });
+    }
+    if (targets.length) secondBuses.push({ keyB, targets });
+  }
+  for (const [keyA, board] of boardable) {
+    // A route that goes there itself needs no second bus. The first bus, as
+    // above, may be one the timetable has stopped; the second may not.
+    if (bestOff(keyA, board.seq)) continue;
+    const ahead = new Map(), aheadGrid = new Map();
+    for (const e of (routeIndex.get(keyA) || [])) {
+      if (e.seq <= board.seq) continue;
+      const had = ahead.get(e.stopId);
+      if (had === undefined || e.seq < had) ahead.set(e.stopId, e.seq);
+    }
+    for (const [stopId, seq] of ahead) {
+      const stop = stopById.get(stopId);
+      if (!stop) continue;
+      const lat = Number(stop.lat), lng = Number(stop.long);
+      const cell = Math.floor(lat / TRANSFER_GRID_DEG) * 100000 + Math.floor(lng / TRANSFER_GRID_DEG);
+      if (!aheadGrid.has(cell)) aheadGrid.set(cell, []);
+      aheadGrid.get(cell).push({ stop, seq, lat, lng });
+    }
+    if (!ahead.size) continue;
+    for (const { keyB, targets } of secondBuses) {
+      if (routeNumberOf(keyA) === routeNumberOf(keyB)) continue;
+      let best = null;
+      const consider = (target, changeOff, seqA, walkMetres) => {
+        const legAMetres = metresAlongRoute(keyA, board.seq, seqA);
+        if (legAMetres < MIN_USEFUL_LEG_M) return;
+        const walk = walkMetres > 0 ? walkingEstimate(walkMetres).minutes : 0;
+        const minutes = rideMinutesOn(keyA, legAMetres) + TRANSFER_PENALTY_MIN + walk +
+                        target.off.ride + target.off.walk.minutes;
+        // Walking between buses weighed the way the map planner weighs it.
+        const cost = minutes + walk * EFFORT.perTransferWalk;
+        if (!best || cost < best.cost) best = { cost, minutes, walkMetres, seqA, changeOff, target };
+      };
+      for (const target of targets) {
+        const same = ahead.get(target.e.stopId);
+        if (same !== undefined) consider(target, target.stop, same, 0);
+        for (let dRow = -1; dRow <= 1; dRow++)
+          for (let dCol = -1; dCol <= 1; dCol++) {
+            const cell = aheadGrid.get((target.row + dRow) * 100000 + target.col + dCol);
+            if (!cell) continue;
+            for (const c of cell) {
+              if (c.stop.stop === target.e.stopId) continue;
+              const metres = metresBetween(c.lat, c.lng, target.lat, target.lng);
+              if (metres <= TRANSFER_WALK_M) consider(target, c.stop, c.seq, metres);
+            }
+          }
+      }
+      if (!best) continue;
+      const t = best.target, offStop = lookupStop(t.off.stopId);
+      if (!tripHasPlace(offStop)) continue;
+      const walkOn = walkingEstimate(board.metres);
+      out.push({ kind: 'bus2', offTimetable: !running(keyA),
+                 legs: [tripBusLeg(keyA, board.seq, best.seqA, board.stop, best.changeOff),
+                        tripBusLeg(keyB, t.e.seq, t.off.seq, t.stop, offStop)],
+                 walkOn, walkOff: t.off.walk,
+                 transferWalks: [best.walkMetres > 0 ? walkingEstimate(best.walkMetres) : null],
+                 total: walkOn.minutes + best.minutes });
+    }
+  }
+
+  const railOk = !!(mtrData && railGraph) && railRunningNow();
+  if (railOk) {
+    // ---- THE RAILWAY, the 港鐵 tab's own search ----
+    for (const j of railJourneys(from.lat, from.lng, place.lat, place.lng))
+      out.push(Object.assign(j, { kind: 'rail' }));
+
+    // ---- A BUS TO A STATION, THEN THE TRAIN ----
+    // Even to a station the phone could walk to: a three-minute bus beats a
+    // fifteen-minute walk at eighty. MIN_USEFUL_LEG_M keeps it a real ride.
+    const atStation = new Map();    // station -> the soonest way to stand in it by bus
+    for (const [key, board] of boardable) {
+      // A bus that goes there itself is not a bus to the train (60X, then one stop of 荃灣綫).
+      if (!running(key) || bestOff(key, board.seq)) continue;
+      for (const e of (routeIndex.get(key) || [])) {
+        if (e.seq <= board.seq) continue;
+        const st = stationBesideStop(e.stopId);
+        if (!st) continue;
+        const metres = metresAlongRoute(key, board.seq, e.seq);
+        if (metres < MIN_USEFUL_LEG_M) continue;
+        const cost = walkingEstimate(board.metres).minutes + rideMinutesOn(key, metres) +
+                     walkingEstimate(st.metres).minutes;
+        const have = atStation.get(st.code);
+        if (!have || cost < have.cost)
+          atStation.set(st.code, { cost, key, board, seq: e.seq, stopId: e.stopId, metres: st.metres });
+      }
+    }
+    const ends = railNodesNear(place.lat, place.lng);
+    const tried = [...atStation.entries()].sort((a, b) => a[1].cost - b[1].cost).slice(0, TRIP_TRAINS_TRIED);
+    for (const [code, way] of tried) {
+      const searched = railSearch(code);
+      const offStop = lookupStop(way.stopId);
+      if (!tripHasPlace(offStop)) continue;
+      for (const end of ends) {
+        if (end.node === code) continue;
+        const found = railPathTo(searched, end.node);
+        const rail = found && buildRailJourney(found, TRIP_NO_WALK, walkingEstimate(end.metres));
+        if (!rail) continue;
+        const bus = tripBusLeg(way.key, way.board.seq, way.seq, way.board.stop, offStop);
+        const walkOn = walkingEstimate(way.board.metres), toTrain = walkingEstimate(way.metres);
+        out.push({ kind: 'busrail', legs: [bus].concat(rail.legs), walkOn, walkOff: rail.walkOff,
+                   transferWalks: [addWalks(toTrain, rail.walkOn)].concat(rail.transferWalks),
+                   total: Math.round(walkOn.minutes + bus.minutes + toTrain.minutes + RAIL_CHANGE_MIN +
+                                     found.cost + rail.walkOff.minutes) });
+      }
+    }
+
+    // ---- THE TRAIN TO A STATION, THEN A BUS ----
+    // One search from each rail stop in reach of the phone settles every
+    // station; each of the place's routes is then met at whichever of its
+    // stops beside a station comes soonest.
+    const searches = railNodesNear(from.lat, from.lng).map(o => {
+      const best = railSearch(o.node), costTo = new Map();
+      if (best) for (const s of best.values())
+        if (!costTo.has(s.node) || s.cost < costTo.get(s.node)) costTo.set(s.node, s.cost);
+      return { o, best, costTo };
+    });
+    const viaBus = [];
+    for (const [keyB, offs] of offOn) {
+      if (!running(keyB)) continue;
+      const lastSeq = offs[offs.length - 1].seq;
+      let pick = null;
+      for (const e of (routeIndex.get(keyB) || [])) {
+        if (e.seq >= lastSeq || offWalk.has(e.stopId)) continue;
+        const st = stationBesideStop(e.stopId);
+        if (!st) continue;
+        const off = bestOff(keyB, e.seq);
+        if (!off || metresAlongRoute(keyB, e.seq, off.seq) < MIN_USEFUL_LEG_M) continue;
+        for (const sr of searches) {
+          if (sr.o.node === st.code) continue;      // no train ridden: that is a walk and a bus
+          const c = sr.costTo.get(st.code);
+          if (c === undefined) continue;
+          const total = walkingEstimate(sr.o.metres).minutes + c + walkingEstimate(st.metres).minutes +
+                        TRANSFER_PENALTY_MIN + off.ride + off.walk.minutes;
+          if (!pick || total < pick.total) pick = { total, sr, st, e, off };
+        }
+      }
+      if (pick) viaBus.push(Object.assign(pick, { keyB }));
+    }
+    viaBus.sort((a, b) => a.total - b.total);
+    for (const v of viaBus.slice(0, 6)) {
+      const found = railPathTo(v.sr.best, v.st.code);
+      const rail = found && buildRailJourney(found, walkingEstimate(v.sr.o.metres), TRIP_NO_WALK);
+      const onStop = lookupStop(v.e.stopId), offStop = lookupStop(v.off.stopId);
+      if (!rail || !tripHasPlace(onStop) || !tripHasPlace(offStop)) continue;
+      out.push({ kind: 'railbus',
+                 legs: rail.legs.concat([tripBusLeg(v.keyB, v.e.seq, v.off.seq, onStop, offStop)]),
+                 walkOn: rail.walkOn, walkOff: v.off.walk,
+                 transferWalks: rail.transferWalks.concat([addWalks(rail.walkOff, walkingEstimate(v.st.metres))]),
+                 total: Math.round(v.total) });
+    }
+  }
+
+  // The road as it is now, for the bus legs — as the map's planner does.
+  applyRoadDrag(out);
+  return out;
+}
+
+// ---- fares: each bus its own fare, each stretch of railway one ----
+function tripFareParts(j) {
+  const parts = [];
+  for (let i = 0; i < j.legs.length;) {
+    const leg = j.legs[i];
+    if (tripIsRail(leg)) {
+      let k = i;
+      while (k + 1 < j.legs.length && tripIsRail(j.legs[k + 1])) k++;
+      // The Airport Express is a fare of its own: MTR's table prices it only
+      // between its own stations (青衣 → 機場 $73), never 太子 → 機場, so the
+      // stretch before it and the stretch on it are priced apart.
+      let from = i;
+      for (let m = i; m <= k; m++) {
+        const ael = l => l.co === 'mtr' && l.lineCode === 'AEL';
+        if (m < k && ael(j.legs[m]) === ael(j.legs[m + 1])) continue;
+        const run = j.legs.slice(from, m + 1), a = run[0].on.stop, b = run[run.length - 1].off.stop;
+        // Both railways in one run: MTR publishes no combined fare (journeyFare).
+        const fare = run.every(l => l.co === 'mtr') ? railFare(a, b)
+                   : run.every(l => l.co === 'lrt') ? lrtFare(a, b) : null;
+        parts.push({ at: from, fare });
+        from = m + 1;
+      }
+      i = k + 1;
+    } else {
+      parts.push({ at: i, fare: fareForLeg(leg.route, leg.bound, leg.serviceType, leg.on.stop, leg.co) });
+      i++;
+    }
+  }
+  return parts;
+}
+// The total as the rider pays it: in 長者模式 every fare is its own $2.
+function tripFareTotal(j) {
+  let sum = 0, known = 0, unknown = 0;
+  for (const p of tripFareParts(j)) {
+    if (p.fare === null || p.fare === undefined || !isFinite(p.fare)) { unknown++; continue; }
+    sum += elderly ? elderlyFare(p.fare) : p.fare;
+    known++;
+  }
+  return { sum, known, unknown };
+}
+function tripFareHtml(j) {
+  const f = tripFareTotal(j);
+  if (!f.known) return '';
+  // Part of it unknown (a minibus with no fare listed): what is known, as "from".
+  const money = '$' + f.sum.toFixed(1) + (elderly ? '<small class="eldtag">' + T('elderTag') + '</small>' : '');
+  return f.unknown ? T('tripFareFrom').replace('{f}', money) : money;
+}
+function tripWalkMinutes(j) {
+  return j.walkOn.minutes + j.walkOff.minutes + transferWalkMinutes(j);
+}
+
+// ---- the first bus's live time ----
+// Kept apart from the stop list's cache (arriveRows): that one holds a
+// Citybus pole's answer for the routes IT asked about, and a route it did
+// not ask about would read here as "nothing coming".
+const tripLive = new Map();          // "stop|route" -> { at, rows }  (rows null: no feed)
+const tripLiveAsking = new Set();
+function tripLiveRows(leg) {
+  const hit = tripLive.get(leg.on.stop + '|' + leg.route);
+  return hit && Date.now() - hit.at < TRIP_LIVE_MS ? hit.rows : undefined;
+}
+// undefined: not asked yet · null: no live feed · { none } · { wait } in minutes
+function tripLiveWait(leg, walkMin) {
+  const rows = tripLiveRows(leg);
+  if (rows === undefined || rows === null) return rows;
+  const now = Date.now();
+  let best = null;
+  for (const row of rows) {
+    if (!row.eta || String(row.route).toUpperCase() !== String(leg.route).toUpperCase()) continue;
+    if (routeKeyForRow(row).split('|')[1] !== leg.bound) continue;   // the other direction
+    const wait = (new Date(row.eta).getTime() - now) / 60000;
+    if (wait < walkMin) continue;             // gone before you get there
+    if (best === null || wait < best) best = wait;
+  }
+  return best === null ? { none: true } : { wait: Math.round(best) };
+}
+async function tripAskLive(legs) {
+  const want = [];
+  for (const leg of legs) {
+    const k = leg.on.stop + '|' + leg.route;
+    if (tripLiveRows(leg) !== undefined || tripLiveAsking.has(k) || want.some(x => x.k === k)) continue;
+    want.push({ k, leg });
+  }
+  if (!want.length) return false;
+  want.forEach(w => tripLiveAsking.add(w.k));
+  await Promise.all(want.map(async w => {
+    let rows = null;
+    try { rows = await fetchPoleRows(w.leg.on, new Set([w.leg.route])); } catch (e) { rows = null; }
+    tripLive.set(w.k, { at: Date.now(), rows });
+    tripLiveAsking.delete(w.k);
+  }));
+  if (tripLive.size > 300) tripLive.clear();
+  return true;
+}
+
+// When to set off and when you are there, as minutes from now. `live` says
+// whether the first bus's time came from the feed. `gone`: not a trip you can
+// make now — the feed lists nothing you can catch (887 at 九龍塘 at 23:53,
+// 最後班次已過), or the timetable has the route stopped and the feed has not
+// shown one coming. A guessed five-minute wait for a bus that is not coming
+// put it top of the list as 最快.
+function tripTimes(j) {
+  const first = j.legs[0];
+  let lead = 0, guess = 0, live = null;
+  if (first && !tripIsRail(first)) {
+    live = tripLiveWait(first, j.walkOn.minutes);
+    if (live && live.wait !== undefined) lead = Math.max(0, live.wait - j.walkOn.minutes);
+    else guess = TRIP_BUS_WAIT_MIN;
+  } else if (first) guess = TRIP_TRAIN_WAIT_MIN;
+  const coming = !!(live && live.wait !== undefined);
+  let gone = !!first && !tripIsRail(first) && (!!(live && live.none) || (!!j.offTimetable && !coming));
+  // The trains stop at about one. railRunningNow asks about NOW; a trip that
+  // reaches its last train after the last train (九龍塘 at 00:02: a 271 to
+  // 太子, then the Airport Express at 01:00) is not a trip.
+  const arrive = lead + j.total + guess;
+  let lastRail = -1;
+  j.legs.forEach((leg, i) => { if (tripIsRail(leg)) lastRail = i; });
+  if (!gone && lastRail >= 0) {
+    let after = j.walkOff.minutes;
+    for (let i = j.legs.length - 1; i > lastRail; i--)
+      after += (j.legs[i].minutes || 0) + TRANSFER_PENALTY_MIN + ((j.transferWalks[i - 1] || {}).minutes || 0);
+    const offTrain = new Date(Date.now() + (arrive - after) * 60000).getHours();
+    if (offTrain >= RAIL_LAST_HOUR && offTrain < RAIL_FIRST_HOUR) gone = true;
+  }
+  return { lead, arrive, live, estimated: !coming, gone };
+}
+
+// ---- which three ----
+// One per SHAPE (the same buses and trains in the same order), each scored
+// for an older rider: soonest there, a change costing five minutes, walking
+// half a minute a minute more than sitting, and every $10 a minute — or the
+// bus to the airport and the Airport Express back ($135.7) beats the train
+// for 安定邨 → 中環. From those within TRIP_SLACK_MIN of the soonest, and
+// sooner than walking: the soonest; the best score; one vehicle all the way;
+// something with a train; something by bus alone; then different ways to
+// fill the list. Shown soonest-there first.
+function tripShape(j) {
+  return j.walkOnly ? 'walk'
+    : j.legs.map(l => tripIsRail(l) ? l.co + ':' + l.lineCode : l.route + '|' + l.bound + '|' + l.co).join('>');
+}
+function tripPick(cands) {
+  const byShape = new Map();
+  for (const j of cands) {
+    j.times = tripTimes(j);
+    if (j.times.gone) continue;
+    j.score = j.times.arrive + 5 * Math.max(0, j.legs.length - 1) + 0.5 * tripWalkMinutes(j) +
+              0.1 * tripFareTotal(j).sum;
+    const s = tripShape(j), have = byShape.get(s);
+    if (!have || j.score < have.score) byShape.set(s, j);
+  }
+  const all = [...byShape.values()].sort((a, b) => a.score - b.score);
+  if (!all.length) return [];
+  const soonest = Math.min(...all.map(j => j.times.arrive));
+  // Nothing that gets there no sooner than simply walking (a one-stop bus
+  // to 中環碼頭 from IFC), and nothing far behind the soonest.
+  const walking = all.find(j => j.walkOnly);
+  const pool = all.filter(j => j.times.arrive <= soonest + TRIP_SLACK_MIN &&
+                               (!walking || j === walking || j.times.arrive < walking.times.arrive));
+  // The soonest there is always on the list — that is the first thing anybody
+  // asks of a journey planner (九龍塘 → 機場: the MTR, 52 min, was left off
+  // for a cheaper bus-and-bus) — and then the best by the score.
+  const fastest = pool.slice().sort((a, b) => a.times.arrive - b.times.arrive || a.score - b.score)[0];
+  const picks = [fastest];
+  const add = j => { if (j && picks.length < TRIP_MAX && !picks.includes(j)) picks.push(j); };
+  add(pool[0]);
+  const hasRail = j => j.legs.some(tripIsRail);
+  // One vehicle the whole way is what an older rider with a bag wants most,
+  // even at some minutes more: kept whenever there is one in reach.
+  const noChange = j => j.legs.length === 1;
+  if (!picks.some(noChange)) add(pool.find(noChange));
+  if (!picks.some(hasRail)) add(pool.find(hasRail));
+  if (!picks.some(j => !j.walkOnly && !hasRail(j))) add(pool.find(j => !j.walkOnly && !hasRail(j)));
+  // The rest of the list: different ways, not the same first bus or train
+  // with a different ending (東鐵綫 to 旺角東, then the same 東鐵綫 and a 2A).
+  // Nor the same last bus with a feeder in front of it (702, then the A23
+  // already listed on its own).
+  const firstOf = j => j.walkOnly ? 'walk' : tripShape({ legs: [j.legs[0]] });
+  const lastOf = j => j.walkOnly ? 'walk' : tripShape({ legs: [j.legs[j.legs.length - 1]] });
+  for (const j of pool)
+    if (!picks.some(p => firstOf(p) === firstOf(j) ||
+                         (lastOf(p) === lastOf(j) && p.legs.length < j.legs.length))) add(j);
+  picks.sort((a, b) => a.times.arrive - b.times.arrive || a.score - b.score);
+  // What each one is best at, said only where it is true and there is a choice.
+  if (picks.length > 1) {
+    const tag = (key, value) => {
+      const best = Math.min(...picks.map(value).filter(v => v !== null));
+      const winners = picks.filter(j => value(j) === best);
+      if (isFinite(best) && winners.length < picks.length && !(key === 'tagNoChange' && best > 0))
+        winners.forEach(j => j.tags.push(key));
+    };
+    picks.forEach(j => { j.tags = []; });
+    tag('tagFastest', j => j.times.arrive);
+    // Cheapest only when it is: a "$14.5 起" option may cost less than an $82.2 one.
+    const leastKnown = Math.min(...picks.map(j => tripFareTotal(j)).filter(f => f.known).map(f => f.sum));
+    tag('tagCheapest', j => { const f = tripFareTotal(j); return f.unknown || !f.known || f.sum > leastKnown ? null : f.sum; });
+    tag('tagLeastWalk', j => tripWalkMinutes(j));
+    tag('tagNoChange', j => j.walkOnly ? null : Math.max(0, j.legs.length - 1));
+    // Two at most, in this order: a card wearing four badges says nothing.
+    const order = ['tagFastest', 'tagNoChange', 'tagCheapest', 'tagLeastWalk'];
+    picks.forEach(j => { j.tags = order.filter(k => j.tags.includes(k)).slice(0, 2); });
+  } else picks.forEach(j => { j.tags = []; });
+  return picks;
+}
+
+// ---- worked out once per place and spot, after the typing stops ----
+let tripMemo = { key: '', name: '', plan: null }, tripTimer = 0, tripTimerKey = '';
+function tripKey(name) {
+  const at = herePoint ? Math.round(herePoint.lat * 4000) + ',' + Math.round(herePoint.lng * 4000) : '-';
+  return name + '|' + at + '|' + dataStamp() + '|' + indexVersion + '|' +
+         (railGraph ? (railGraph.withLrt ? 'lrt' : 'mtr') : '-') + '|' + Math.floor(Date.now() / 300000);
+}
+function tripPlanNow(name, destIds) {
+  const place = placeOf(name);
+  if (!place || !herePoint) return null;
+  const from = { lat: herePoint.lat, lng: herePoint.lng };
+  return { name, from, place, cands: tripCandidates(from, place, destIds) };
+}
+// The plan, or undefined while it is being worked out.
+function tripPlanFor(name, destIds) {
+  const key = tripKey(name);
+  if (tripMemo.key === key) return tripMemo.plan;
+  miRailReady();                    // the railway, if it is not here yet; the key changes when it lands
+  if (tripTimerKey !== key) {
+    clearTimeout(tripTimer);
+    tripTimerKey = key;
+    tripTimer = setTimeout(() => {
+      tripTimer = 0;
+      if (tripTimerKey !== key) return;
+      let plan = null;
+      try { plan = tripPlanNow(name, destIds); } catch (error) { console.warn('Trip plan failed:', error); }
+      tripMemo = { key, name, plan };
+      tripTimerKey = '';
+      tripRedraw();
+      if (plan) tripLiveFor(plan, key);
+    }, TRIP_SETTLE_MS);
+  }
+  // The same place a moment ago (the phone moved, five minutes passed): that
+  // stays on the screen while the new answer is worked out, not a blink of
+  // 「正在找路線…」 under the rider's thumb.
+  return tripMemo.name === name ? tripMemo.plan : undefined;
+}
+// Ask for the first bus of the most promising options, then order again —
+// the ones on the screen (`shown`) before anything else.
+function tripLiveFor(plan, key, shown) {
+  const ranked = (shown || []).concat(plan.cands.slice()
+    .sort((a, b) => (a.total + (a.legs[0] && !tripIsRail(a.legs[0]) ? TRIP_BUS_WAIT_MIN : 0)) -
+                    (b.total + (b.legs[0] && !tripIsRail(b.legs[0]) ? TRIP_BUS_WAIT_MIN : 0))));
+  const legs = [];
+  for (const j of ranked) {
+    const first = j.legs[0];
+    if (!first || tripIsRail(first)) continue;
+    if (!legs.some(l => l.on.stop === first.on.stop && l.route === first.route)) legs.push(first);
+    if (legs.length >= TRIP_LIVE_ASK) break;
+  }
+  tripAskLive(legs).then(asked => { if (asked && tripMemo.key === key) tripRedraw(); }).catch(() => {});
+}
+// Only the box of ways is redrawn when an answer lands. Redrawing the lower
+// half rebuilt the 我要去 suggestions too, and a suggestion swapped out
+// between finger-down and finger-up is a tap that never happens.
+function tripRedraw() {
+  if (activeMode !== 'stop' || stopState.stop) return;
+  const box = document.querySelector('#stop-rest .tripbox');
+  const name = String(stopState.destQuery || '').trim();
+  const destIds = destIdsNow();
+  if (box) {
+    const html = (name && herePoint && destIds && destIds.size) ? tripSectionHtml(name, destIds) : '';
+    if (html) box.outerHTML = html; else box.remove();
+    return;
+  }
+  const typing = document.activeElement;
+  if (typing && (typing.id === 'stop-search' || typing.id === 'stop-dest')) return;
+  stopScheduleRefresh();
+}
+
+// ---- drawing it ----
+// A trip's buses take turns at these, so two buses in one trip are two
+// colours on the map (they were both blue): blue, then magenta — neither is
+// an MTR line's colour, the dotted grey of a walk, or the Light Rail's amber.
+const TRIP_BUS_COLOURS = ['#1d4ed8', '#a21caf'];
+function tripLegColour(leg, busNo) {
+  if (leg.co === 'mtr') return MTR_LINE_COLOURS[leg.lineCode] || '#6b7280';
+  if (leg.co === 'lrt') return '#b45309';
+  if (leg.co === 'ferry') return '#0f766e';
+  return TRIP_BUS_COLOURS[(busNo || 0) % TRIP_BUS_COLOURS.length];
+}
+// Every leg's colour, the buses counted in order.
+function tripColours(j) {
+  let buses = 0;
+  return j.legs.map(leg => tripLegColour(leg, (leg.co === 'mtr' || leg.co === 'lrt' || leg.co === 'ferry') ? 0 : buses++));
+}
+// A railway's name read at drawing time, not the one baked into the leg when
+// it was planned: switch to English and back, and 東涌綫 stays 東涌綫.
+function tripLineName(leg) {
+  if (leg.co === 'mtr') return railLineName(leg.lineCode);
+  if (leg.co === 'lrt') return railLineName(LR_LINE + leg.lineCode);
+  return leg.route;
+}
+function tripLegName(leg) {
+  if (leg.co === 'ferry') return '⛴ ' + T('tripFerry');
+  if (leg.co === 'mtr') return '🚇 ' + tripLineName(leg);
+  if (leg.co === 'lrt') return '🚈 ' + tripLineName(leg);
+  return '🚌 ' + leg.route;
+}
+// Minutes WITH their unit: 「🚌 887 12」 reads as one route number.
+function tripChipMin(n) { return T('tripChipMin').replace('{n}', n); }
+function tripChipsHtml(j) {
+  const walk = m => '<span class="tchip walk">🚶 ' + tripChipMin(m) + '</span>';
+  if (j.walkOnly) return walk(j.walkOn.minutes);
+  const chips = [];
+  if (j.walkOn.minutes) chips.push(walk(j.walkOn.minutes));
+  j.legs.forEach((leg, i) => {
+    const w = i > 0 ? j.transferWalks[i - 1] : null;
+    if (w && w.minutes) chips.push(walk(w.minutes));
+    chips.push('<span class="tchip ' + (tripIsRail(leg) ? 'rail' : leg.co === 'ferry' ? 'ferry' : 'bus') + '"' +
+               (tripIsRail(leg) ? ' style="border-left-color:' + tripLegColour(leg) + '"' : '') + '>' +
+               esc(tripLegName(leg)) + ' <span class="tmin">' + esc(tripChipMin(leg.minutes || 1)) + '</span></span>');
+  });
+  if (j.walkOff.minutes) chips.push(walk(j.walkOff.minutes));
+  return chips.join('<span class="tsep" aria-hidden="true">›</span>');
+}
+function tripClock(minutesFromNow) {
+  return new Date(Date.now() + minutesFromNow * 60000).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+}
+function tripTimesHtml(j) {
+  const t = j.times || tripTimes(j);
+  return t.lead > 0 || !t.estimated
+    ? esc(T('tripLeave').replace('{a}', tripClock(t.lead)).replace('{b}', tripClock(t.arrive)))
+    : esc(T('tripLeaveNow').replace('{b}', tripClock(t.arrive)));
+}
+// The top of an option: how long, how much, what it is best at.
+function tripTopHtml(j) {
+  const t = j.times || tripTimes(j);
+  const fare = tripFareHtml(j);
+  return '<span class="trtop"><span class="trtotal">' + esc(T('tripMins').replace('{n}', Math.round(t.arrive - t.lead))) + '</span>' +
+         (fare ? '<span class="trfare">' + fare + '</span>' : '') +
+         (j.tags || []).map(k => '<span class="trtag">' + esc(T(k)) + '</span>').join('') + '</span>';
+}
+
+// Step by step, for an opened option: where to walk, which bus or train,
+// how many stops, where to change and get off, and when it all ends.
+function tripStepsHtml(plan, j, index) {
+  const steps = [];
+  const at = x => [Number(x.lat), Number(x.long)];
+  const walkStep = (w, name, to, from) => '<li class="tstep">🚶 ' +
+    esc(T('tripWalkTo').replace('{n}', w.minutes).replace('{s}', name)) +
+    ' <a class="tmaplink" href="' + esc(walkUrl(to[0], to[1], from[0], from[1])) + '" target="_blank" rel="noopener">' +
+    esc(T('tripRouteLink')) + '</a></li>';
+  const from = [plan.from.lat, plan.from.lng], place = [plan.place.lat, plan.place.lng];
+  if (j.walkOnly) {
+    steps.push(walkStep(j.walkOn, plan.name, place, from));
+  } else {
+    const fares = new Map(tripFareParts(j).map(p => [p.at, p.fare]));
+    const colours = tripColours(j);     // the same colour as the leg on the map
+    const first = j.legs[0];
+    steps.push(walkStep(j.walkOn, stopName(first.on), at(first.on), from));
+    j.legs.forEach((leg, i) => {
+      if (i > 0) {
+        const prev = j.legs[i - 1], w = j.transferWalks[i - 1];
+        if (w && w.minutes) steps.push(walkStep(w, stopName(leg.on), at(leg.on), at(prev.off)));
+        else if (tripIsRail(prev) && tripIsRail(leg))
+          steps.push('<li class="tstep">🔁 ' + esc(T('tripChangeAt').replace('{s}', stopName(leg.on)).replace('{l}', tripLineName(leg))) + '</li>');
+        else steps.push('<li class="tstep">🔁 ' + esc(T('tripChangeSame')) + '</li>');
+      }
+      const fare = fares.has(i) && fares.get(i) !== null ? ' · <span class="rjfare">' + fareText(fares.get(i)) + '</span>' : '';
+      let html = '<li class="tstep ride"><span class="tline" style="border-left-color:' + colours[i] + '">';
+      if (tripIsRail(leg)) {
+        html += '<b>' + esc(tripLegName(leg)) + '</b>' + fare +
+                '<small>' + esc(T('tripRail').replace('{a}', stopName(leg.on)).replace('{b}', stopName(leg.off))
+                  .replace('{n}', leg.stops).replace('{m}', leg.minutes || 1)) + '</small>';
+      } else {
+        const towards = leg.key ? routeTerminus(leg.key) : '';
+        html += '<b>' + esc(tripLegName(leg)) + '</b>' +
+                (towards ? ' ' + esc(T('towards')) + ' ' + esc(towards) : '') + fare +
+                '<small>' + esc(T('tripRide').replace('{n}', leg.stops).replace('{m}', leg.minutes || 1)) + '</small>' +
+                '<small>' + esc(T('tripGetOff').replace('{s}', stopName(leg.off))) + '</small>';
+        if (i === 0) {
+          const live = j.times && j.times.live;
+          const line = live === null ? T('tripNoLive')
+            : live && live.none ? T('tripNoNext')
+            : live && live.wait !== undefined
+              ? (j.times.lead <= 0 ? T('tripNextNow') : T('tripNextBus').replace('{m}', live.wait).replace('{t}', tripClock(j.times.lead)))
+              : '';
+          if (line) html += '<small class="' + (live && live.wait !== undefined ? 'tlive' : 'test') + '">' + esc(line) + '</small>';
+        }
+        // The stop's own screen, filtered to where this bus is taking you:
+        // every bus from it there, with live times.
+        if (leg.co !== 'ferry')
+          html += '<button type="button" class="tstepbtn" data-stop-id="' + esc(leg.on.stop) +
+                  '" data-filter="' + esc(plainStopName(stopName(leg.off))) + '">' + esc(T('tripStopTimes')) + '</button>';
+      }
+      steps.push(html + '</span></li>');
+    });
+    if (j.walkOff.minutes) {
+      const last = j.legs[j.legs.length - 1];
+      steps.push(walkStep(j.walkOff, plan.name, place, at(last.off)));
+    }
+  }
+  const t = j.times || tripTimes(j);
+  steps.push('<li class="tstep end">🏁 ' + esc(T('tripArrive').replace('{t}', tripClock(t.arrive)).replace('{d}', plan.name)) + '</li>');
+  return '<div class="trdetail"><ol class="tsteps">' + steps.join('') + '</ol>' +
+    '<button type="button" class="mibtn" data-stop-act="tripmap" data-index="' + index + '">' +
+    '<span class="mibmain">' + esc(T('tripMapBtn')) + '</span>' +
+    '<span class="mibsub">' + esc(T('tripMapSub')) + '</span></button>' +
+    '<div class="tnote">' + esc(T('tripEstimate')) + '</div></div>';
+}
+
+// The section itself. '' when there is no position, no place, or the name
+// is so broad (道, 街) that it names half the territory.
+let tripShown = [];                  // the options on screen, for the taps
+function tripSectionHtml(name, destIds) {
+  tripShown = [];
+  if (!name || !herePoint || !stopIndex || !routeIndex || !destIds || !destIds.size ||
+      destIds.size > DEST_FAMILY_MAX) return '';
+  const plan = tripPlanFor(name, destIds);
+  const head = '<div class="tripbox"><div class="triphead">🧭 ' + esc(T('tripHead').replace('{d}', name)) + '</div>';
+  if (plan === undefined) return head + '<div class="tripwait">' + esc(T('tripWorking')) + '</div></div>';
+  if (!plan) return '';
+  const picks = tripPick(plan.cands);
+  if (!picks.length) return head + '<div class="tripwait">' + esc(T('tripNone')) + '</div></div>';
+  // Times age while the screen sits there; a first bus whose answer has gone
+  // stale is asked about again, and the list redraws when it comes.
+  if (picks.some(j => j.legs[0] && !tripIsRail(j.legs[0]) && tripLiveRows(j.legs[0]) === undefined))
+    tripLiveFor(plan, tripMemo.key, picks);
+  tripShown = picks.map(j => ({ plan, j }));
+  // Remembered by the trip, not its place in the list: live times can reorder it.
+  const open = stopState.tripOpenFor === name ? picks.findIndex(j => tripShape(j) === stopState.tripOpen) : -1;
+  return head + picks.map((j, i) =>
+    '<button type="button" class="tripopt' + (i === open ? ' open' : '') + '" data-stop-act="tripopen" data-index="' + i +
+      '" aria-expanded="' + (i === open) + '">' + tripTopHtml(j) +
+      '<span class="trchips">' + tripChipsHtml(j) + '</span>' +
+      '<span class="trtimes' + (j.times.estimated ? ' est' : '') + '">' + tripTimesHtml(j) + '</span></button>' +
+    (i === open ? tripStepsHtml(plan, j, i) : '')).join('') + '</div>';
 }
 
 // The route rows for the chosen pole, filtered by destination when one is
@@ -12847,7 +14159,9 @@ function stopRowsHtml() {
 // answer is "cross to MK752 and take the 60X", not a list of route numbers.
 // Station names that begin with what was typed, Chinese or English, one
 // line per name, shortest first — 金 lists 金鐘 before 金鐘道, "tue" lists
-// Tuen Mun. Names that merely contain the text follow if there is room.
+// Tuen Mun. Names that merely contain the text follow if there is room, and
+// last a name holding it only as where a ferry goes (中環碼頭 - 長洲及南丫島渡輪
+// for 長洲): still there to pick, but not above the island's own pier.
 const suggestMemo = new Map();
 function destSuggestions(q, max) {
   const needle = needleOf(q);
@@ -12861,7 +14175,7 @@ function destSuggestions(q, max) {
     let rank;
     if (nk === needle || ne === needle) rank = 0;
     else if (nk.startsWith(needle) || ne.startsWith(needle)) rank = 1;
-    else if (nk.includes(needle) || ne.includes(needle)) rank = 2;
+    else if (nk.includes(needle) || ne.includes(needle)) rank = onlyFerryServed(stop, needle) ? 3 : 2;
     else continue;
     const name = sc(stopName(stop));      // shown and typed back in the script the rider chose
     if (!name) continue;
@@ -13231,6 +14545,31 @@ document.getElementById('stopview').addEventListener('click', event => {
   }
   switch (el.dataset.stopAct) {
     case 'tomap':   swipeToTab(-1); break;   // slides in from the left, as the swipe does
+    // 去 X 的路線 with no position: find the phone, then the picker redraws with the trips.
+    case 'triplocate': withHere(() => {}); break;
+    // 去 X 的路線: one option open at a time, its steps under it; again to close.
+    case 'tripopen': {
+      const shown = tripShown[Number(el.dataset.index)];
+      if (!shown) break;
+      const shape = tripShape(shown.j);
+      const name = String(stopState.destQuery || '').trim();
+      const wasOpen = stopState.tripOpenFor === name && stopState.tripOpen === shape;
+      stopState.tripOpen = wasOpen ? '' : shape;
+      stopState.tripOpenFor = name;
+      stopScheduleRefresh();
+      break;
+    }
+    // ...and the whole trip on the map: every leg, where to get on, change and get off.
+    case 'tripmap': {
+      const shown = tripShown[Number(el.dataset.index)];
+      if (!shown) break;
+      const { plan, j } = shown;
+      tripRide = { trip: true, j, plan, name: plan.name,
+                   sig: 'trip|' + plan.name + '|' + tripShape(j) + '|' + plan.from.lat + ',' + plan.from.lng };
+      tripRideAt = ++mapSeq;
+      swipeToTab(-1);
+      break;
+    }
     // NO BUS GOES THERE: the MTR card's button. The 港鐵 tab opens on its
     // plan with the trip filled in — the station in 我要去, from where the
     // phone is, and the walk from the station to the place as the last step
@@ -13326,8 +14665,9 @@ document.getElementById('stopview').addEventListener('click', event => {
       // card's own search looks the whole START_REACH_M, every company; when
       // it finds a stop, so does this pin, and the two never disagree about
       // whether there is a bus. A stop whose buses this tab's index cannot
-      // show (Citybus, minibus…) is named rather than opened: its own screen
-      // would say there is no bus.
+      // show yet (Citybus, minibus… in the moment before they are folded
+      // in) is named rather than opened: its own screen would say there is
+      // no bus.
       const far = busWithinReach(here, destIds, stopState.destQuery);
       if (far && !far.indexed) {
         status.textContent = T('startOtherCo')
@@ -17565,9 +18905,10 @@ function noteRouteRide() {
 
 const hasPlace = x => x && isFinite(Number(x.lat)) && isFinite(Number(x.long));
 
-// The bus the 巴士 page would tell you to catch — the soonest one that goes
-// to the destination — and the stops it calls at on the way. null when the
-// page has no stop, no destination, or no live times yet.
+// The bus the 巴士 page would tell you to catch — the one that gets there
+// first, which is the top row of its list — and the stops it calls at on
+// the way. null when the page has no stop, no destination, or no live times
+// yet.
 function currentStopRide() {
   const st = stopState, stop = st.stop;
   if (!stop || !st.destFilter || !st.rows || !routeIndex) return null;
@@ -17588,7 +18929,11 @@ function currentStopRide() {
     const t = row.eta ? new Date(row.eta).getTime() : Infinity;
     const m = isFinite(t) ? Math.round((t - now) / 60000) : Infinity;
     if (m < 0) continue;
-    if (!best || m < best.m) best = { row, key, seq, reach, t, m };
+    // FIRST THERE, NOT FIRST AWAY — the list's own order. At 東涌 the 41-minute
+    // boat to 大澳 can sail before the 28-minute one; the list puts the second
+    // on top, and the map (both ⛴) used to draw the first.
+    const at = m + rideMinutesFrom(key, seq, reach.stopsAway);
+    if (!best || at < best.at || (at === best.at && m < best.m)) best = { row, key, seq, reach, t, m, at };
   }
   if (!best) return null;
   const toSeq = best.seq + best.reach.stopsAway;
@@ -17606,7 +18951,9 @@ function currentStopRide() {
   }
   if (stops.length < 2 || nums[0] !== 0 || nums[nums.length - 1] !== best.reach.stopsAway) return null;
   const row = best.row;
-  return { route: String(row.route), stops, nums, count: best.reach.stopsAway, row, key: best.key, toEnd: false,
+  // A ferry is called by the ⛴, not by the Transport Department's number
+  // (7006) that nobody on a pier knows — as the page's own rows call it.
+  return { route: routeTag({ co: row.co, route: row.route }), stops, nums, count: best.reach.stopsAway, row, key: best.key, seq: best.seq, toEnd: false,
            dest: lang === 'zh' ? (row.dest_tc || row.dest_en) : row.dest_en,
            minutes: isFinite(best.m) ? best.m : null,
            sig: 'stop|' + stopRideSig + '|' + best.key };
@@ -17639,20 +18986,92 @@ function showRideOnMap() {
   const sources = [
     { at: stopRideAt,  on: !!stopRideSig,  get: currentStopRide },
     { at: routeRideAt, on: !!routeRideSig, get: currentRouteRide },
+    { at: tripRideAt,  on: !!tripRide,     get: () => tripRide },
   ].filter(x => x.on).sort((a, b) => b.at - a.at);
   for (const source of sources) {
     if (source.at <= mapDrawnAt) break;
     const ride = source.get();
-    if (ride) { drawRide(ride); return true; }
+    if (ride) { (ride.trip ? drawTrip : drawRide)(ride); return true; }
   }
   const card = document.getElementById('ridecard');
   if (card && card.classList.contains('on')) {
     for (const source of sources) {
       const ride = source.get();
-      if (ride && ride.sig === card.dataset.sig) { paintRideCard(ride); break; }
+      if (ride && ride.sig === card.dataset.sig) { (ride.trip ? paintTripCard : paintRideCard)(ride); break; }
     }
   }
   return false;
+}
+
+// A WHOLE TRIP from 去 X 的路線: each bus or train in its own colour (a
+// line's own colour for the MTR), the walks dotted, every place to get on
+// numbered in order, 上車 named at the first and the place named at the end.
+function drawTrip(trip) {
+  resetTrip({ keepRouteStops: true });
+  mapDrawnAt = ++mapSeq;
+  map.getContainer().classList.remove('ridetight');
+  journeyMode = true;
+  stopLayer.clearLayers();
+  const j = trip.j, plan = trip.plan;
+  const at = x => [Number(x.lat), Number(x.long)];
+  const start = [plan.from.lat, plan.from.lng], end = [plan.place.lat, plan.place.lng];
+  const points = [start, end];
+  const walk = (a, b) => L.polyline([a, b], { color:'#374151', weight:5, opacity:.85, dashArray:'2 10' }).addTo(routeLayer);
+  const colours = tripColours(j);
+  let prev = start;
+  j.legs.forEach((leg, i) => {
+    const shape = shapeForLeg(leg);
+    walk(prev, shape[0]);
+    L.polyline(shape, { color:'white', weight:12, opacity:.9 }).addTo(routeLayer);
+    L.polyline(shape, { color: colours[i], weight:7, opacity:1 }).addTo(routeLayer);
+    points.push(...shape);
+    if (i > 0) L.marker(at(leg.on), { zIndexOffset: 800, icon: L.divIcon({ className:'', iconSize:[34, 34], iconAnchor:[17, 17],
+      html:'<div class="tripdot" style="background:' + colours[i] + '">' + (i + 1) + '</div>' }) })
+      .bindPopup('<b>' + esc(T('rideOn') + ' ' + tripLegName(leg)) + '</b><br>' + esc(stopName(leg.on)))
+      .addTo(routeLayer);
+    prev = shape[shape.length - 1];
+  });
+  walk(prev, end);
+  L.circleMarker(start, { radius:8, color:'white', weight:3, fillColor:'#166534', fillOpacity:1 })
+    .bindPopup('<b>' + esc(T('tripStart')) + '</b>').addTo(routeLayer);
+  paintTripCard(trip);
+  paintMapReset();
+  fitMapTo(L.latLngBounds(points), ridePadding);
+  paintRideZoom();
+  // The two ends named, each hanging away from the other, as drawRide does.
+  const first = j.legs.length ? at(j.legs[0].on) : start;
+  const startSouth = first[0] <= end[0], eastStart = first[1] > end[1];
+  if (j.legs.length)
+    rideEndLabel(first, 'start', '1', T('rideOn') + ' ' + tripLegName(j.legs[0]), stopName(j.legs[0].on),
+                 startSouth ? 'down' : 'up', eastStart ? 'toleft' : 'toright');
+  rideEndLabel(end, 'end', '🏁', T('tripDest'), plan.name,
+               startSouth ? 'up' : 'down', eastStart ? 'toright' : 'toleft');
+  keepRideLabelsInView();
+  // Once more after the card has settled: its chips wrap to their final
+  // height a moment after the first layout, and on a 375×667 phone the card
+  // then covered the top of the 上車 label.
+  setTimeout(() => { if (document.body.classList.contains('mapopen')) keepRideLabelsInView(); }, 200);
+  const t = j.times || tripTimes(j);
+  status.textContent = T('tripHead').replace('{d}', plan.name) + ' · ' + T('tripMins').replace('{n}', Math.round(t.arrive - t.lead));
+}
+
+// The card over the map: how long, how much, when you leave and arrive, and
+// the steps in one line. The full steps are on the 巴士 page, one tap back.
+// No title: the place is named on the map at the 🏁 and in the bar at the
+// top, and a long name in two lines cost the map a fifth of a small screen.
+function paintTripCard(trip) {
+  const card = document.getElementById('ridecard');
+  if (!card) return;
+  const j = trip.j;
+  j.times = tripTimes(j);           // aged to now: the card outlives the moment it was drawn
+  card.innerHTML =
+    '<div class="trline">' + tripTopHtml(j) + '</div>' +
+    '<div class="trchips">' + tripChipsHtml(j) + '</div>' +
+    '<div class="rcarrive">🏁 ' + tripTimesHtml(j) + '</div>';
+  card.dataset.sig = trip.sig;
+  card.classList.toggle('compact', window.innerHeight < 760);
+  card.classList.add('on', 'trip');
+  if (document.body.classList.contains('mapopen')) keepRideLabelsInView();
 }
 
 function drawRide(ride) {
@@ -17693,7 +19112,7 @@ function drawRide(ride) {
   // and off without reading the card.)
   const first = at(ride.stops[0]), final = at(ride.stops[last]);
   const startSouth = first[0] <= final[0], eastStart = first[1] > final[1];
-  rideEndLabel(first, 'start', '🚌', T('rideOn'), stopName(ride.stops[0]),
+  rideEndLabel(first, 'start', rideIcon(ride), T('rideOn'), stopName(ride.stops[0]),
                startSouth ? 'down' : 'up', eastStart ? 'toleft' : 'toright');
   rideEndLabel(final, 'end', String(count), T(ride.toEnd ? 'rideEnd' : 'rideOff').replace('{n}', count),
                stopName(ride.stops[last]), startSouth ? 'up' : 'down', eastStart ? 'toright' : 'toleft');
@@ -17751,31 +19170,29 @@ function paintRideZoom() {
 }
 map.on('zoomend', paintRideZoom);
 
-// The 巴士 page's own estimate, worked out the same way so the two screens
-// never disagree: the next bus's minutes, plus the ride — the ferry table
-// for a crossing, MINUTES_PER_STOP a stop for a bus.
+// The 巴士 page's own estimate, worked out by the same helper so the two
+// screens never disagree: the next bus's minutes, plus rideMinutesFrom.
 function rideArrivalTime(ride) {
   if (ride.minutes === null) return '';
-  const stopsAway = ride.count;
-  const info = ride.row.co === 'FERRY' && ride.key ? ferryInfo.get(ride.key) : null;
-  const at = Number(ride.row.seq) || 1;
-  const rideMins = info && info.mins[at - 1 + stopsAway] !== undefined
-    ? Number(info.mins[at - 1 + stopsAway]) - Number(info.mins[at - 1] || 0)
-    : stopsAway * MINUTES_PER_STOP;
+  const rideMins = rideMinutesFrom(ride.key, ride.seq || ride.row.seq, ride.count);
   return new Date(Date.now() + (ride.minutes + rideMins) * 60000)
     .toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
 }
 
+// The boat or the bus, for the card and the 上車 label.
+function rideIcon(ride) { return String((ride.row || {}).co || '').toUpperCase() === 'FERRY' ? '\u26F4' : '🚌'; }
+
 function paintRideCard(ride) {
   const card = document.getElementById('ridecard');
   if (!card) return;
+  card.classList.remove('trip');   // a single ride's card, not a whole trip's (paintTripCard)
   if (!ride) { card.classList.remove('on'); card.innerHTML = ''; card.dataset.sig = ''; return; }
   const last = ride.stops.length - 1, count = ride.count;
   const arrive = rideArrivalTime(ride);
   const next = ride.minutes === null ? ''
     : ride.minutes <= 0 ? T('rideNextNow') : T('rideNext').replace('{m}', ride.minutes);
   card.innerHTML =
-    '<div class="rchead">🚌 ' + esc(ride.route) + (ride.dest ? ' <span>' + esc(T('towards')) + ' ' + esc(ride.dest) + '</span>' : '') + '</div>' +
+    '<div class="rchead">' + (rideIcon(ride) === '🚌' ? '🚌 ' + esc(ride.route) : esc(ride.route)) + (ride.dest ? ' <span>' + esc(T('towards')) + ' ' + esc(ride.dest) + '</span>' : '') + '</div>' +
     '<div class="rccount">' + esc(T(ride.toEnd ? 'rideToEnd' : 'rideCount').replace('{n}', count)) + '</div>' +
     (arrive ? '<div class="rcarrive">🏁 ' + T(ride.toEnd ? 'rideArriveEnd' : 'rideArrive').replace('{t}', '<b>' + esc(arrive) + '</b>') + '</div>' : '') +
     '<div class="rcends">🟢 ' + esc(stopName(ride.stops[0])) + ' → 🔴 ' + esc(stopName(ride.stops[last])) + '</div>' +
@@ -18508,8 +19925,9 @@ function spotCardHtml(s) {
 // at a pole. Nothing here re-implements any of it.
 
 // EVERYTHING THE ANSWER DEPENDS ON, BEFORE THE ANSWER IS GIVEN.
-// The bus tab builds only the KMB index, because that is all it needs to
-// answer "which bus is coming". A place is different: The Peak, Stanley,
+// The bus tab used to build only the KMB index (it folds every company in
+// now, since 4 Oct 2026 — stopEnsureNetwork). A place cannot wait for a visit
+// to that tab: The Peak, Stanley,
 // Repulse Bay and Aberdeen are Citybus territory, and with only the KMB list
 // loaded the app told a visitor standing at the Peak Tram terminus that there
 // was no bus stop within a short walk — nearly a kilometre of Mid-Levels
@@ -19034,6 +20452,707 @@ document.getElementById('spotfilter').addEventListener('click', openFilterSheet)
   const reset = document.getElementById('spot-reset');
   if (reset) reset.addEventListener('click', () => { resetMapView(); input.blur(); });
 })();
+
+
+// ============================================================
+// BUG REPORTS (tester mode)
+// ============================================================
+// A tester taps 🐞 → the app takes a screenshot of exactly what is on screen
+// → the tester drags a box round the problem → writes or records what
+// happened → the report is saved on the phone (IndexedDB) and sent when there
+// is a connection. Nothing is lost offline: a report that cannot be sent
+// stays under 我的回報 in SETTINGS and goes the next time the app is open
+// with a signal. (An iPhone does not let a web page send in the background,
+// so "later" means "next time the app is open and online".)
+//
+// WHERE THEY GO: BUG_INBOX_URL (top of this script), a Google Apps Script
+// that writes one row per report into the "GoHK bug reports" Google Sheet and
+// keeps the screenshot and recording in a Drive folder beside it — see
+// bug-inbox/Code.gs and bug-inbox/SETUP.md. The sheet's Status column is
+// where the developer decides: New → To-do next / Won't fix / Fixed.
+//
+// THE SCREENSHOT. An iPhone does not let a web page photograph the screen at
+// all, so html2canvas (MIT, 1.4.1, the file beside this one, npm integrity
+// checked) redraws the page into a picture itself. It is fetched only once
+// tester mode is on — 47 KB that riders never pay for — and the service
+// worker keeps it, so a tester can report offline. If it cannot be had (first
+// use with no signal) the box is drawn on the live screen instead, and the
+// report goes without a picture but with what was under the box.
+const BUG_VOICE_MAX_S = 60;       // a short message, not a podcast
+const BUG_KEEP_SENT = 30;         // sent reports listed in SETTINGS; older ones dropped
+
+function bugTesterOn() {
+  try { return localStorage.getItem('gohk-tester') === '1'; } catch (e) { return false; }
+}
+// Ever saved a report on this phone? Riders who never turned tester mode on
+// never open the report store at all.
+function bugEverUsed() {
+  try { return localStorage.getItem('gohk-bug-used') === '1'; } catch (e) { return false; }
+}
+
+function bugApplyTester() {
+  document.body.classList.toggle('bugtester', bugTesterOn());
+  const btn = document.getElementById('bugbtn');
+  if (btn) { btn.title = T('bugBtn'); btn.setAttribute('aria-label', T('bugBtn')); }
+}
+
+// ---- the store ------------------------------------------------------
+// Pictures and recordings are kept as ArrayBuffers, not Blobs: every browser
+// can put an ArrayBuffer in IndexedDB, and older iPhones could not do Blobs.
+function bugDb() {
+  if (bugDbReady) return bugDbReady;
+  bugDbReady = new Promise(resolve => {
+    let request;
+    try { request = indexedDB.open('gohk-bugs', 1); } catch (e) { resolve(null); return; }
+    request.onupgradeneeded = () => request.result.createObjectStore('reports', { keyPath: 'id' });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => resolve(null);
+  });
+  return bugDbReady;
+}
+async function bugStore(mode, work) {
+  const db = await bugDb();
+  if (!db) throw new Error('no IndexedDB');
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('reports', mode);
+    const request = work(tx.objectStore('reports'));
+    let result;
+    if (request) request.onsuccess = () => { result = request.result; };
+    tx.oncomplete = () => resolve(result);
+    tx.onerror = tx.onabort = () => reject(tx.error || new Error('IndexedDB'));
+  });
+}
+// Declarations, not const arrows: SETTINGS calls these, and a function
+// declaration exists from the first line of the script.
+function bugPut(rec) { return bugStore('readwrite', st => st.put(rec)); }
+function bugDel(id) { return bugStore('readwrite', st => st.delete(id)); }
+// Newest first. Never rejects: no store reads as no reports.
+function bugAll() {
+  return bugStore('readonly', st => st.getAll())
+    .then(list => (list || []).sort((a, b) => String(b.created).localeCompare(String(a.created))))
+    .catch(() => []);
+}
+
+function bugBuf(blob) {
+  return blob.arrayBuffer ? blob.arrayBuffer() : new Response(blob).arrayBuffer();
+}
+function bugB64(buf) {
+  const bytes = new Uint8Array(buf);
+  let text = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(text);
+}
+
+// ---- what the app was doing -----------------------------------------
+// Everything a developer needs to stand where the tester stood, and nothing
+// that says where the tester IS: the start and destination go by NAME only,
+// never as coordinates, and the GPS position is not read at all.
+function bugContext() {
+  // Every search box on screen that has something in it, by its id. Each tab
+  // has its own boxes (車站's 我要去 is not the planner's 目的地), so they are
+  // found rather than listed — a list would silently miss the next new one.
+  const typed = {};
+  document.querySelectorAll('input[type="text"], input[type="search"], input:not([type])').forEach(el => {
+    if (!el.value || !el.offsetParent || el.closest('#bugsheet')) return;
+    typed[el.id || el.placeholder || 'input'] = String(el.value).slice(0, 80);
+  });
+  const panel = document.getElementById('panel');
+  return {
+    page: activeMode,
+    panel: panel ? panel.className.replace(/\bslidefrom\w+/g, '').trim() : '',
+    lang: lang === 'zh' ? (script === 'sc' ? 'zh-Hans' : 'zh-Hant') : 'en',
+    textSize: textScale,
+    senior: elderly,
+    screen: window.innerWidth + 'x' + window.innerHeight + ' @' + (window.devicePixelRatio || 1) + 'x',
+    installed: isInstalled(),
+    online: navigator.onLine,
+    device: String(navigator.userAgent || '').slice(0, 220),
+    typed,
+    chosen: { start: startPoint ? String(startPoint.label || '').slice(0, 80) : '',
+              end:   endPoint   ? String(endPoint.label   || '').slice(0, 80) : '' },
+    pageDate: document.lastModified,
+    messages: bugTrail.slice(),
+    errors: bugErrors.slice(-15),
+  };
+}
+// Which build: the service worker's cache is named after sw.js's VERSION.
+async function bugBuild() {
+  try {
+    const names = (await caches.keys()).filter(n => n.indexOf('gohk-') === 0);
+    return names.join(', ') || 'no app cache';
+  } catch (e) { return 'unknown'; }
+}
+
+// The last ten things the app told the rider — the trail that led to the bug.
+(function watchBugTrail() {
+  if (typeof MutationObserver === 'undefined') return;
+  new MutationObserver(() => {
+    const text = status.textContent.trim();
+    if (!text || (bugTrail.length && bugTrail[bugTrail.length - 1].msg === text)) return;
+    bugTrail.push({ t: new Date().toISOString(), msg: text.slice(0, 200) });
+    if (bugTrail.length > 10) bugTrail.shift();
+  }).observe(status, { childList: true, characterData: true, subtree: true });
+})();
+
+// ---- the screenshot -------------------------------------------------
+function bugLoadShooter() {
+  if (window.html2canvas) return Promise.resolve(window.html2canvas);
+  if (!bugShooterLoading) {
+    bugShooterLoading = new Promise(resolve => {
+      const tag = document.createElement('script');
+      tag.src = 'html2canvas.min.js';
+      tag.onload = () => resolve(window.html2canvas || null);
+      tag.onerror = () => { tag.remove(); bugShooterLoading = null; resolve(null); };
+      document.head.appendChild(tag);
+    });
+  }
+  return bugShooterLoading;
+}
+
+// The visible screen, at up to twice its CSS size. The 🐞 and the report's
+// own screens are left out. Map tiles come from the Lands Department with an
+// open CORS header, so they draw; anything that cannot be read is skipped
+// rather than spoiling the picture.
+async function bugCapture() {
+  const shooter = await bugLoadShooter();
+  if (!shooter) return null;
+  try {
+    return await shooter(document.body, {
+      useCORS: true, logging: false, backgroundColor: '#ffffff', imageTimeout: 4000,
+      scale: Math.min(window.devicePixelRatio || 1, 2),
+      x: window.scrollX, y: window.scrollY, width: window.innerWidth, height: window.innerHeight,
+      windowWidth: window.innerWidth, windowHeight: window.innerHeight,
+      ignoreElements: el => el.id === 'bugbtn' || el.id === 'bugshot' || el.id === 'bugsheet',
+    });
+  } catch (e) {
+    bugNoteError('screenshot failed: ' + (e && e.message ? e.message : e), 'bugCapture');
+    return null;
+  }
+}
+
+// What the box was drawn over, read from the live page: a short CSS path and
+// the words, so the developer can find the exact element without guessing.
+function bugPath(el) {
+  const parts = [];
+  for (let n = el; n && n !== document.body && parts.length < 4; n = n.parentElement) {
+    let part = n.tagName.toLowerCase();
+    if (n.id) { parts.unshift(part + '#' + n.id); break; }
+    const raw = typeof n.className === 'string' ? n.className : (n.className && n.className.baseVal) || '';
+    const classes = raw.trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    if (classes.length) part += '.' + classes.join('.');
+    parts.unshift(part);
+  }
+  return parts.join(' > ');
+}
+function bugUnderBox(box) {
+  const shot = document.getElementById('bugshot');
+  const was = shot.style.visibility;
+  shot.style.visibility = 'hidden';          // hit-test the page, not the overlay
+  const seen = new Set(), found = [];
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) {
+      const el = document.elementFromPoint(box.x + box.w * (i + 0.5) / 4, box.y + box.h * (j + 0.5) / 4);
+      if (!el || seen.has(el) || el.closest('#bugbtn, #bugshot, #bugsheet')) continue;
+      seen.add(el);
+      found.push({ path: bugPath(el),
+                   text: String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120) });
+    }
+  }
+  shot.style.visibility = was;
+  return found.slice(0, 10);
+}
+
+// ---- step 1: the button ---------------------------------------------
+// A tap starts a report; a drag moves the tab up or down out of the way and
+// is remembered. Pointer events, so a finger and a mouse behave the same.
+(function wireBugButton() {
+  const btn = document.getElementById('bugbtn');
+  if (!btn) return;
+  const clampTop = y => Math.max(60, Math.min(window.innerHeight - 140, y));
+  try {
+    const saved = Number(localStorage.getItem('gohk-bugbtn-top'));
+    if (saved > 0) btn.style.top = clampTop(saved) + 'px';
+  } catch (e) {}
+  let down = false, dragged = false, startY = 0, startTop = 0;
+  btn.addEventListener('pointerdown', e => {
+    down = true; dragged = false; startY = e.clientY; startTop = btn.getBoundingClientRect().top;
+    try { btn.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  btn.addEventListener('pointermove', e => {
+    if (!down || (!dragged && Math.abs(e.clientY - startY) < 8)) return;
+    dragged = true;
+    btn.style.top = clampTop(startTop + e.clientY - startY) + 'px';
+  });
+  const end = () => {
+    if (!down) return;
+    down = false;
+    if (dragged) { try { localStorage.setItem('gohk-bugbtn-top', String(parseInt(btn.style.top, 10))); } catch (e) {} }
+  };
+  btn.addEventListener('pointerup', end);
+  btn.addEventListener('pointercancel', end);
+  btn.addEventListener('click', () => {
+    if (dragged) { dragged = false; return; }   // the end of a drag is not a tap
+    bugStart();
+  });
+})();
+
+async function bugStart() {
+  if (bugDraft) return;                       // one report at a time
+  const btn = document.getElementById('bugbtn');
+  bugDraft = { id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+               created: new Date().toISOString(), box: null, under: [], shot: null, voice: null };
+  // Read the screen's state BEFORE anything of ours changes it.
+  bugDraft.ctx = bugContext();
+  btn.textContent = '⏳';
+  btn.disabled = true;
+  bugDraft.canvas = await bugCapture();
+  btn.textContent = '🐞';
+  btn.disabled = false;
+  bugPaintCount();
+  bugOpenShot();
+}
+
+// ---- step 2: box the problem ----------------------------------------
+function bugOpenShot() {
+  const d = bugDraft;
+  const wrap = document.getElementById('bugshot');
+  const w = window.innerWidth, h = window.innerHeight;
+  wrap.innerHTML = '';
+  // With a screenshot the screen is frozen as it was; without one the tester
+  // draws on the live screen, under a light tint so it is clear it is waiting.
+  wrap.style.background = d.canvas ? '#ffffff' : '';
+  if (d.canvas) {
+    d.canvas.style.width = w + 'px';
+    d.canvas.style.height = h + 'px';
+    wrap.appendChild(d.canvas);
+  }
+  const ink = document.createElement('canvas');
+  const k = Math.min(window.devicePixelRatio || 1, 2);
+  ink.width = Math.round(w * k); ink.height = Math.round(h * k);
+  ink.style.width = w + 'px'; ink.style.height = h + 'px';
+  wrap.appendChild(ink);
+  const hint = document.createElement('div');
+  hint.className = 'bughint';
+  hint.textContent = T(d.canvas ? 'bugDrawHint' : 'bugNoShot');
+  wrap.appendChild(hint);
+  const bar = document.createElement('div');
+  bar.className = 'bugbar';
+  bar.innerHTML = '<button type="button" data-bugs="cancel">' + T('bugCancel') + '</button>' +
+                  '<button type="button" data-bugs="nobox">' + T('bugNoBox') + '</button>' +
+                  '<button type="button" class="go" data-bugs="next" disabled>' + T('bugNext') + '</button>';
+  wrap.appendChild(bar);
+  const next = bar.querySelector('[data-bugs="next"]');
+
+  const pen = ink.getContext('2d');
+  const paint = () => {
+    pen.clearRect(0, 0, ink.width, ink.height);
+    const b = d.box;
+    if (!b) return;
+    pen.lineWidth = 7 * k; pen.strokeStyle = '#ffffff';
+    pen.strokeRect(b.x * k, b.y * k, b.w * k, b.h * k);
+    pen.lineWidth = 4 * k; pen.strokeStyle = '#dc2626';
+    pen.strokeRect(b.x * k, b.y * k, b.w * k, b.h * k);
+  };
+  let from = null;
+  ink.addEventListener('pointerdown', e => {
+    from = { x: e.clientX, y: e.clientY };
+    d.box = null; paint();
+    try { ink.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  ink.addEventListener('pointermove', e => {
+    if (!from) return;
+    const x = Math.max(0, Math.min(w, e.clientX)), y = Math.max(0, Math.min(h, e.clientY));
+    d.box = { x: Math.min(from.x, x), y: Math.min(from.y, y), w: Math.abs(x - from.x), h: Math.abs(y - from.y) };
+    paint();
+  });
+  const lift = () => {
+    if (!from) return;
+    from = null;
+    // A stray tap is not a box.
+    if (d.box && (d.box.w < 12 || d.box.h < 12)) d.box = null;
+    paint();
+    next.disabled = !d.box;
+  };
+  ink.addEventListener('pointerup', lift);
+  ink.addEventListener('pointercancel', lift);
+  bar.addEventListener('click', e => {
+    const act = e.target.closest('[data-bugs]');
+    if (!act) return;
+    if (act.dataset.bugs === 'cancel') bugCancel();
+    else bugBoxDone(act.dataset.bugs === 'next');
+  });
+  wrap.classList.add('open');
+}
+
+async function bugBoxDone(keepBox) {
+  const d = bugDraft;
+  if (!d) return;
+  if (keepBox && d.box) {
+    d.box = { x: Math.round(d.box.x), y: Math.round(d.box.y), w: Math.round(d.box.w), h: Math.round(d.box.h),
+              screenW: window.innerWidth, screenH: window.innerHeight };
+    d.under = bugUnderBox(d.box);
+  } else {
+    d.box = null;
+  }
+  d.shot = await bugCompose(d);
+  d.canvas = null;                            // the full-size picture is no longer needed
+  const wrap = document.getElementById('bugshot');
+  wrap.classList.remove('open');
+  wrap.innerHTML = '';
+  bugOpenSheet();
+}
+
+// The screenshot with the box burnt in, at most 1000 px wide (plenty to read
+// a phone screen, and a fraction of the bytes of a full-resolution one).
+async function bugCompose(d) {
+  const src = d.canvas;
+  if (!src) return null;
+  try {
+    const fit = Math.min(1, 1000 / src.width);
+    const out = document.createElement('canvas');
+    out.width = Math.round(src.width * fit);
+    out.height = Math.round(src.height * fit);
+    const pen = out.getContext('2d');
+    pen.drawImage(src, 0, 0, out.width, out.height);
+    if (d.box) {
+      const k = out.width / d.box.screenW;
+      pen.lineWidth = 7 * k; pen.strokeStyle = '#ffffff';
+      pen.strokeRect(d.box.x * k, d.box.y * k, d.box.w * k, d.box.h * k);
+      pen.lineWidth = 4 * k; pen.strokeStyle = '#dc2626';
+      pen.strokeRect(d.box.x * k, d.box.y * k, d.box.w * k, d.box.h * k);
+    }
+    const blob = await new Promise(resolve => out.toBlob(resolve, 'image/jpeg', 0.72));
+    if (!blob) return null;
+    return { type: 'image/jpeg', buf: await bugBuf(blob), url: URL.createObjectURL(blob) };
+  } catch (e) {
+    // A picture the page is not allowed to read (a tile without CORS) ends
+    // here. The report still goes, with the box and what was under it.
+    bugNoteError('screenshot not usable: ' + (e && e.message ? e.message : e), 'bugCompose');
+    return null;
+  }
+}
+
+// ---- step 3: say what happened --------------------------------------
+function bugOpenSheet() {
+  const d = bugDraft;
+  const card = document.getElementById('bugcard');
+  card.innerHTML =
+    '<div class="bugtitle">' + T('bugTitle') + '</div>' +
+    (d.shot ? '<img class="bugthumb" src="' + d.shot.url + '" alt="">' +
+              '<label class="bugcheck"><input type="checkbox" id="bugwithshot" checked> ' + T('bugIncludeShot') + '</label>'
+            : '') +
+    '<label class="buglabel" for="bugnote">' + T('bugWhat') + '</label>' +
+    '<textarea id="bugnote" rows="4" maxlength="2000" placeholder="' + esc(T('bugPlaceholder')) + '"></textarea>' +
+    '<div class="bugtip">' + T('bugMicTip') + '</div>' +
+    '<div class="bugvoice" id="bugvoice"></div>' +
+    '<div class="bugtip" id="bugsay" style="color:var(--red)"></div>' +
+    '<div class="bugalso">' + T('bugAlsoSent') + '</div>' +
+    '<div class="bugactions">' +
+      '<button type="button" class="bugsave" id="bugsave">' + T('bugSave') + '</button>' +
+      '<button type="button" class="dircancel" id="bugcancel">' + T('bugCancel') + '</button>' +
+    '</div>';
+  bugPaintVoice();
+  document.getElementById('bugsheet').classList.add('open');
+}
+// Messages for the sheet go IN the sheet: the top bar is underneath its tint.
+function bugSheetSay(text) {
+  const el = document.getElementById('bugsay');
+  if (el) el.textContent = text || '';
+}
+
+function bugClock(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+function bugPaintVoice() {
+  const box = document.getElementById('bugvoice');
+  const d = bugDraft;
+  if (!box || !d) return;
+  if (d.recorder) {
+    const label = T('bugStop') + ' ' + bugClock(Math.round((Date.now() - d.recStarted) / 1000));
+    const stop = box.querySelector('[data-bugv="stop"]');
+    // Only the label changes while recording. Rebuilding the button twice a
+    // second would swallow the tap that lands between the two.
+    if (stop) stop.textContent = label;
+    else box.innerHTML = '<button type="button" class="rec" data-bugv="stop">' + label + '</button>';
+  } else if (d.voice) {
+    box.innerHTML = '<button type="button" data-bugv="play">' + T('bugPlay') + ' ' + bugClock(d.voice.secs) + '</button>' +
+                    '<button type="button" data-bugv="del">' + T('bugDelVoice') + '</button>';
+  } else {
+    box.innerHTML = '<button type="button" data-bugv="rec">' + T('bugRecord') + '</button>';
+  }
+}
+
+// Recording works with no signal: it is the phone's own microphone into the
+// phone's own memory. iPhones record AAC (audio/mp4), Android/Chrome Opus.
+async function bugStartRecording() {
+  const d = bugDraft;
+  if (!d || d.recorder) return;
+  bugSheetSay('');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+    bugSheetSay(T('bugNoMic')); return;
+  }
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { bugSheetSay(T(e && e.name === 'NotAllowedError' ? 'bugMicDenied' : 'bugNoMic')); return; }
+  if (bugDraft !== d) { stream.getTracks().forEach(t => t.stop()); return; }   // cancelled meanwhile
+  const type = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
+    .find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+  let recorder;
+  try { recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined); }
+  catch (e) { stream.getTracks().forEach(t => t.stop()); bugSheetSay(T('bugNoMic')); return; }
+  const chunks = [];
+  d.recorder = recorder;
+  d.recStarted = Date.now();
+  d.recDone = new Promise(resolve => {
+    recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    recorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());          // the red mic light goes off
+      clearInterval(d.recTimer);
+      const secs = Math.max(1, Math.round((Date.now() - d.recStarted) / 1000));
+      const blob = new Blob(chunks, { type: recorder.mimeType || type || 'audio/webm' });
+      d.recorder = null;
+      if (blob.size) d.voice = { type: blob.type, secs, buf: await bugBuf(blob), url: URL.createObjectURL(blob) };
+      bugPaintVoice();
+      resolve();
+    };
+  });
+  recorder.start(1000);
+  d.recTimer = setInterval(() => {
+    if (Date.now() - d.recStarted >= BUG_VOICE_MAX_S * 1000) bugStopRecording();
+    else bugPaintVoice();
+  }, 500);
+  bugPaintVoice();
+}
+function bugStopRecording() {
+  const d = bugDraft;
+  if (!d || !d.recorder) return Promise.resolve();
+  try { if (d.recorder.state !== 'inactive') d.recorder.stop(); } catch (e) {}
+  return d.recDone || Promise.resolve();
+}
+
+document.getElementById('bugsheet').addEventListener('click', event => {
+  const v = event.target.closest('[data-bugv]');
+  const d = bugDraft;
+  if (v && d) {
+    const what = v.dataset.bugv;
+    if (what === 'rec') bugStartRecording();
+    else if (what === 'stop') bugStopRecording();
+    else if (what === 'play' && d.voice) { try { new Audio(d.voice.url).play(); } catch (e) {} }
+    else if (what === 'del' && d.voice) { URL.revokeObjectURL(d.voice.url); d.voice = null; bugPaintVoice(); }
+    return;
+  }
+  if (event.target.closest('#bugsave')) { bugSave(); return; }
+  if (event.target.closest('#bugcancel')) bugCancel();
+  // Deliberately NOT closed by tapping the tint: that would throw away a
+  // report someone has just spent a minute writing.
+});
+
+function bugClose() {
+  const d = bugDraft;
+  bugDraft = null;
+  if (d) {
+    if (d.recorder) { try { d.recorder.stop(); } catch (e) {} }
+    clearInterval(d.recTimer);
+    if (d.shot && d.shot.url) URL.revokeObjectURL(d.shot.url);
+    if (d.voice && d.voice.url) URL.revokeObjectURL(d.voice.url);
+  }
+  const wrap = document.getElementById('bugshot');
+  wrap.classList.remove('open');
+  wrap.innerHTML = '';
+  document.getElementById('bugsheet').classList.remove('open');
+  document.getElementById('bugcard').innerHTML = '';
+}
+function bugCancel() { bugClose(); }
+
+async function bugSave() {
+  const d = bugDraft;
+  if (!d) return;
+  await bugStopRecording();
+  if (bugDraft !== d) return;
+  const note = String(document.getElementById('bugnote').value || '').trim();
+  if (!note && !d.voice) { bugSheetSay(T('bugNeedNote')); document.getElementById('bugnote').focus(); return; }
+  const tick = document.getElementById('bugwithshot');
+  const withShot = !!d.shot && (!tick || tick.checked);
+  const rec = {
+    id: d.id, created: d.created, note,
+    ctx: Object.assign({}, d.ctx, { build: await bugBuild() }),
+    box: d.box, under: d.under,
+    shot: withShot ? { type: d.shot.type, buf: d.shot.buf } : null,
+    voice: d.voice ? { type: d.voice.type, secs: d.voice.secs, buf: d.voice.buf } : null,
+    hasShot: withShot, hasVoice: !!d.voice,
+    status: 'waiting', tries: 0,
+  };
+  bugClose();
+  try { localStorage.setItem('gohk-bug-used', '1'); } catch (e) {}
+  try {
+    await bugPut(rec);
+  } catch (e) {
+    // No storage (a private window, a full phone). Last chance: send it now.
+    if (BUG_INBOX_URL && navigator.onLine) {
+      try { await bugPost(rec); status.textContent = T('bugSentMsg'); return; } catch (e2) {}
+    }
+    status.textContent = T('bugSaveFailed');
+    return;
+  }
+  bugPaintList();
+  if (!BUG_INBOX_URL) { status.textContent = T('bugNoInbox'); return; }
+  if (!navigator.onLine) { status.textContent = T('bugSavedOffline'); return; }
+  bugSendAll(true);
+}
+
+// ---- step 4: send ---------------------------------------------------
+// text/plain on purpose: a "simple" request, so the browser sends it straight
+// to Apps Script without the OPTIONS preflight Apps Script cannot answer.
+// Apps Script replies through a redirect that does carry an open CORS header,
+// so the answer can be read and a report is only marked sent when the inbox
+// has actually said "ok". Sending one twice is harmless: the inbox ignores an
+// id it already has.
+async function bugPost(rec) {
+  const body = JSON.stringify({
+    key: BUG_INBOX_KEY, id: rec.id, created: rec.created, note: rec.note,
+    ctx: rec.ctx, box: rec.box, under: rec.under,
+    shot: rec.shot ? { type: rec.shot.type, data: bugB64(rec.shot.buf) } : null,
+    voice: rec.voice ? { type: rec.voice.type, secs: rec.voice.secs, data: bugB64(rec.voice.buf) } : null,
+  });
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), 45000);
+  try {
+    const response = await fetch(BUG_INBOX_URL, { method: 'POST', body, signal: stop.signal,
+                                                  headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
+    let answer = null;
+    try { answer = JSON.parse(await response.text()); } catch (e) {}
+    if (!response.ok || !answer || !answer.ok) throw new Error((answer && answer.error) || ('HTTP ' + response.status));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Every waiting report, oldest first. Stops at the first failure — that is
+// almost always the connection, and the rest would fail the same way.
+function bugSendAll(manual) {
+  if (bugSending) return bugSending;
+  bugSending = (async () => {
+    const waiting = (await bugAll()).filter(r => r.status !== 'sent').reverse();
+    if (!waiting.length) return 0;
+    if (!BUG_INBOX_URL) { if (manual) status.textContent = T('bugNoInbox'); return 0; }
+    let sent = 0;
+    for (const rec of waiting) {
+      try {
+        await bugPost(rec);
+      } catch (e) {
+        rec.tries = (rec.tries || 0) + 1;
+        rec.lastError = String(e && e.message ? e.message : e).slice(0, 160);
+        try { await bugPut(rec); } catch (e2) {}
+        if (manual) status.textContent = T('bugSendFailed');
+        break;
+      }
+      // Sent. The picture and the recording now live in Drive, so the phone
+      // keeps only the words — a tester's phone is not the archive.
+      rec.status = 'sent'; rec.sentAt = new Date().toISOString();
+      rec.shot = null; rec.voice = null;
+      try { await bugPut(rec); } catch (e) {}
+      sent++;
+    }
+    await bugPrune();
+    bugPaintList();
+    if (sent) status.textContent = T('bugSentMsg') + (sent > 1 ? ' ×' + sent : '');
+    return sent;
+  })().finally(() => { bugSending = null; });
+  return bugSending;
+}
+async function bugPrune() {
+  const sent = (await bugAll()).filter(r => r.status === 'sent');
+  for (const rec of sent.slice(BUG_KEEP_SENT)) { try { await bugDel(rec.id); } catch (e) {} }
+}
+
+// ---- SETTINGS: the switch and the list ------------------------------
+function bugSettingsRows() {
+  bugApplyTester();                           // also re-labels the 🐞 after a language change
+  const on = bugTesterOn();
+  return '<div class="setrow setrow-stack">' +
+           '<span class="setlabel">' + T('bugTester') + '</span>' +
+           '<div class="sizebtns">' +
+             [['1', 'bugOn'], ['0', 'bugOff']].map(([k, t]) =>
+               '<button class="sizebtn' + ((on ? '1' : '0') === k ? ' on' : '') + '" data-bug="tester" data-id="' + k + '">' +
+                 T(t) + '</button>').join('') +
+           '</div>' +
+           '<div class="setnote" style="padding-bottom:0">' + T('bugTesterNote') + '</div>' +
+         '</div>' +
+         (on || bugEverUsed() ? '<div class="favhead">' + T('bugMine') + '</div><div id="bugreports"></div>' : '');
+}
+
+async function bugPaintList() {
+  const box = document.getElementById('bugreports');
+  if (!box) { bugPaintCount(); return; }
+  const list = await bugAll();
+  const waiting = list.filter(r => r.status !== 'sent').length;
+  const when = iso => {
+    const t = new Date(iso);
+    return isNaN(t) ? '' : t.toLocaleString(lang === 'en' ? 'en-HK' : 'zh-HK',
+      { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+  box.innerHTML = !list.length ? '<div class="setnote">' + T('bugNone') + '</div>' :
+    (waiting ? '<button class="gobtn" data-bug="send" style="width:100%;margin-bottom:10px">' +
+                 T('bugSendNow') + ' (' + waiting + ')</button>' : '') +
+    list.map(r =>
+      '<div class="bugitem">' +
+        '<div class="bugwhen">' + esc(when(r.created)) + (r.ctx && r.ctx.page ? ' · ' + esc(r.ctx.page) : '') + '</div>' +
+        (r.note ? '<div class="bugtext">' + esc(r.note.length > 140 ? r.note.slice(0, 140) + '…' : r.note) + '</div>' : '') +
+        '<div class="bugrow">' +
+          '<span class="bugtag ' + (r.status === 'sent' ? 'sent' : 'wait') + '">' +
+            T(r.status === 'sent' ? 'bugSentTag' : 'bugWaitTag') + '</span>' +
+          (r.hasShot ? '<span class="bugtag">📷</span>' : '') +
+          (r.hasVoice ? '<span class="bugtag">🎙</span>' : '') +
+          '<button class="bugdel" data-bug="del" data-id="' + esc(r.id) + '">' + T('bugDelete') + '</button>' +
+        '</div>' +
+      '</div>').join('');
+  bugPaintCount(waiting);
+}
+
+// Reports still on the phone, as a badge on the 🐞.
+async function bugPaintCount(known) {
+  const btn = document.getElementById('bugbtn');
+  if (!btn || !bugTesterOn()) return;
+  const waiting = typeof known === 'number' ? known
+    : (bugEverUsed() ? (await bugAll()).filter(r => r.status !== 'sent').length : 0);
+  let badge = btn.querySelector('.bugcount');
+  if (!waiting) { if (badge) badge.remove(); return; }
+  if (!badge) { badge = document.createElement('span'); badge.className = 'bugcount'; btn.appendChild(badge); }
+  badge.textContent = String(waiting);
+}
+
+function bugSettingsAction(what, id) {
+  if (what === 'tester') {
+    try { localStorage.setItem('gohk-tester', id === '1' ? '1' : '0'); } catch (e) {}
+    bugApplyTester();
+    renderSettings();
+    // Fetch the screenshot tool now, while there is a signal, so the first
+    // report works on the MTR platform too.
+    if (id === '1' && navigator.onLine) bugLoadShooter();
+    return;
+  }
+  if (what === 'send') { bugSendAll(true); return; }
+  if (what === 'del' && id) {
+    if (!window.confirm(T('bugDelete') + '?')) return;
+    bugDel(id).catch(() => {}).then(bugPaintList);
+  }
+}
+
+// ---- start-up -------------------------------------------------------
+bugApplyTester();
+bugPaintCount();
+// Later, not now: the first seconds belong to the bus data a rider is
+// waiting for, and KMB's servers refuse bursts.
+setTimeout(() => {
+  if (bugTesterOn() && navigator.onLine) bugLoadShooter();
+  if (bugEverUsed() && navigator.onLine) bugSendAll(false);
+}, 12000);
+window.addEventListener('online', () => {
+  if (bugEverUsed()) setTimeout(() => bugSendAll(false), 3000);
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && bugEverUsed() && navigator.onLine) bugSendAll(false);
+});
 
 
 // Open on 車站. The trip planner is one tap away under 巴士.
