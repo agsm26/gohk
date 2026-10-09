@@ -2637,7 +2637,9 @@ rmStations:'{n} stations',
     credits:'Route and arrival data: Transport Department / DATA.GOV.HK. Route and fare data: HK Bus Crawling@2021. Map from Lands Department © The Government of the HKSAR.',
     optionsFound:'{n} option(s) found.', noNearbyStops:'No bus stops within {m} m of one of your points.',
     couldNotWork:'Could not work out routes:', checkInternet:'Please check your internet and press the button again.',
-    someDataFailed:'Some bus data could not load:',
+    busDataRetrying:'Bus data did not download — trying again ({n}/{m})…',
+    busDataStale:'Could not update the bus data — using the copy saved {n} days ago.',
+    busDataLater:'Bus data could not load. The app will keep trying by itself.',
     loadingNetwork:'Loading the bus network… first time only, then it is saved', lookingFor:'Looking for buses…',
     stopsOnRoute:'{n} stops on this route', rideCount:'Ride {n} stops', rideArrive:'Arrive about {t}', rideStopN:'Stop {n}', mapHint:'See this ride on the map', mapHintSwipe:'Swipe right 👉 or tap here — stops to ride, where to get on and off', rideEnd:'Stop {n} · end of route', rideToEnd:'{n} stops to the end of the route', rideArriveEnd:'Reaches the end about {t}', ridePickOff:'Tap your stop to get off on the 巴士 page to count the stops.', rideOn:'Get on', rideOff:'Get off · stop {n}', rideNext:'Next bus in {m} min', rideNextNow:'Next bus arriving', cleared:'Cleared.',
     rsHint:'Tap where you get on, then tap where you get off — the app counts the stops down as you ride. Tap ☆ to save that stop AND this bus to FAVOURITES.',
@@ -3012,7 +3014,9 @@ rmStations:'{n} 個站',
     credits:'路線及到站資料：運輸署 / 資料一站通。路線及車費資料：HK Bus Crawling@2021。地圖來自地政總署 © 香港特別行政區政府。',
     optionsFound:'找到 {n} 個選擇。', noNearbyStops:'你的地點 {m} 米範圍內沒有巴士站。',
     couldNotWork:'無法計算路線：', checkInternet:'請檢查網絡連線後再按一次。',
-    someDataFailed:'部分巴士資料未能載入：',
+    busDataRetrying:'巴士資料未能下載，正在重試（{n}/{m}）…',
+    busDataStale:'未能更新巴士資料，暫時使用 {n} 天前儲存的版本。',
+    busDataLater:'巴士資料未能載入，程式會自動再試。',
     loadingNetwork:'正在載入巴士路線網絡…只需一次，之後會自動儲存', lookingFor:'正在搜尋巴士…',
     stopsOnRoute:'此路線共 {n} 個站', rideCount:'坐 {n} 個站', rideArrive:'預計 {t} 到達', rideStopN:'第 {n} 站', mapHint:'在地圖看這程車', mapHintSwipe:'手指向右掃 👉 或點這裡：坐幾多個站、在哪裡上落車', rideEnd:'第 {n} 站 · 總站', rideToEnd:'到總站共 {n} 個站', rideArriveEnd:'預計 {t} 到總站', ridePickOff:'在巴士頁點選下車站，可知要坐幾個站。', rideOn:'上車', rideOff:'第 {n} 站 下車', rideNext:'下一班 {m} 分鐘', rideNextNow:'下一班即將到站', cleared:'已清除。',
     rsHint:'先按上車站，再按下車站，乘車時會自動倒數剩餘車站。按 ☆ 可同時收藏該車站及此路線，在「收藏」查看。',
@@ -3464,24 +3468,156 @@ async function cachePut(key, value) {
 let allStops = [], allRoutes = [], ctbRoutes = [];
 const CTB_BASE = 'https://rt.data.gov.hk/v2/transport/citybus';
 
+// ---- GETTING THE BUS DATA DOWN, EVEN ON A BAD DAY ----
+// These downloads used to get ONE try each, all three fired at the same
+// moment. KMB's server turns away requests that arrive in a burst — on
+// 5 Oct 2026 about half of back-to-back fetches were refused within 0.13 s
+// (it shows up as "Failed to fetch"), while the same requests 5 s apart all
+// came back — and one refusal left the stop list EMPTY until the app was
+// reloaded. So now: KMB's big files go out one after another with a gap;
+// every download is tried again, waiting a little longer each time; a copy
+// saved on the phone is used even when it is older than CACHE_DAYS if the
+// network will not give a newer one; and when there is nothing at all, the
+// app keeps trying by itself — when the connection comes back, when the app
+// is looked at again, and on a slowly growing timer.
+const KMB_GAP_MS = 700;                        // between KMB's big downloads
+const BUS_RETRY_WAITS = [0, 1500, 4000, 10000];  // before each try, ms (plus a little jitter)
+let kmbNextAt = 0;
+function kmbSlot() {
+  const now = Date.now(), at = Math.max(now, kmbNextAt);
+  kmbNextAt = at + KMB_GAP_MS;
+  return new Promise(resolve => setTimeout(resolve, at - now));
+}
+function busSleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+// No point using up tries while the phone says it is offline: wait for the
+// connection instead, up to `ms`.
+function busWaitOnline(ms) {
+  if (navigator.onLine !== false) return Promise.resolve();
+  return new Promise(resolve => {
+    const done = () => { clearTimeout(timer); window.removeEventListener('online', done); resolve(); };
+    const timer = setTimeout(done, ms);
+    window.addEventListener('online', done);
+  });
+}
+// The JSON at `url`, tried up to `waits.length` times. `kmb`: wait for a slot
+// first (KMB_GAP_MS). `onTry(n, of)`: told before each try.
+async function fetchBusData(url, opts) {
+  const o = opts || {};
+  const waits = o.waits || BUS_RETRY_WAITS;
+  let lastError = null;
+  for (let i = 0; i < waits.length; i++) {
+    if (waits[i]) await busSleep(waits[i] + Math.random() * 500);
+    await busWaitOnline(10000);
+    if (o.kmb) await kmbSlot();
+    if (o.onTry) o.onTry(i + 1, waits.length);
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(o.timeoutMs || 30000) });
+      if (!response.ok) throw new Error('server said ' + response.status);
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+      console.warn('Download ' + (i + 1) + '/' + waits.length + ' failed: ' + url, error);
+    }
+  }
+  throw lastError || new Error('download failed');
+}
+// A saved copy of ANY age, as { value, days } — the fallback when the network
+// will not give a newer one. A week-old map of the bus network beats an empty
+// one: stops and routes change rarely, and arrival times are always live.
+async function cacheGetAny(key) {
+  try {
+    const db = await openCache();
+    if (!db) return null;
+    return await new Promise(resolve => {
+      const request = db.transaction('files').objectStore('files').get(key);
+      request.onsuccess = () => {
+        const entry = request.result;
+        resolve(entry && entry.value ? { value: entry.value, days: Math.round(cacheAgeDays(entry.day)) } : null);
+      };
+      request.onerror = () => resolve(null);
+    });
+  } catch (error) { return null; }
+}
+
+// Keep trying in the background after every try has failed: when the phone
+// comes back online, when the app is opened again, and every so often —
+// from 30 s, doubling to 5 min. One loop per `key`; `tryOnce` resolves when
+// it worked (and has redrawn whatever was waiting) or throws to go round
+// again.
+const busRetrying = new Set();
+function busKeepTrying(key, tryOnce) {
+  if (busRetrying.has(key)) return;
+  busRetrying.add(key);
+  let delay = 30000, timer = 0, running = false;
+  const stop = () => {
+    clearTimeout(timer);
+    window.removeEventListener('online', now);
+    document.removeEventListener('visibilitychange', seen);
+    busRetrying.delete(key);
+  };
+  const attempt = async () => {
+    if (running) return;
+    running = true;
+    clearTimeout(timer);
+    try {
+      await tryOnce();
+      stop();
+    } catch (error) {
+      delay = Math.min(delay * 2, 300000);
+      timer = setTimeout(attempt, delay);
+    } finally {
+      running = false;
+    }
+  };
+  const now = () => attempt();
+  const seen = () => { if (document.visibilityState === 'visible') attempt(); };
+  window.addEventListener('online', now);
+  document.addEventListener('visibilitychange', seen);
+  timer = setTimeout(attempt, delay);
+}
+
+// `onDone(data, late)`: `late` is true when the file arrived by the
+// background retry, after the rider was told it had not.
 async function loadOnce(cacheKey, url, onDone) {
   const cached = await cacheGet(cacheKey);
   if (cached) { onDone(cached); return; }
 
+  const kmb = url.indexOf('data.etabus.gov.hk') >= 0;
+  const old = await cacheGetAny(cacheKey);           // an expired copy, if there is one
+  // Use what there is and keep trying in the background for a newer one.
+  const fallBack = () => {
+    if (old) {
+      onDone(old.value);
+      if (cacheKey === 'kmb-stops') status.textContent = T('busDataStale').replace('{n}', old.days);
+    } else {
+      status.textContent = T('busDataLater');
+    }
+    busKeepTrying(cacheKey, async () => {
+      const json = await fetchBusData(url, { kmb, waits: [0, 3000] });
+      cachePut(cacheKey, json.data);
+      onDone(json.data, true);
+    });
+  };
+  // Offline: nothing worth trying now — the saved copy at once, if any.
+  if (navigator.onLine === false) { fallBack(); return; }
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
-    if (!response.ok) throw new Error('server said ' + response.status);
-    const json = await response.json();
+    // With a saved copy to fall back on, ONE try before using it: the rider
+    // should not stare at an empty list for twenty seconds of retries while
+    // a usable copy sits on the phone. Without one, every try.
+    const json = await fetchBusData(url, {
+      kmb, waits: old ? [0] : BUS_RETRY_WAITS,
+      onTry: (n, of) => { if (n > 1 && cacheKey === 'kmb-stops') status.textContent = T('busDataRetrying').replace('{n}', n).replace('{m}', of); },
+    });
     cachePut(cacheKey, json.data);
     onDone(json.data);
   } catch (error) {
     console.error(cacheKey + ' failed:', error);
-    status.textContent = T('someDataFailed') + ' ' + error.message;
+    fallBack();
   }
 }
 
 loadOnce('kmb-stops', 'https://data.etabus.gov.hk/v1/transport/kmb/stop',
-  data => {
+  (data, late) => {
     allStops = data;                 // this REPLACES the array...
     addStationsToSearch();           // ...so the stations have to go back in
     addLrtStopsToSearch();           // ...and the Light Rail stops with them
@@ -3492,8 +3628,16 @@ loadOnce('kmb-stops', 'https://data.etabus.gov.hk/v1/transport/kmb/stop',
     // app cannot do reads as the app being broken.
     status.textContent = T('ready');
     // The app opens on the 車站 tab, usually before this list has arrived.
-    if (typeof activeMode !== 'undefined' && activeMode === 'stop' && typeof renderStopView === 'function') renderStopView();
+    // A list that arrived LATE (the background retry) is not redrawn under
+    // somebody typing — the keyboard would drop; their next keystroke uses it.
+    if (typeof activeMode !== 'undefined' && activeMode === 'stop' && typeof renderStopView === 'function' &&
+        !(late && stopViewTyping())) renderStopView();
   });
+// Is the rider typing in one of the 巴士 tab's boxes right now?
+function stopViewTyping() {
+  const el = document.activeElement;
+  return !!(el && /^(INPUT|TEXTAREA)$/.test(el.tagName) && el.closest && el.closest('#stopview'));
+}
 loadOnce('kmb-routes', 'https://data.etabus.gov.hk/v1/transport/kmb/route/', data => { allRoutes = data; });
 loadOnce('ctb-routes', CTB_BASE + '/route/CTB', data => { ctbRoutes = data; });
 
@@ -6409,17 +6553,30 @@ async function buildIndexesNow() {
 
   let rows = await cacheGet('kmb-route-stop');
 
-  for (let attempt = 1; attempt <= 2 && !rows; attempt++) {
-    try {
-      status.textContent = T('loadingNetwork') + ' (' + attempt + '/2)';
-      const response = await fetch('https://data.etabus.gov.hk/v1/transport/kmb/route-stop',
-                                   { signal: AbortSignal.timeout(90000) });
-      if (!response.ok) throw new Error('server said ' + response.status);
-      rows = (await response.json()).data;
-      cachePut('kmb-route-stop', rows);
-    } catch (error) {
-      console.warn('Network file attempt ' + attempt + ' failed:', error);
-      if (attempt === 2) throw new Error('the bus network file would not download (' + error.message + ')');
+  // Up to three tries, spaced, in KMB's queue (see fetchBusData) — or ONE
+  // when a saved copy of any age is there to fall back on: an index from
+  // last month answers "which bus goes there" far better than none, and
+  // better now than after twenty seconds of retries. Offline, no tries.
+  if (!rows) {
+    const old = await cacheGetAny('kmb-route-stop');
+    if (navigator.onLine === false) {
+      if (!old) throw new Error('offline');
+      rows = old.value;
+    } else {
+      try {
+        const json = await fetchBusData('https://data.etabus.gov.hk/v1/transport/kmb/route-stop', {
+          kmb: true, timeoutMs: 90000, waits: old ? [0] : [0, 2000, 6000],
+          onTry: (n, of) => { status.textContent = T('loadingNetwork') + ' (' + n + '/' + of + ')'; },
+        });
+        rows = json.data;
+        cachePut('kmb-route-stop', rows);
+        // Not left saying 「正在載入…」 once it has.
+        if (status.textContent.indexOf(T('loadingNetwork')) === 0) status.textContent = T('ready');
+      } catch (error) {
+        if (!old) throw new Error('the bus network file would not download (' + error.message + ')');
+        rows = old.value;
+        status.textContent = T('busDataStale').replace('{n}', old.days);
+      }
     }
   }
 
@@ -12117,7 +12274,16 @@ let stopLiteAsked = false;
 function stopEnsureNetwork() {
   if (!stopIndex && !stopState.indexing) {
     stopState.indexing = true;
-    buildIndexes().catch(error => console.warn('Index unavailable:', error))
+    buildIndexes()
+      .catch(error => {
+        console.warn('Index unavailable:', error);
+        // Not only the next time this tab is opened: by itself, as soon as
+        // the network allows (busKeepTrying), and the screen redrawn then.
+        busKeepTrying('kmb-index', () => buildIndexes().then(() => {
+          addOperatorsOnce();
+          if (activeMode === 'stop' && !stopViewTyping()) renderStopView();
+        }));
+      })
       .then(() => { stopState.indexing = false; addOperatorsOnce(); if (activeMode === 'stop') renderStopView(); });
   }
   if (hkbusRoutes) { addOperatorsOnce(); return; }
