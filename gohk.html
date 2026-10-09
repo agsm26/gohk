@@ -2088,6 +2088,7 @@
   #bugshot { display:none; position:fixed; inset:0; z-index:3000; background:rgba(15,23,42,.35);
              touch-action:none; user-select:none; -webkit-user-select:none; }
   #bugshot.open { display:block; }
+  #bugshot.hold { cursor:progress; }
   #bugshot canvas { position:absolute; left:0; top:0; }
   #bugshot .bughint { position:absolute; left:50%; top:calc(env(safe-area-inset-top, 0px) + 10px);
                       transform:translateX(-50%); max-width:calc(100% - 24px); pointer-events:none;
@@ -20707,6 +20708,7 @@ function bugContext() {
     typed[el.id || el.placeholder || 'input'] = String(el.value).slice(0, 80);
   });
   const panel = document.getElementById('panel');
+  const state = bugTabState();
   return {
     page: activeMode,
     panel: panel ? panel.className.replace(/\bslidefrom\w+/g, '').trim() : '',
@@ -20718,12 +20720,70 @@ function bugContext() {
     online: navigator.onLine,
     device: String(navigator.userAgent || '').slice(0, 220),
     typed,
-    chosen: { start: startPoint ? String(startPoint.label || '').slice(0, 80) : '',
-              end:   endPoint   ? String(endPoint.label   || '').slice(0, 80) : '' },
+    state,
+    chosen: bugChosen(state),
     pageDate: document.lastModified,
     messages: bugTrail.slice(),
     errors: bugErrors.slice(-15),
   };
+}
+
+// WHAT THE TAB ITSELF HOLDS. The boxes on screen are not the whole story: a
+// destination picked on the 巴士 tab lives in the app's memory once a stop is
+// opened, and the 港鐵 tab's plan is two stations, not two boxes. The first
+// reports (9 Oct 2026) never said where the tester was going — it had to be
+// guessed from their note. Names only, never a position.
+function bugTabState() {
+  const s = { tab: activeMode };
+  try {
+    if (activeMode === 'stop') {
+      const st = stopState;
+      if (String(st.destQuery || '').trim()) s.destination = String(st.destQuery).trim().slice(0, 80);
+      if (st.stop) {
+        s.stop = stopName(st.stop) + ' (' + st.stop.stop + ')';
+        s.bays = stopGroupNow().length;
+        if (String(st.destFilter || '').trim()) s.filter = String(st.destFilter).trim().slice(0, 80);
+        if (st.showOthers) s.othersOpen = true;
+      }
+      // The ways there the app was offering, as the rider read them.
+      const shown = [...document.querySelectorAll('#stopview .tripopt')].slice(0, 3)
+        .map(b => b.innerText.replace(/\s+/g, ' ').trim().slice(0, 120));
+      if (shown.length) s.tripsShown = shown;
+    } else if (activeMode === 'mtr') {
+      const p = railPlan;
+      if (p.to || p.toQuery) s.to = p.to ? railNodeName(p.to) : String(p.toQuery).slice(0, 80);
+      if (p.from || p.fromQuery) s.from = p.from ? railNodeName(p.from) : String(p.fromQuery).slice(0, 80);
+      if (p.place && p.place.name) s.place = String(p.place.name).slice(0, 80);
+      if (mtrState.station) {
+        s.station = stationName(mtrState.station);
+        if (mtrState.line) s.line = mtrState.line;
+        if (mtrState.dir) s.dir = mtrState.dir;
+      }
+      if (mtrState.lrt) s.lightRail = lrtName(mtrState.lrt);
+    } else if (activeMode === 'map') {
+      if (spotQuery) s.search = String(spotQuery).slice(0, 80);
+    } else if (startPoint || endPoint) {
+      s.picks = (currentPicks || []).length;
+    }
+  } catch (e) { s.error = String(e && e.message ? e.message : e).slice(0, 120); }
+  return s;
+}
+// The trip in a line for the sheet's 「trip: A → B」: the current tab's own
+// start and destination, or else the journey planner's.
+function bugChosen(s) {
+  if (s.tab === 'stop' && (s.stop || s.destination))
+    return { start: s.stop ? s.stop.replace(/ \([^)]*\)$/, '') : '', end: s.filter || s.destination || '' };
+  if (s.tab === 'mtr' && (s.to || s.from || s.station))
+    return { start: s.from || s.station || '(phone)', end: s.to || '' };
+  return { start: startPoint ? String(startPoint.label || '').slice(0, 80) : '',
+           end:   endPoint   ? String(endPoint.label   || '').slice(0, 80) : '' };
+}
+// What is on screen, in one string — to tell whether it changed between the
+// screenshot and the box being drawn.
+function bugScreenSig() {
+  const panel = document.getElementById('panel');
+  return [activeMode, panel ? panel.className.replace(/\bslidefrom\w+/g, '').trim() : '',
+          stopState.stop ? stopState.stop.stop : '', mtrState.station || '', mtrState.lrt || ''].join('|');
 }
 // Which build: the service worker's cache is named after sw.js's VERSION.
 async function bugBuild() {
@@ -20763,20 +20823,31 @@ function bugLoadShooter() {
 // own screens are left out. Map tiles come from the Lands Department with an
 // open CORS header, so they draw; anything that cannot be read is skipped
 // rather than spoiling the picture.
+// Never more than BUG_SHOT_MAX_MS: the screen is held while this runs
+// (bugHold), and a picture that never finishes must not leave it held.
+const BUG_SHOT_MAX_MS = 15000;
 async function bugCapture() {
   const shooter = await bugLoadShooter();
   if (!shooter) return null;
+  let timer = 0;
   try {
-    return await shooter(document.body, {
-      useCORS: true, logging: false, backgroundColor: '#ffffff', imageTimeout: 4000,
-      scale: Math.min(window.devicePixelRatio || 1, 2),
-      x: window.scrollX, y: window.scrollY, width: window.innerWidth, height: window.innerHeight,
-      windowWidth: window.innerWidth, windowHeight: window.innerHeight,
-      ignoreElements: el => el.id === 'bugbtn' || el.id === 'bugshot' || el.id === 'bugsheet',
-    });
+    return await Promise.race([
+      shooter(document.body, {
+        useCORS: true, logging: false, backgroundColor: '#ffffff', imageTimeout: 4000,
+        scale: Math.min(window.devicePixelRatio || 1, 2),
+        x: window.scrollX, y: window.scrollY, width: window.innerWidth, height: window.innerHeight,
+        windowWidth: window.innerWidth, windowHeight: window.innerHeight,
+        ignoreElements: el => el.id === 'bugbtn' || el.id === 'bugshot' || el.id === 'bugsheet',
+      }),
+      new Promise((resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('took over ' + BUG_SHOT_MAX_MS / 1000 + ' s')), BUG_SHOT_MAX_MS);
+      }),
+    ]);
   } catch (e) {
     bugNoteError('screenshot failed: ' + (e && e.message ? e.message : e), 'bugCapture');
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -20852,14 +20923,40 @@ async function bugStart() {
   bugDraft = { id: 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
                created: new Date().toISOString(), box: null, under: [], shot: null, voice: null };
   // Read the screen's state BEFORE anything of ours changes it.
-  bugDraft.ctx = bugContext();
+  const d = bugDraft;
+  d.ctx = bugContext();
+  d.sig = bugScreenSig();
   btn.textContent = '⏳';
   btn.disabled = true;
-  bugDraft.canvas = await bugCapture();
+  bugHold();
+  const t0 = performance.now();
+  d.canvas = await bugCapture();
+  // How long the picture took on THIS phone, and what kind of phone it is:
+  // a slow screenshot is the first thing to suspect when a report's box and
+  // picture disagree. Also put in front of the device line, which the
+  // inbox's sheet already shows.
+  const shotMs = Math.round(performance.now() - t0);
+  const cores = navigator.hardwareConcurrency || null, memGB = navigator.deviceMemory || null;
+  d.ctx.perf = { shotMs, shotOk: !!d.canvas, cores, memGB };
+  d.ctx.device = 'screenshot ' + (d.canvas ? (shotMs / 1000).toFixed(1) + ' s' : 'FAILED after ' + (shotMs / 1000).toFixed(1) + ' s') +
+                 (cores ? ' · ' + cores + ' cores' : '') + (memGB ? ' · ' + memGB + ' GB' : '') + '\n' + d.ctx.device;
   btn.textContent = '🐞';
   btn.disabled = false;
   bugPaintCount();
+  if (bugDraft !== d) return;                 // closed meanwhile
   bugOpenShot();
+}
+
+// TAPS ARE HELD WHILE THE PICTURE IS TAKEN. html2canvas can take seconds on
+// a slow phone, and a tester who tapped on meanwhile changed the screen under
+// the picture: a 9 Oct report's box landed on the 港鐵 tab while its picture
+// showed 巴士. The cover is see-through, says what is happening, and is not in
+// the picture — html2canvas leaves #bugshot out (bugCapture).
+function bugHold() {
+  const wrap = document.getElementById('bugshot');
+  wrap.innerHTML = '<div class="bughint">' + esc(T('bugShooting')) + '</div>';
+  wrap.style.background = 'transparent';
+  wrap.classList.add('open', 'hold');
 }
 
 // ---- step 2: box the problem ----------------------------------------
@@ -20868,6 +20965,7 @@ function bugOpenShot() {
   const wrap = document.getElementById('bugshot');
   const w = window.innerWidth, h = window.innerHeight;
   wrap.innerHTML = '';
+  wrap.classList.remove('hold');
   // With a screenshot the screen is frozen as it was; without one the tester
   // draws on the live screen, under a light tint so it is clear it is waiting.
   wrap.style.background = d.canvas ? '#ffffff' : '';
@@ -20940,7 +21038,11 @@ async function bugBoxDone(keepBox) {
   if (keepBox && d.box) {
     d.box = { x: Math.round(d.box.x), y: Math.round(d.box.y), w: Math.round(d.box.w), h: Math.round(d.box.h),
               screenW: window.innerWidth, screenH: window.innerHeight };
-    d.under = bugUnderBox(d.box);
+    // What is under the box is read from the LIVE page, so only while it is
+    // still the screen in the picture. Taps are held now, but a screen can
+    // still change on its own; then say so rather than report the wrong one.
+    d.under = bugScreenSig() === d.sig ? bugUnderBox(d.box)
+      : [{ path: '(not recorded)', text: 'the screen changed after the screenshot — see the picture' }];
   } else {
     d.box = null;
   }
@@ -21105,7 +21207,7 @@ function bugClose() {
     if (d.voice && d.voice.url) URL.revokeObjectURL(d.voice.url);
   }
   const wrap = document.getElementById('bugshot');
-  wrap.classList.remove('open');
+  wrap.classList.remove('open', 'hold');
   wrap.innerHTML = '';
   document.getElementById('bugsheet').classList.remove('open');
   document.getElementById('bugcard').innerHTML = '';
