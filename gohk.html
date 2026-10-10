@@ -92,7 +92,12 @@
                font-size:calc(clamp(17px, 4.6vw, 21px) * var(--text-scale, 1));
                color-scheme:light;   /* Samsung/Chrome auto-dark would invert every colour above */
                -webkit-text-size-adjust:100%;      /* iOS must not re-inflate it */
-               -webkit-tap-highlight-color:rgba(0,0,0,.08); }
+               -webkit-tap-highlight-color:rgba(0,0,0,.08);
+               /* Said, not assumed. A phone paints a bare page white anyway, but an
+                  embedded web view paints it BLACK, and any pixel no box covers (the
+                  seam under the top bar, the space under a short panel) showed as a
+                  black band. */
+               background:#fff; }
   /* The bar sits at the FOOT of the screen, so the map stops where the bar
      starts. Leaflet's own furniture — the zoom control and, more to the
      point, the copyright line the Lands Department licence requires to be
@@ -735,6 +740,25 @@
                           padding:8px 12px; border-width:2px; }
   body.mapopen #ridebar .rsridesub, body.mapopen #ridebar .rbbtns { display:none; }
   body.mapopen #ridebar .rsridebig { font-size:1.3rem; margin-top:2px; }
+  /* ...and while the alarm is on, the map's own cards make room for it. The
+     red 清除 bar, the ride card and the search results all hang under the
+     search box inside #maptools, which sits ABOVE this bar (1150 > 1100) —
+     so the moment the map had anything on it (a drawn ride, the 📍 dot) the
+     countdown was hidden under them. The search box now keeps the bar's
+     height free beneath it, so they start below the bar instead; and since
+     the room is INSIDE #maptools, measureMapChrome() and
+     keepRideLabelsInView() frame the ride below the bar too.
+     --rideh is the bar's own height, measured by ridePaint() each time it
+     draws. Straight after a switch from 巴士 it still holds the 巴士 tab's
+     height (237px against 87px here, at 特大) until the next GPS fix — and
+     that is exactly when the ride is framed — so it is capped at the most
+     this card can be: 22px of border, padding and gap, two head lines of
+     1.35rem (clamped below) and one big line of 1.3rem x 1.15. The extra
+     22px clears the bar's fixed 74px offset at any search-box height from
+     52px (標準) up. */
+  body.mapopen #ridebar .rsridehead { line-height:1.35; display:-webkit-box; -webkit-line-clamp:2;
+                                      -webkit-box-orient:vertical; overflow:hidden; }
+  body.mapopen.riding .mtsearch { margin-bottom:calc(min(var(--rideh, 0px), 22px + 4.2rem) + 22px); }
   .rsridehead { font-size:1rem; font-weight:800; color:var(--ink-2); overflow-wrap:anywhere; }
   .rsridebig { font-size:1.88rem; font-weight:800; color:var(--navy); margin-top:4px; line-height:1.15; }
   .rsridebig.soon { color:var(--red); }
@@ -1767,6 +1791,14 @@
                     font-size:1.06rem; padding:10px 6px; color:var(--ink); }
   .mtsearch button { flex:0 0 auto; min-width:44px; min-height:44px; border:none; background:transparent;
                      font-size:1.1rem; font-weight:800; color:var(--ink-3); border-radius:var(--r-sm); }
+  /* The input above has no outline of its own (a ring INSIDE the box would
+     look like a second box), so the box itself wears the app's focus ring
+     while anything in it has focus. Not when the ✕ was merely tapped:
+     Android focuses a tapped button, and a ring left round the box after
+     clearing it reads as "still typing". Browsers without :has() drop
+     that second rule and simply keep the ring. */
+  .mtsearch:focus-within { outline:3px solid var(--navy); outline-offset:2px; }
+  .mtsearch:has(> button:focus:not(:focus-visible)) { outline:none; }
   /* The one thing on this screen that UNDOES something, so it is the one
      thing here that is red, and it is a full-width bar rather than another
      round chip — nothing else should be mistakable for it. */
@@ -2339,6 +2371,16 @@
 // goes in before any other line of the app runs. The report state is up here
 // for the same reason mtrData is declared early further down: SETTINGS reads
 // it, and SETTINGS can be drawn before the bottom of the file has run.
+
+// AbortSignal.timeout is Safari 16 / Chrome 103. Every download in this file
+// uses it, and on an iPhone 7 (iOS 15 at most) it is undefined: each fetch
+// threw before it was sent, the retries all "failed", and a first visit
+// never got a stop list at all.
+if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout !== 'function' &&
+    typeof AbortController !== 'undefined') {
+  AbortSignal.timeout = ms => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; };
+}
+
 const bugErrors = [];             // { t, msg, at } — the last 20, oldest first
 function bugNoteError(msg, at) {
   bugErrors.push({ t: new Date().toISOString(), msg: String(msg || '').slice(0, 300),
@@ -2428,7 +2470,7 @@ rmStations:'{n} stations',
     railFareSplit:'\u2139 MTR does not publish one price for Light Rail and train together, so no total is shown. Each part shows its own fare.',
     mtrSearchPh:'Station name…', mtrSaved:'Your saved stations', mtrChange:'Change',
     mtrLineStrip:'Tap or slide a station to stand there', mtrNextStops:'Stations ahead — tap one for the arrival time',
-    mtrAway:'about {m} m away', mtrNearestTag:'nearest station',
+    mtrAway:'about {m} away', mtrNearestTag:'nearest station',
     mtrNextTrains:'Next trains',
     mtrPlatform:'Platform {p}', mtrStops:'{n} stops', mtrOneStop:'1 stop', mtrRide:'about {m} min on the train',
     mtrArrive:'Take the train in {w} min — arrive about {t}',
@@ -2465,7 +2507,7 @@ rmStations:'{n} stations',
     stopIndexing:'Loading the bus network — first time only…',
     stopDestNoName:'No stop called "{d}" — try a shorter name.',
     stopNearNoneTo:'No nearby stop has a direct bus to {d}.',
-    stopSearchNoneTo:'No stop with that name has a direct bus to {d}.', stopNoReach:'No direct bus to {d} — opens without the filter',
+    stopSearchNoneTo:'No stop with that name has a direct bus to {d}.', stopNoReach:'No direct bus to {d} — opens with the other ways there',
     alertTitle:'Traffic notice — your route is affected', alertSure:'Affected: {x}', alertMaybe:'Possibly affected: {x}', alertOk:'Got it',
     alertBanner:'⚠ Traffic notice: {x} · tap to read', alertSource:'Transport Department special traffic news',
     alertSourceMtr:'MTR next-train feed', alertSourceBus:'Bus company arrival feed', alertMtrDelay:'{line} is delayed at the moment',
@@ -2536,7 +2578,7 @@ rmStations:'{n} stations',
     mapResetDone:'The map is clear.',
     spotPlanning:'Working out how to get you there\u2026',
     hereTitle:'You are here',
-    hereAccuracy:'Accurate to about {m} m',
+    hereAccuracy:'Accurate to about {m}',
     hereNearby:'Nearest public transport',
     hereSpots:'Places to visit near you',
     hereFailed:'Could not find you. Check that location is on for this app.',
@@ -2563,7 +2605,7 @@ rmStations:'{n} stations',
     journeyRoadSlow:'Traffic counted: {s} is moving at {k} km/h, so {n} min have been added to this ride.',
     stopNoFeedEta:'{r} · about {n} stops — no live times for this company', alertSourceRoad:'Transport Department road detectors',
     stopHeldTitle:'Traffic notice on route {r}', stopHeldGo:'Use this stop anyway', stopHeldBack:'Choose another stop',
-    rsNearestStop:'Nearest stop', rsNearestFound:'Nearest on this route: {s} ({m} m)',
+    rsNearestStop:'Nearest stop', rsNearestFound:'Nearest on this route: {s} ({m})',
     rsWalkNeedStop:'Tap 📍 first to find your stop', rsWalkTo:'Walking directions to {s}',
     rsPickRouteFirst:'Pick a bus route first.',
     rsFindingStop:'Finding your nearest stop on this route…',
@@ -2636,7 +2678,7 @@ rmStations:'{n} stations',
     pleaseRead:'<b>Please read:</b> options are ordered by how EASY they are, not just how fast — walking and changing bus count against a journey. Times are estimates: walking at 3.5 km/h, plus {t} minutes to change bus. Fares are the full adult fare and may be missing for some routes. KMB, Citybus, New Lantao Bus, green minibus and MTR. At most one change of bus.',
     credits:'Route and arrival data: Transport Department / DATA.GOV.HK. Route and fare data: HK Bus Crawling@2021. Map from Lands Department © The Government of the HKSAR.',
     optionsFound:'{n} option(s) found.', noNearbyStops:'No bus stops within {m} m of one of your points.',
-    couldNotWork:'Could not work out routes:', checkInternet:'Please check your internet and press the button again.',
+    couldNotWork:'Could not work out routes:', checkInternet:'Please check your internet and press the button again.', mtrDataFailed:'Could not download the train data. Please check your connection.', retryBtn:'Try again',
     busDataRetrying:'Bus data did not download — trying again ({n}/{m})…',
     busDataStale:'Could not update the bus data — using the copy saved {n} days ago.',
     busDataLater:'Bus data could not load. The app will keep trying by itself.',
@@ -2650,7 +2692,7 @@ rmStations:'{n} stations',
     rsAllQuiet:'⛔ No bus is due at any stop checked on this route.',
     rsOffTag:'not running',
     rsEtaFailed:'times unavailable', rsClose:'Close the stop list',
-    rsBoardAuto:'● GETTING ON HERE (you are nearby)', rsBoardNear:'● Nearest stop to you (about {m} m)', rsAlight:'▼ GETTING OFF HERE',
+    rsBoardAuto:'● GETTING ON HERE (you are nearby)', rsBoardNear:'● Nearest stop to you (about {m})', rsAlight:'▼ GETTING OFF HERE',
     rsAfterAlight:'after your stop', rsStops:'{n} stops', rsOneStop:'1 stop',
     rsRemaining:'{n} stops to go', rsNextStop:'Next stop — get off!', rsArrived:'This is your stop',
     rsNearNow:'You are near {s}', rsNotOnRoute:'You are not near this route yet',
@@ -2715,6 +2757,8 @@ rmStations:'{n} stations',
     // wording nor the "which side of the road" warning carries over.
     boardHereRail:'TAKE THE {route} HERE', alightHereRail:'GET OFF AT THIS STATION',
     checkPlatform:'Follow the signs inside the station to this exit.',
+    checkChangeHere:'Change here: stay inside the station and follow the signs to the next platform.',
+    stopNofM:'Stop {n} of {m} · {r}',
     checkGates:'Once inside, follow the signs to the platform.',
     checkLrtPlatform:'Light Rail platforms are in the road. Check the platform number, and the route number on the front of the train.',
     // Spelt out, because "walk W" is a compass badge, not a sentence.
@@ -2813,7 +2857,7 @@ rmStations:'{n} 個站',
     railFareSplit:'ℹ 港鐵沒有公佈輕鐵連港鐵的合併車費，所以不顯示總數。每程分別顯示該程車費。',
     mtrSearchPh:'輸入車站名稱…', mtrSaved:'你收藏的車站', mtrChange:'更改',
     mtrLineStrip:'按一下或滑動車站即可換站', mtrNextStops:'沿途車站 — 按一下計算到達時間',
-    mtrAway:'距離約 {m} 米', mtrNearestTag:'最近車站',
+    mtrAway:'距離約 {m}', mtrNearestTag:'最近車站',
     mtrNextTrains:'下班列車',
     mtrPlatform:'{p} 號月台', mtrStops:'{n} 個站', mtrOneStop:'1 個站', mtrRide:'車程約 {m} 分鐘',
     mtrArrive:'乘搭 {w} 分鐘後的班次，預計 {t} 到達',
@@ -2848,7 +2892,7 @@ rmStations:'{n} 個站',
     stopIndexing:'正在載入巴士路線網絡（只需一次）…',
     stopDestNoName:'找不到叫「{d}」的車站，試試較短的名稱。',
     stopNearNoneTo:'附近沒有直達 {d} 的車站。',
-    stopSearchNoneTo:'沒有名稱相符而又直達 {d} 的車站。', stopNoReach:'沒有直達 {d} 的巴士 — 打開會顯示全部班次',
+    stopSearchNoneTo:'沒有名稱相符而又直達 {d} 的車站。', stopNoReach:'沒有直達 {d} 的巴士 — 打開可看其他路線',
     alertTitle:'交通消息 — 你的路線受影響', alertSure:'受影響：{x}', alertMaybe:'可能受影響：{x}', alertOk:'知道了',
     alertBanner:'⚠ 交通消息：{x} · 按此查看', alertSource:'運輸署特別交通消息',
     alertSourceMtr:'港鐵列車班次資料', alertSourceBus:'巴士公司班次資料', alertMtrDelay:'{line} 現時延誤',
@@ -2916,7 +2960,7 @@ rmStations:'{n} 個站',
     mapResetDone:'地圖已清除。',
     spotPlanning:'正在為你規劃路線…',
     hereTitle:'你在這裡',
-    hereAccuracy:'誤差約 {m} 米',
+    hereAccuracy:'誤差約 {m}',
     hereNearby:'最近的公共交通',
     hereSpots:'你附近的景點',
     hereFailed:'找不到你的位置，請檢查手機有沒有允許本應用程式使用定位。',
@@ -2943,7 +2987,7 @@ rmStations:'{n} 個站',
     journeyRoadSlow:'已計入路面實況：{s} 現時只有 {k} 公里/小時，車程已加 {n} 分鐘。',
     stopNoFeedEta:'{r} · 約 {n} 個站 — 此公司沒有實時班次', alertSourceRoad:'運輸署道路探測器',
     stopHeldTitle:'{r} 有交通消息', stopHeldGo:'照用呢個站', stopHeldBack:'揀第二個站',
-    rsNearestStop:'最近車站', rsNearestFound:'此路線最近的站：{s}（{m} 米）',
+    rsNearestStop:'最近車站', rsNearestFound:'此路線最近的站：{s}（{m}）',
     rsWalkNeedStop:'請先按 📍 找出最近車站', rsWalkTo:'步行前往 {s}',
     rsPickRouteFirst:'請先選擇巴士路線。',
     rsFindingStop:'正在找此路線最近你的車站…',
@@ -3013,7 +3057,7 @@ rmStations:'{n} 個站',
     pleaseRead:'<b>請注意：</b>選項按「輕鬆程度」排序，並非只看快慢 — 步行及轉乘會令評分下降。時間為估算：步行速度每小時 3.5 公里，轉乘另加 {t} 分鐘。車費為成人全程收費，部分路線可能沒有資料。包括九巴、城巴、嶼巴、綠色小巴及港鐵，巴士最多轉乘一次。',
     credits:'路線及到站資料：運輸署 / 資料一站通。路線及車費資料：HK Bus Crawling@2021。地圖來自地政總署 © 香港特別行政區政府。',
     optionsFound:'找到 {n} 個選擇。', noNearbyStops:'你的地點 {m} 米範圍內沒有巴士站。',
-    couldNotWork:'無法計算路線：', checkInternet:'請檢查網絡連線後再按一次。',
+    couldNotWork:'無法計算路線：', checkInternet:'請檢查網絡連線後再按一次。', mtrDataFailed:'未能下載港鐵資料，請檢查網絡連線。', retryBtn:'再試一次',
     busDataRetrying:'巴士資料未能下載，正在重試（{n}/{m}）…',
     busDataStale:'未能更新巴士資料，暫時使用 {n} 天前儲存的版本。',
     busDataLater:'巴士資料未能載入，程式會自動再試。',
@@ -3027,7 +3071,7 @@ rmStations:'{n} 個站',
     rsAllQuiet:'⛔ 此路線已查的車站全部沒有班次。',
     rsOffTag:'現時停駛',
     rsEtaFailed:'無法取得班次', rsClose:'關閉車站列表',
-    rsBoardAuto:'● 在此上車（你在附近）', rsBoardNear:'● 最近的車站（約 {m} 米）', rsAlight:'▼ 在此下車',
+    rsBoardAuto:'● 在此上車（你在附近）', rsBoardNear:'● 最近的車站（約 {m}）', rsAlight:'▼ 在此下車',
     rsAfterAlight:'在下車站之後', rsStops:'{n} 個站', rsOneStop:'1 個站',
     rsRemaining:'還有 {n} 個站', rsNextStop:'下一站下車！', rsArrived:'已到達下車站',
     rsNearNow:'你正接近 {s}', rsNotOnRoute:'你尚未接近此路線',
@@ -3090,6 +3134,8 @@ rmStations:'{n} 個站',
     boardHereDetail:'在此乘搭 {route} 號巴士', alightHereDetail:'在此下車（{route} 號）',
     boardHereRail:'在此乘搭{route}', alightHereRail:'在此站落車',
     checkPlatform:'請跟車站內的指示牌前往該出口。',
+    checkChangeHere:'在此轉車：毋須出閘，跟指示牌前往下一個月台。',
+    stopNofM:'第{n}站（共{m}站）· {r}',
     checkGates:'入閘後請跟指示牌前往月台。',
     checkLrtPlatform:'輕鐵月台在馬路中間。請看清楚月台號碼，以及車頭的路線號碼。',
     wayN:'往北', wayNE:'往東北', wayE:'往東', waySE:'往東南',
@@ -3164,6 +3210,8 @@ function guessLanguage() {
   const tags = (navigator.languages && navigator.languages.length
                  ? navigator.languages : [navigator.language || '']).map(t => String(t).toLowerCase());
   for (const tag of tags) {
+    // Cantonese can come as yue-Hant-HK rather than zh-HK.
+    if (tag.startsWith('yue')) return { lang: 'zh', script: /hans/.test(tag) ? 'sc' : 'tc' };
     if (!tag.startsWith('zh')) {
       if (/^[a-z]{2}/.test(tag)) return { lang: 'en', script: 'tc' };   // anything else: English
       continue;
@@ -3265,7 +3313,10 @@ let barMessage = '', barMessageUntil = 0, barMessageTimer = null, barPartTimer =
   let last = '';
   new MutationObserver(() => {
     const text = status.textContent.trim();
-    if (!text || text === last) return;
+    // A repeat is skipped only while the first one is still on the bar. Once
+    // it has gone, the same words again are new news: a second tap on ☆ with
+    // the list full got no answer at all.
+    if (!text || (text === last && barMessage === text)) return;
     last = text;
     toast.textContent = text;                 // heard
     const reading = showBarMessage(text);     // seen
@@ -3651,6 +3702,14 @@ function metresBetween(lat1, lng1, lat2, lng2) {
   const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
   const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+// A distance as a person says it: 「850 米」, 「2.4 公里」, 「2527 公里」.
+// Raw metres past a kilometre read as a fault — a phone abroad showed a
+// stop 「距離約 2527004 米」 away.
+function distWords(m) {
+  m = Math.max(0, Number(m) || 0);
+  if (Math.round(m) < 1000) return Math.round(m) + T('unitM');
+  return (m < 10000 ? (m / 1000).toFixed(1) : String(Math.round(m / 1000))) + T('unitKm');
 }
 
 // The nearest stop to a point — over BOTH companies. This walked allStops,
@@ -4159,7 +4218,9 @@ function redrawJourney() {
   findButton.disabled = !(startPoint && endPoint);
   findButton.textContent = findButton.disabled ? T('setBoth') : T('findBuses');
 
-  if (!endPoint) { walkInfo.style.display = 'none'; return; }
+  // No stop yet (the bus data had not loaded when the point was set): nothing
+  // to say rather than "get off at  · Infinity m".
+  if (!endPoint || !endPoint.stop) { walkInfo.style.display = 'none'; return; }
 
   // ONE SET OF INSTRUCTIONS AT A TIME.
   // This block is the hint shown while a trip is being ENTERED: "set this
@@ -4178,7 +4239,7 @@ function redrawJourney() {
   walkInfo.style.display = 'block';
   walkInfo.innerHTML =
     '<div>' + T('getOffAt') + '</div>' +
-    '<div class="big">' + stopName(endPoint.stop) + '</div>' +
+    '<div class="big">' + esc(stopName(endPoint.stop)) + '</div>' +
     '<div>' + T('thenWalkAbout') + '</div>' +
     '<div class="big">' + walk.minutes + T('min') + ' · ' + walk.metres + ' m</div>' +
     '<div class="warn">' + T('walkWarn') + '</div>';
@@ -4238,7 +4299,7 @@ function drawPoint(point, colour, letter, text) {
 
   L.circleMarker(stopLatLng, { radius:10, color:colour, weight:4,
     fillColor:'white', fillOpacity:1 })
-    .addTo(journeyLayer).bindPopup('<b>' + stopName(point.stop) + '</b><br>' + T('nearestStop'));
+    .addTo(journeyLayer).bindPopup('<b>' + esc(stopName(point.stop)) + '</b><br>' + T('nearestStop'));
 }
 
 
@@ -4527,15 +4588,21 @@ function loadFavourites() {
   // name. A start favourite goes there too: the same argument the split
   // migration above made — somewhere you leave from is nearly always
   // somewhere you come back to, and dropping it to be tidy loses more.
+  // "My location" is not a place: as a destination name it matches no stop.
+  const notAPlace = new Set([TEXT.en.myLocationLabel, TEXT.zh.myLocationLabel]);
   if (favStart.length || favEnd.length) {
     for (const fav of favEnd.concat(favStart)) {
       const name = String(fav.label || '').trim();
-      if (name && !isSavedDest(name) && stopDests.length < MAX_DESTS) stopDests.push(name);
+      if (name && !notAPlace.has(name) && !isSavedDest(name) && stopDests.length < MAX_DESTS) stopDests.push(name);
     }
     saveStopDests();
     favStart = [];
     favEnd   = [];
   }
+  // The single list has been carried over; it must not be carried over
+  // again. Left in place, it refilled the emptied lists on every launch and
+  // put back each destination the rider had deleted from 我要去.
+  if (old.length) { try { localStorage.removeItem('hkfast-favs'); } catch (e) {} }
 
   // Anything saved before colours existed gets one now, per list, so an
   // existing install does not open to a row of identical chips.
@@ -4688,12 +4755,14 @@ function applyLanguage() {
   if (typeof loadWeather === 'function' && document.readyState !== 'loading') loadWeather();
   // The stop list holds stop names and counts in the old language, and it is
   // rebuilt rather than patched — every string in it comes from T().
+  // autoMetres goes back with the mark: the redraw guesses afresh from where
+  // the phone is NOW, and the old mark wore the new guess's distance.
   if (routeStopsState) {
     const keep = { context: routeStopsState.context, stops: routeStopsState.stops,
                    boardAt: routeStopsState.boardAt, alightAt: routeStopsState.alightAt,
-                   autoBoard: routeStopsState.autoBoard };
+                   autoBoard: routeStopsState.autoBoard, autoMetres: routeStopsState.autoMetres };
     renderRouteStops(keep.context, keep.stops);
-    if (routeStopsState) { Object.assign(routeStopsState, { boardAt: keep.boardAt, alightAt: keep.alightAt, autoBoard: keep.autoBoard }); paintStopCounts(); syncRideWatch(); }
+    if (routeStopsState) { Object.assign(routeStopsState, { boardAt: keep.boardAt, alightAt: keep.alightAt, autoBoard: keep.autoBoard, autoMetres: keep.autoMetres }); paintStopCounts(); syncRideWatch(); }
   }
   // A get-off alarm's bar speaks the new language at once, not at the next fix.
   ridePaint();
@@ -5503,10 +5572,38 @@ function svcArcsCoverNow(summary, nowMins) {
 // ranking a list and nowhere near good enough to cross a route off.
 function routeServiceNow(context) {
   const info = serviceInfoFor(context);
+  if (info && lastNightStillRunning(info.freq, minutesNow())) return true;
   const today = info ? patternsForToday(info.freq) : { masks: [], state: 'noData' };
   if (today.state === 'closed' || today.state === 'closedPh') return false;
   const summary = today.masks.length ? svcSummary(info.freq, today.masks) : null;
   return svcArcsCoverNow(summary, minutesNow());
+}
+
+// JUST AFTER MIDNIGHT, LAST NIGHT'S TIMETABLE IS STILL RUNNING. The 71S runs
+// on Sundays and holidays only, with departures at 00:15, 00:35 and 00:55 —
+// filed under Sunday as "2415"…, because they belong to Sunday's service. At
+// 00:20 on Monday, today's pattern said "closed" and the route was greyed
+// out and dropped from the planner with two buses still to come. Same choice
+// of yesterday's patterns as ferrySailings: the holiday ones after a public
+// holiday, otherwise yesterday's weekday bit.
+function lastNightStillRunning(freq, nowMins) {
+  if (!freq || nowMins >= 360) return false;
+  const y = new Date(Date.now() - 86400000);
+  const ybit = DAY_BITS[(y.getDay() + 6) % 7];
+  const yPh = isPublicHoliday(y);
+  const t = nowMins + 1440;                      // now, on yesterday's clock
+  let started = false, toCome = false;
+  for (const key of Object.keys(freq)) {
+    const m = Number(key);
+    if (!isFinite(m) || m <= 0 || !(yPh ? (m & PH_BIT) : (m & ybit))) continue;
+    for (const [start, value] of Object.entries(freq[key] || {})) {
+      const w = svcWindow(start, value);
+      if (!w || w.b < 1440) continue;            // finished before midnight
+      if (w.a <= t) started = true;
+      if (w.b >= t) toCome = true;
+    }
+  }
+  return started && toCome;
 }
 
 function isRunningNow(routeKey) {
@@ -5515,6 +5612,7 @@ function isRunningNow(routeKey) {
   if (String(routeKey).endsWith('|ferry')) return ferrySailings(routeKey, 1, 1, FERRY_SOON_MIN).length > 0;
   const nowMins = minutesNow();
   const info = serviceInfo.get(routeKey);
+  if (info && lastNightStillRunning(info.freq, nowMins)) return true;
   const today = info ? patternsForToday(info.freq) : { masks: [], state: 'noData' };
 
   if (today.state === 'closed' || today.state === 'closedPh') return false;
@@ -5984,12 +6082,30 @@ function buildRailGraph() {
   // Every branch matters: Lok Ma Chau and LOHAS Park live only on one variant,
   // and taking just the longest one strands them. Heavy-rail lines are listed
   // once and run both ways, so both ways are added here.
-  for (const [line, variants] of Object.entries(mtrData.lines))
-    for (const stops of variants)
+  //
+  // A BRANCH IS NOT A THROUGH TRAIN. 康城 → 將軍澳 → 寶琳 is all 將軍澳綫, and
+  // the search rode it as one train — but none runs from one branch onto the
+  // other; the rider changes at 將軍澳. What the trains really do is in the
+  // variants: three stops in a row on any one of them is a ride straight
+  // through the middle one (joins). Passing through a station of a line with
+  // more than one variant any other way is a change (railSearch). Not one
+  // line id per variant: MTR files the 康城 branch as 康城 > 將軍澳 > 調景嶺,
+  // and its trains run on to 北角, which that would have broken.
+  railGraph.joins = new Set();
+  railGraph.branched = new Set();
+  for (const [line, variants] of Object.entries(mtrData.lines)) {
+    if (variants.length > 1) railGraph.branched.add(line);
+    for (const stops of variants) {
+      if (line === 'AEL') { railAirportLinks(line, stops, RAIL_SPEED[line] || 33, link); continue; }
       for (let i = 0; i < stops.length - 1; i++) {
         ride(stops[i], stops[i + 1], line, RAIL_SPEED[line] || 33);
         ride(stops[i + 1], stops[i], line, RAIL_SPEED[line] || 33);
+        if (i === 0) continue;
+        railGraph.joins.add(stops[i - 1] + '>' + stops[i] + '>' + stops[i + 1]);
+        railGraph.joins.add(stops[i + 1] + '>' + stops[i] + '>' + stops[i - 1]);
       }
+    }
+  }
 
   if (!lrtData) return;    // the trains still work on their own
 
@@ -5999,7 +6115,7 @@ function buildRailGraph() {
   // the 705 and 706 are the two halves of a loop, and a rider cannot ride
   // either of them backwards. Adding the reverse would invent a service.
   for (const key of Object.keys(lrtData.routes)) {
-    const line = LR_LINE + key.split('|')[0];
+    const line = LR_LINE + lrtServiceOf(key);
     const stops = lrtRouteStops(key);
     for (let i = 0; i < stops.length - 1; i++)
       ride(LR_NODE + stops[i], LR_NODE + stops[i + 1], line, LRT_SPEED, key);
@@ -6022,6 +6138,56 @@ function buildRailGraph() {
     }
   }
   railGraph.withLrt = true;
+}
+
+// THE AIRPORT EXPRESS ONLY GOES TO THE AIRPORT.
+// Between 香港, 九龍 and 青衣 it runs beside the 東涌綫, and MTR's table holds
+// only the 東涌綫 price for those pairs — so 香港 → 九龍 came out as 機場快綫
+// at $10.6, a ride that costs far more. It is joined to the network as the
+// airport's link and nothing else: from each station only it serves (機場,
+// 博覽館) to every other stop on it, both ways, timed hop by hop along the
+// line. The stations a link runs through ride along on it, so 機場 → 香港
+// still counts three stations and is drawn through 青衣 and 九龍.
+function railAirportLinks(line, stops, speed, link) {
+  const own = code => Object.entries(mtrData.lines).every(([other, variants]) =>
+    other === line || !variants.some(list => list.includes(code)));
+  const at = [0];                        // minutes from the first stop, hop by hop
+  for (let i = 1; i < stops.length; i++) {
+    const A = railNodePos(stops[i - 1]), B = railNodePos(stops[i]);
+    at.push(A && B ? at[i - 1] + metresBetween(A[0], A[1], B[0], B[1]) / 1000 / speed * 60 : NaN);
+  }
+  for (let i = 0; i < stops.length; i++)
+    for (let j = i + 1; j < stops.length; j++) {
+      if (!own(stops[i]) && !own(stops[j])) continue;   // 香港 ↔ 九龍 is the 東涌綫's job
+      if (!isFinite(at[j] - at[i])) continue;
+      const through = stops.slice(i + 1, j);
+      link(stops[i], stops[j], line, at[j] - at[i], { through });
+      link(stops[j], stops[i], line, at[j] - at[i], { through: through.slice().reverse() });
+    }
+}
+
+// WHICH LIGHT RAIL SERVICE A ROUTE DIRECTION IS, as the search sees it.
+// Each direction is a service of its own. The 505 out to 石排 does not go on
+// to 鳴琴 — 鳴琴 is only on the way back, across the platform, after a wait —
+// and filed as one "505" the search kept the rider aboard through that change
+// (161 stop pairs, 三聖 → 鳴琴 among them). The 705 and 706 are the exception:
+// each of their two "directions" is half of one circle, joined end to end with
+// no stop in common, and the car carries on round — so they stay one service.
+function lrtServiceOf(key) {
+  const number = String(key).split('|')[0];
+  const a = lrtRouteStops(number + '|1'), b = lrtRouteStops(number + '|2');
+  const halves = a.length > 1 && b.length > 1 &&
+                 a[a.length - 1] === b[0] && b[b.length - 1] === a[0];
+  if (!halves) return key;
+  const inner = new Set(a.slice(1, -1));
+  return b.slice(1, -1).some(id => inner.has(id)) ? key : number;
+}
+
+// The line as a rider names it. The search keeps the two directions of a
+// Light Rail route apart (LR:505|1); the journey, the cards and the
+// next-train lookups all want the plain LR:505.
+function railRiderLine(line) {
+  return String(line).replace(/\|.*$/, '');
 }
 
 // ONE SEARCH FROM ONE STARTING POINT, settling the whole network.
@@ -6082,13 +6248,27 @@ function railSearch(from) {
       // Walking from a station to a stop to another station is not an
       // interchange, it is wandering. One walk at a time.
       if (here.line === RAIL_WALK && edge.line === RAIL_WALK) continue;
-      const boarding = edge.line !== RAIL_WALK && here.line && here.line !== edge.line;
+      // A WALK STRAIGHT FROM THE STARTING POINT is part of the walk there, and
+      // the first train boarded never pays a wait — walked to in the street or
+      // inside this graph alike. It used to: 屯門站 → 三聖 paid five minutes
+      // the same ride from the 屯門 stop did not. Its own state key keeps it
+      // apart from a walk made between two rides, which does pay.
+      const startWalk = here.line === null && edge.line === RAIL_WALK;
+      // Staying aboard through a station of a branched line is staying aboard
+      // only if some train runs that way (buildRailGraph's joins): 北角 →
+      // 將軍澳 → 康城 is one train, 康城 → 將軍澳 → 坑口 is a change. So on
+      // such a line the state also remembers the station it came from.
+      const branched = railGraph.branched && railGraph.branched.has(edge.line);
+      const cameFrom = branched && here.line === edge.line ? best.get(here.prev).node : null;
+      const turns = cameFrom !== null && !railGraph.joins.has(cameFrom + '>' + here.node + '>' + edge.to);
+      const boarding = (edge.line !== RAIL_WALK && here.line && here.line !== edge.line && !here.startWalk) || turns;
       const cost = here.cost + edge.minutes +
                    (boarding ? (isLrtLine(edge.line) ? LRT_CHANGE_MIN : RAIL_CHANGE_MIN) : 0);
-      const nextKey = edge.to + '|' + edge.line;
+      const nextKey = edge.to + '|' + edge.line + (startWalk ? '|start' : '') +
+                      (branched ? '<' + here.node : '');
       const seen = best.get(nextKey);
       if (seen && seen.cost <= cost) continue;
-      best.set(nextKey, { cost, prev: key, node: edge.to, line: edge.line, edge });
+      best.set(nextKey, { cost, prev: key, node: edge.to, line: edge.line, edge, startWalk, turns });
       push({ cost, key: nextKey });
     }
   }
@@ -6106,7 +6286,7 @@ function railPathTo(best, to) {
   const path = [];
   for (let key = bestKey; key !== null; key = best.get(key).prev) {
     const state = best.get(key);
-    path.push({ station: state.node, line: state.line, edge: state.edge });
+    path.push({ station: state.node, line: state.line, edge: state.edge, turns: !!state.turns });
   }
   path.reverse();
   return { cost: bestCost, path };
@@ -6429,6 +6609,10 @@ function buildRailJourney(found, walkOn, walkOff) {
   const path = found.path;
   const legs = [], transferWalks = [];
   let pending = null;          // a walk not yet attached to anything
+  // Minutes of walking that found.cost already holds AND that end up inside
+  // walkOn or walkOff. Counted once, not twice: 屯門站 → 三聖 said 19 minutes
+  // for an 11-minute trip, and an option could lose its place to a slower one.
+  let folded = 0;
   let i = 1;
 
   while (i < path.length) {
@@ -6436,14 +6620,17 @@ function buildRailJourney(found, walkOn, walkOff) {
 
     if (line === RAIL_WALK) {
       const hop = walkingEstimate((path[i].edge && path[i].edge.metres) || 0);
-      if (legs.length === 0) walkOn = addWalks(walkOn, hop);   // before the first train
+      if (legs.length === 0) { walkOn = addWalks(walkOn, hop); folded += hop.minutes; }   // before the first train
       else pending = hop;                                      // between two trains
       i++;
       continue;
     }
 
     const startAt = i - 1;
-    while (i < path.length && path[i].line === line) i++;
+    // The first hop is this leg's own; after it, a turn from one branch onto
+    // the other starts the next leg at that station (railSearch).
+    i++;
+    while (i < path.length && path[i].line === line && !path[i].turns) i++;
 
     const on = railStop(path[startAt].station), off = railStop(path[i - 1].station);
     if (!on || !off) return null;
@@ -6455,24 +6642,30 @@ function buildRailJourney(found, walkOn, walkOff) {
     // chips of 去 X 的路線 (🚇 東涌綫 18).
     let rideMins = 0;
     for (let k = startAt + 1; k < i; k++) rideMins += (path[k].edge && path[k].edge.minutes) || 0;
+    // Every station the leg calls at — an Airport Express link carries the
+    // ones it runs through (railAirportLinks).
+    const calls = [path[startAt].station];
+    for (let k = startAt + 1; k < i; k++)
+      calls.push(...((path[k].edge && path[k].edge.through) || []), path[k].station);
+    const shown = railRiderLine(line);
     legs.push({
-      route: railLineName(line),
-      lineCode: lrt ? line.slice(LR_LINE.length) : line,
+      route: railLineName(shown),
+      lineCode: lrt ? shown.slice(LR_LINE.length) : shown,
       minutes: Math.max(1, Math.round(rideMins)),
-      on, off, stops: (i - 1) - startAt,
-      path: path.slice(startAt, i).map(p => railStop(p.station)).filter(Boolean),
+      on, off, stops: calls.length - 1,
+      path: calls.map(code => railStop(code)).filter(Boolean),
       bound: 'O', serviceType: '1', co: lrt ? 'lrt' : 'mtr',
       lrtVia: lrt ? ((path[startAt + 1].edge || {}).via || null) : null
     });
   }
 
   // A walk still in hand after the last leg is the start of the walk out.
-  if (pending) walkOff = addWalks(walkOff, pending);
+  if (pending) { walkOff = addWalks(walkOff, pending); folded += pending.minutes; }
   if (legs.length === 0) return null;
 
   return {
     legs, walkOn, walkOff, transferWalks, fares: 1, rail: true,
-    total: Math.round(walkOn.minutes + found.cost + walkOff.minutes)
+    total: Math.round(walkOn.minutes + found.cost - folded + walkOff.minutes)
   };
 }
 
@@ -6500,7 +6693,7 @@ function stopGridNow() {
   }
   return stopGrid;
 }
-function stopsNear(lat, lng, limit) {
+function stopsNear(lat, lng, limit, every) {
   const radius = limit || WALK_LIMIT_M;
   const grid = stopGridNow();
   const ring = Math.max(1, Math.ceil(radius / 1000));
@@ -6517,6 +6710,12 @@ function stopsNear(lat, lng, limit) {
     }
   }
   near.sort((a, b) => a.metres - b.metres);
+  // EVERY STOP IN THE CIRCLE, for working out which bays are one stop
+  // (ownGroup, poleGroup). The places below are a journey's, not a stop's:
+  // shared by every company and the railway, the 25 ran out before a busy
+  // interchange did — 葵芳站巴士總站 KW909 never met its own KW900 88 m away,
+  // and the stop it opened depended on which of its bays was tapped.
+  if (every) return near;
   // THE 25 NEAREST STOPS, as always — and, beside them, the MTR's own buses
   // and the piers. An MTR Bus stop is filed once PER ROUTE (seven ids on the
   // one spot at 大埔墟站), so counted in with the rest they took eleven of
@@ -6526,6 +6725,11 @@ function stopsNear(lat, lng, limit) {
   const out = [], spots = new Set();
   let main = 0, piers = 0;
   for (const n of near) {
+    // A railway station or Light Rail stop is not a bus stop and takes none
+    // of the 25: at 兆康 they pushed three 兆康苑總站 bays out. It stays in the
+    // list — findBuses reads an empty list as "no stop within reach" and
+    // stops there, before it has asked the trains.
+    if (n.stop.isStation) { out.push(n); continue; }
     if (n.stop.pier) { if (piers < 4) { out.push(n); piers++; } continue; }
     if (n.stop.feeder) {
       const spot = Number(n.stop.lat).toFixed(4) + ',' + Number(n.stop.long).toFixed(4);
@@ -7008,6 +7212,12 @@ async function findBuses() {
   journeyMode = false;
   drawStops();
   etaRequests = new Map();
+  // THE LAST TRIP'S ANSWERS GO NOW, not when this one has some of its own. A
+  // search that found nothing, failed or was cancelled left them in place:
+  // the 港鐵 tab still offered "3 trips" and drew the old A → B journeys
+  // under the new A → C heading.
+  busPicks = []; railPicks = []; railOptions = []; currentPicks = [];
+  paintBottomBar();
 
   try {
     // The HK Bus Crawling file carries Citybus stops and route orders, so it
@@ -7251,10 +7461,16 @@ async function findBuses() {
     // When two journeys are within 5 minutes, prefer the one with fewer buses.
     // Saving four minutes is not worth an extra change for most people, and
     // certainly not for an older rider with luggage.
-    const byTime = [...journeys].sort((a, b) => {
-      if (Math.abs(a.total - b.total) <= 5) return a.legs.length - b.legs.length;
-      return a.total - b.total;
-    });
+    // Done as ONE number per journey — five and a half minutes added for each
+    // change. The old pairwise rule called two journeys with as many buses
+    // and 4 minutes apart a tie, and a sort fed ties that do not chain hands
+    // back whatever order it was given: the 最快 card went to a 27-minute trip
+    // beside a 20-minute one in two searches out of three. Totals are whole
+    // minutes, so the half keeps "5 apart" on the fewer-buses side and
+    // "6 apart" on the quicker side, exactly as before.
+    const changeWeighted = journey => journey.total + 5.5 * (journey.legs.length - 1);
+    const byTime = [...journeys].sort((a, b) =>
+      changeWeighted(a) - changeWeighted(b) || a.total - b.total);
     // Gentlest = least total effort, not simply fewest changes.
     const byEffort = [...journeys].sort((a, b) => effortScore(a) - effortScore(b));
     const byWalking = [...journeys].sort((a, b) =>
@@ -7333,7 +7549,9 @@ async function findBuses() {
       const lowest = Math.min(...prices);
       for (const pick of picks) {
         const fare = journeyFare(pick.journey);
-        if (fare !== null && fare > lowest) pick.extraCost = fare - lowest;
+        // The cheapest is kept too: in senior mode the card prices both ends
+        // at the concession rate and works the gap out from those (makeCard).
+        if (fare !== null && fare > lowest) { pick.extraCost = fare - lowest; pick.cheapestFare = lowest; }
       }
     }
 
@@ -7401,6 +7619,9 @@ async function findBuses() {
     // Offer to save these points now that the user has seen a real result.
     const addRow = document.createElement('div');
     for (const [which, point] of [['start', startPoint], ['end', endPoint]]) {
+      // 「⭐ 儲存起點：我的位置」 saved a name that means somewhere else every
+      // time — and, by label, refused every later 我的位置 as already saved.
+      if (point.label === T('myLocationLabel')) continue;
       const button = document.createElement('button');
       button.className = 'addfav';
       button.textContent = T(which === 'start' ? 'saveStart' : 'saveEnd')
@@ -7410,7 +7631,9 @@ async function findBuses() {
     }
     box.appendChild(addRow);
 
-    status.textContent = T('optionsFound').replace('{n}', picks.length);
+    // Trains only: there are no bus picks, and "0 options found" sat above
+    // three train cards.
+    status.textContent = T('optionsFound').replace('{n}', picks.length || railPicks.length);
   } catch (error) {
     box.innerHTML = '<div class="jcard">' + T('couldNotWork') + ' ' + error.message +
                     '<br><br>' + T('checkInternet') + '</div>';
@@ -7640,7 +7863,9 @@ function buildCompareStrip(picks) {
     tile.innerHTML =
       '<div class="cnum" style="background:' + pick.colour + '">' + pick.number + '</div>' +
       '<div class="ctime">' + journey.total + '<span class="cunit">' + T('min') + '</span></div>' +
-      '<div class="cbus">' + journey.legs.map(l => l.lineCode || l.route).join(' → ') + '</div>' +
+      // A ferry by where it goes, as its step names it: 7005 means nothing.
+      '<div class="cbus">' + journey.legs.map(l =>
+        l.lineCode || (l.co === 'ferry' ? esc(legLabel(l)) : l.route)).join(' → ') + '</div>' +
       (fare !== null ? '<div class="cfare">' + fareText(fare) + '</div>' : '') +
       '<div class="ceta" id="ceta-' + pick.number + '">…</div>';
 
@@ -7669,7 +7894,14 @@ function makeCard(pick) {
   card.className = 'jcard';
   card.dataset.number = pick.number;
 
-  const boardsAtChosen = !!startPoint.stop && journey.legs[0].on.stop === startPoint.stop.stop;
+  // Picked from the search list, a station is filed as MTR:KOT and a Light
+  // Rail stop as LRT:295 — the places the railway search calls KOT and
+  // LR:295. Compared raw they never matched, and a rider standing in 九龍塘
+  // station was told to walk 1 minute (0 m) to it.
+  const chosenId = startPoint.stop ? String(startPoint.stop.stop) : '';
+  const firstId = String(journey.legs[0].on.stop);
+  const boardsAtChosen = !!chosenId && (firstId === chosenId || chosenId === 'MTR:' + firstId ||
+    (isLrtNode(firstId) && chosenId === 'LRT:' + lrtIdOf(firstId)));
   const isTrainTrip = !!journey.rail || journey.legs[0].co === 'mtr';
   const legCount = journey.legs.length;
 
@@ -7691,6 +7923,11 @@ function makeCard(pick) {
 
   const walkTotal = totalWalkMinutes(journey);
   const changes = legCount - 1;
+  // WHAT THIS ONE COSTS ABOVE THE CHEAPEST, at the prices this card shows.
+  // In senior mode every price on screen is the concession one, so the gap
+  // is too — "$4.4 more" under two $2.0 fares was the adult gap leaking out.
+  const paid = f => elderly ? elderlyFare(f) : f;
+  const extraShown = pick.extraCost ? paid(journeyFare(journey)) - paid(pick.cheapestFare) : 0;
 
   const fareCell = journeyFare(journey) === null
     // An unknown fare is a sentence, not a giant dash: some cross-harbour
@@ -7736,8 +7973,8 @@ function makeCard(pick) {
       '<div class="jnext waiting" id="next-' + pick.number + '">' + T('checkingBus') + '</div>' +
     '</div>' +
     '<div class="jwhy">' + pick.why + '</div>' +
-    (pick.extraCost
-      ? '<div class="jextra">' + T('costsMore').replace('{n}', pick.extraCost.toFixed(1)) + '</div>'
+    (extraShown >= 0.05
+      ? '<div class="jextra">' + T('costsMore').replace('{n}', extraShown.toFixed(1)) + '</div>'
       : '');
 
   // Green minibuses carry 19 people and do not take standees. For an older
@@ -8475,11 +8712,23 @@ function findMeThenNearby() {
   navigator.geolocation.getCurrentPosition(
     position => {
       herePoint = { lat: position.coords.latitude, lng: position.coords.longitude };
-      map.setView([herePoint.lat, herePoint.lng], 16);
+      // Centre on the rider ONCE. The fix can take ten seconds, and this also
+      // runs on every language switch: it used to snap a map the rider had
+      // already opened on a drawn route, or panned, back to their own street.
+      if (!mapCentredOnce) {
+        mapCentredOnce = true;
+        map.setView([herePoint.lat, herePoint.lng], 16);
+      }
       status.textContent = T('foundYou');
       if (activeMode === 'bus') renderLiveStrip('bus');
       if (activeMode === 'mtr') openMtrView();
       if (activeMode === 'stop') renderStopView();
+      // ⭐ opened before the fix landed: buses saved by number were left
+      // saying "allow location" though it had just been allowed. Only their
+      // times are asked again — redrawing the whole list would throw away a
+      // name half-typed into the add or rename box.
+      if (activeMode === 'fav')
+        departures.forEach((dep, i) => { if (!dep.stop) loadDepartureEta(dep, i); });
     },
     error => { status.textContent = T('locationFailed'); },
     { enableHighAccuracy:true, timeout:10000 });
@@ -8739,7 +8988,12 @@ function renderAddRoute(into) {
     }
 
     for (const r of matches) {
-      const already = departures.some(d =>
+      // ★ only for what THIS button adds and removes: a KMB route saved by
+      // number, with no stop. A 60X pinned to one pole used to light it, and
+      // tapping that ★ added a second 60X — and with six saved, quietly
+      // dropped the oldest bus off the end of the list.
+      const already = departures.some(d => !d.stop &&
+        String(d.co || 'KMB').toUpperCase() === 'KMB' &&
         String(d.route).toUpperCase() === String(r.route).toUpperCase() && d.dir === r.bound);
       const item = document.createElement('button');
       item.className = 'addrouteitem' + (already ? ' on' : '');
@@ -8964,7 +9218,6 @@ function renderFavouriteList() {
       const del = document.createElement('button');
       del.className = 'fpdel';
       del.textContent = '✕';
-      del.setAttribute('aria-label', 'Remove ' + name);
       del.setAttribute('aria-label', T('removeLabel') + ' ' + label);
       del.addEventListener('click', () => {
         if (isStart) { stopFavs.splice(index, 1); saveStopFavs(); }
@@ -9026,7 +9279,7 @@ function renderFavouriteList() {
 
     const del = document.createElement('button');
     del.className = 'go-del depdel'; del.textContent = '✕';
-    del.setAttribute('aria-label', 'Remove ' + dep.route);
+    del.setAttribute('aria-label', T('removeLabel') + ' ' + dep.route);
     del.addEventListener('click', () => {
       departures.splice(index, 1); saveDepartures(); renderFavouriteList();
     });
@@ -9064,7 +9317,7 @@ function renderFavouriteList() {
         '<div class="depeta" id="trainfav-eta-' + index + '">…</div>';
       const del = document.createElement('button');
       del.className = 'go-del depdel'; del.textContent = '✕';
-      del.setAttribute('aria-label', 'Remove ' + stationName(t.station));
+      del.setAttribute('aria-label', T('removeLabel') + ' ' + stationName(t.station));
       del.addEventListener('click', () => { trainFavs.splice(index, 1); saveTrainFavs(); renderFavouriteList(); });
       row.appendChild(del);
       const open = document.createElement('button');
@@ -9149,6 +9402,10 @@ function goToRouteMode(routeNo) {
 async function loadDepartureEta(dep, index) {
   const cell = document.getElementById('depeta-' + index);
   if (!cell) return;
+  // Grabbed now, with the cell, not after the wait below: delete a saved bus
+  // while this one is still finding its stop and the rows renumber, so a
+  // label looked up later by index belonged to a different bus.
+  const stopLabel = document.getElementById('depstop-' + index);
   try {
     // A route saved by number carries no stop, so find the nearest one on
     // that route to where the person is standing.
@@ -9161,8 +9418,7 @@ async function loadDepartureEta(dep, index) {
     if (!dep.stop) {
       // A countdown with no place attached is just a number, so name the stop.
       const found = allStops.find(s => s.stop === stopId);
-      const label = document.getElementById('depstop-' + index);
-      if (found && label) label.textContent = plainStopName(stopName(found));
+      if (found && stopLabel) stopLabel.textContent = plainStopName(stopName(found));
     }
 
     // KMB answers per stop; every other company through the same fetchPoleRows
@@ -9286,7 +9542,10 @@ document.addEventListener('touchstart', event => {
   swipe = null;
   if (event.touches.length !== 1) return;
   // Not while a sheet is up, and not while a search box has the keyboard.
-  if (document.querySelector('#dirsheet.open, #alertsheet.open')) return;
+  // The 🐞 report's own screens are sheets too: boxing a row is a sideways
+  // drag, and it used to change the tab under the picture (or refresh it),
+  // so the report lost what was under the box.
+  if (document.querySelector('#dirsheet.open, #alertsheet.open, #bugsheet.open, #bugshot.open')) return;
   if (event.target.closest('input, textarea, select')) return;
   // The map tab is a map: dragging it is panning, and panning wins.
   if (activeMode === 'map' || event.target.closest('#map')) return;
@@ -9347,7 +9606,9 @@ function refreshCurrentView() {
     if (stopState.stop) { arriveRows.clear(); stopLoadRows(true); }
     else { renderStopView(); }
   } else if (activeMode === 'mtr') {
-    mtrLoadBlocks(true);
+    // A Light Rail board is its own feed: a pull used to fetch the trains
+    // behind it and leave its times as they were under the refresh hint.
+    if (mtrState.lrt) lrtOpen(mtrState.lrt); else mtrLoadBlocks(true);
   } else if (activeMode === 'fav') {
     renderFavouriteList();
   } else if (activeMode === 'map') {
@@ -9398,10 +9659,10 @@ function drawOneOption(chosenPick) {
   journeyLayer.clearLayers();
   L.circleMarker([startPoint.lat, startPoint.lng], { radius:7, color:'white',
     weight:3, fillColor:'#166534', fillOpacity:1 }).addTo(journeyLayer)
-    .bindPopup('<b>' + T('start') + '</b><br>' + startPoint.label);
+    .bindPopup('<b>' + T('start') + '</b><br>' + esc(startPoint.label));
   L.circleMarker([endPoint.lat, endPoint.lng], { radius:7, color:'white',
     weight:3, fillColor:'#991b1b', fillOpacity:1 }).addTo(journeyLayer)
-    .bindPopup('<b>' + T('destination') + '</b><br>' + endPoint.label);
+    .bindPopup('<b>' + T('destination') + '</b><br>' + esc(endPoint.label));
 
   const latLngOf = stop => [Number(stop.lat), Number(stop.long)];
   const all = [[startPoint.lat, startPoint.lng], [endPoint.lat, endPoint.lng]];
@@ -9440,9 +9701,11 @@ function drawOneOption(chosenPick) {
         color: 'white', weight: isEnd ? 4 : 2,
         fillColor: colour, fillOpacity: 1
       }).addTo(routeLayer)
-        .bindPopup('<b>' + station.name_en + '</b><br><small>' +
-                   (station.name_tc || '') + '</small><br>Stop ' + (index + 1) +
-                   ' of ' + stations.length + ' on bus ' + leg.route);
+        // The rider's own language first, and no "on bus" over a train.
+        .bindPopup('<b>' + esc(stopName(station)) + '</b><br><small>' +
+                   esc(lang === 'zh' ? (station.name_en || '') : (station.name_tc || '')) + '</small><br>' +
+                   esc(T('stopNofM').replace('{n}', index + 1).replace('{m}', stations.length)
+                                    .replace('{r}', legLabel(leg))));
     });
 
     // Labels alternate left and right so consecutive markers do not cover
@@ -9455,14 +9718,14 @@ function drawOneOption(chosenPick) {
 
     addStopLabel(latLngOf(leg.on),
                  isFirst ? 'A' : (legIndex + 1),
-                 T('getOn') + ' ' + leg.route,
+                 T('getOn') + ' ' + legLabel(leg),
                  stopName(leg.on), false, onSide, 900,
                  () => zoomToStopDetail(leg.on, isFirst ? startPoint : journey.legs[legIndex-1].off,
                                         leg, true));
 
     addStopLabel(latLngOf(leg.off),
                  isLast ? 'B' : '↓',
-                 T('getOff') + ' ' + leg.route,
+                 T('getOff') + ' ' + legLabel(leg),
                  stopName(leg.off), true, offSide, 890,
                  () => zoomToStopDetail(leg.off, isLast ? endPoint : journey.legs[legIndex+1].on,
                                         leg, false));
@@ -9474,7 +9737,7 @@ function drawOneOption(chosenPick) {
 
   fitMapTo(L.latLngBounds(all));
 
-  document.getElementById('rb-route').textContent = journey.legs.map(l => l.route).join(' → ');
+  document.getElementById('rb-route').textContent = journey.legs.map(l => legLabel(l)).join(' → ');
   const companies = [...new Set(journey.legs.map(l => coName(l.co)))];
   document.getElementById('rb-company').textContent =
     companies.join(' + ') + ' · ' + T('option') + ' ' + chosenPick.number;
@@ -9527,7 +9790,21 @@ function addStopLabel(latlng, dotText, title, name, finish, side, z, onClick) {
 // enough to see the pavement and draw the walking line.
 function zoomToStopDetail(stop, fromPoint, leg, isBoarding) {
   const stopLatLng = [Number(stop.lat), Number(stop.long)];
-  const fromLatLng = [fromPoint.lat, fromPoint.lng];
+  // At a CHANGE the other end is the previous or next leg's stop, and a stop
+  // record carries lat/LONG, not lat/lng. [lat, undefined] made Leaflet throw
+  // "Invalid LatLng", so the "2" and "↓" labels on the map opened nothing.
+  const fromLat = Number(fromPoint.lat);
+  const fromLng = Number(fromPoint.lng !== undefined ? fromPoint.lng : fromPoint.long);
+  const fromLatLng = [fromLat, fromLng];
+  // Getting off: where the walk goes next. At the end of the trip that is the
+  // destination; at a change it is the stop the next leg boards at — the card
+  // used to send someone changing trains off towards their final address.
+  const atChange = !isBoarding && fromPoint !== endPoint;
+  const walkTo = { lat: fromLat, lng: fromLng,
+                   label: atChange ? stopName(fromPoint) : ((endPoint && endPoint.label) || '') };
+  // A change inside the same station, or at the same pole, is not a walk
+  // anywhere: there is no exit to take and nothing to hand to the phone's map.
+  const sameStop = atChange && fromPoint.stop !== undefined && fromPoint.stop === stop.stop;
 
   detailLayer.clearLayers();
   const colour = isBoarding ? '#166534' : '#991b1b';
@@ -9548,7 +9825,7 @@ function zoomToStopDetail(stop, fromPoint, leg, isBoarding) {
   L.circleMarker(stopLatLng, { radius: 8, color: 'white', weight: 3,
     fillColor: colour, fillOpacity: 1 }).addTo(detailLayer);
 
-  const walk = walkingEstimate(metresBetween(fromPoint.lat, fromPoint.lng,
+  const walk = walkingEstimate(metresBetween(fromLat, fromLng,
                                              Number(stop.lat), Number(stop.long)));
 
   // The details go in a FIXED panel at the top-right. Being fixed, it can
@@ -9570,10 +9847,10 @@ function zoomToStopDetail(stop, fromPoint, leg, isBoarding) {
     ? walkUrl(Number(stop.lat), Number(stop.long))
     // Off the bus: they are reading this BEFORE they get there, so the walk
     // is drawn from the stop they will step off at, not from where they sit.
-    : walkUrl(endPoint.lat, endPoint.lng, Number(stop.lat), Number(stop.long));
+    : walkUrl(walkTo.lat, walkTo.lng, Number(stop.lat), Number(stop.long));
   const goText = isBoarding
     ? T('sdWalkHere')
-    : T('sdWalkDest').replace('{d}', esc(plainStopName(endPoint.label || '')));
+    : T('sdWalkDest').replace('{d}', esc(plainStopName(walkTo.label)));
 
   // ---- WHICH EXIT (railway stations only) ----
   // A station is not a bus stop: coming out of the wrong end of 尖東 is a ten
@@ -9584,9 +9861,9 @@ function zoomToStopDetail(stop, fromPoint, leg, isBoarding) {
   const isLrtLeg = leg && leg.co === 'lrt';
   const isRail = isLrtLeg || (leg && leg.co === 'mtr');
   let exitLine = '';
-  if (!isBoarding && isRail) {
+  if (!isBoarding && isRail && !sameStop) {
     const face = Math.round(bearingBetween(Number(stop.lat), Number(stop.long),
-                                           endPoint.lat, endPoint.lng) / 45) % 8;
+                                           walkTo.lat, walkTo.lng) / 45) % 8;
     exitLine = '<div class="sd-exit" id="sd-exit">' +
                T(isLrtLeg ? 'lrtOutDir' : 'sdExitDir').replace('{d}', esc(T(WAY_KEYS[face]))) + '</div>';
   }
@@ -9602,10 +9879,10 @@ function zoomToStopDetail(stop, fromPoint, leg, isBoarding) {
     '<div class="sd-sub">' + (lang === 'zh' ? stop.name_en : (stop.name_tc || '')) + '</div>' +
     '<div class="sd-line">' +
       (isBoarding ? T('towards') + ' <b>' + stopName(leg.off) + '</b>'
-                  : T('thenWalkTo') + ' <b>' + esc(endPoint.label) + '</b>') + '</div>' +
+                  : T('thenWalkTo') + ' <b>' + esc(walkTo.label) + '</b>') + '</div>' +
     '<div class="sd-walk">&#128694; ' + walk.minutes + T('min') + ' &middot; ' + walk.metres + ' m</div>' +
     exitLine +
-    '<a class="sd-go" href="' + esc(goHref) + '" target="_blank" rel="noopener">' + goText + '</a>' +
+    (sameStop ? '' : '<a class="sd-go" href="' + esc(goHref) + '" target="_blank" rel="noopener">' + goText + '</a>') +
     // "Check you are on the correct side of the road" is a bus stop's problem.
     // Inside a station the question is which sign to follow, so it says that.
     // A Light Rail platform is neither: it is in the middle of a road, and
@@ -9613,9 +9890,9 @@ function zoomToStopDetail(stop, fromPoint, leg, isBoarding) {
     // front of the train.
     '<div class="sd-note">' +
       T(isLrtLeg ? 'checkLrtPlatform' : !isRail ? 'checkSide'
-        : isBoarding ? 'checkGates' : 'checkPlatform') + '</div>';
+        : isBoarding ? 'checkGates' : sameStop ? 'checkChangeHere' : 'checkPlatform') + '</div>';
 
-  if (!isBoarding && isRail && !isLrtLeg) fillStationExit(stop, endPoint, 'sd-exit');
+  if (!isBoarding && isRail && !isLrtLeg && !sameStop) fillStationExit(stop, walkTo, 'sd-exit');
 
   document.getElementById('sd-close').addEventListener('click', () => {
     panel.style.display = 'none';
@@ -9781,7 +10058,7 @@ async function loadTrainTimes(pick, line, tile) {
     const minutes = trains.slice(0, 3)
       .map(t => usableWait(t.ttnt))
       .filter(n => n !== null)
-      .map(n => n === 0 ? T('due') : n + ' ' + T('min'));
+      .map(n => n === 0 ? T('due') : n + T('min'));     // T('min') brings its own space
     if (minutes.length === 0) throw new Error('no usable times');
 
     setBoth(T('nextTrain') + ' ' + minutes.join(', '));
@@ -9817,9 +10094,13 @@ function lrtTerminusName(via) {
 //                                            train is worse than no time.
 async function loadLrtNext(pick, line, tile) {
   const leg = pick.journey.legs[0];
-  const alive = () => document.getElementById('next-' + pick.number) === line;
+  // No "is this card still on screen?" check. With the option's card closed,
+  // loadNextBus hands over a spare element that is never in the page, so the
+  // check always failed and options 2 and 3 sat on "…" until opened. The line
+  // and the tile were grabbed when the request went out and are written by
+  // reference, as loadTrainTimes does: a late answer for a card that has gone
+  // lands on a detached node, out of sight.
   const giveUp = message => {
-    if (!alive()) return;
     line.className = 'jnext waiting';
     line.textContent = message;
     if (tile) tile.textContent = '—';
@@ -9830,7 +10111,6 @@ async function loadLrtNext(pick, line, tile) {
                                  { signal: AbortSignal.timeout(10000) });
     if (!response.ok) throw new Error('server said ' + response.status);
     const data = await response.json();
-    if (!alive()) return;
 
     const dest = t => String((lang === 'zh' ? t.dest_ch : t.dest_en) || '').trim();
     const mine = [];
@@ -9997,11 +10277,15 @@ async function loadNextBus(pick) {
     // Options boarding at the same stop share one request (reused for a minute).
     const recent = etaRequests.get(url);
     if (!recent || Date.now() - recent.at > 60000) {
-      etaRequests.set(url, { at: Date.now(), answer: fetch(url, { signal: AbortSignal.timeout(10000) })
+      const asked = { at: Date.now(), answer: fetch(url, { signal: AbortSignal.timeout(10000) })
         .then(response => {
           if (!response.ok) throw new Error('server said ' + response.status);
           return response.json();
-        }) });
+        }) };
+      etaRequests.set(url, asked);
+      // A FAILED request is not shared for the minute. It used to be, so
+      // asking again inside that minute failed again without asking anyone.
+      asked.answer.catch(() => { if (etaRequests.get(url) === asked) etaRequests.delete(url); });
     }
     const entries = (await etaRequests.get(url).answer).data || [];
     const now = Date.now();
@@ -10055,6 +10339,9 @@ async function loadNextBus(pick) {
   } catch (error) {
     line.className = 'jnext waiting';
     line.textContent = T('liveUnavailable') + ' ' + leg.route;
+    // Every other way out of here settles the tile; this one left it on "…",
+    // which reads as still loading for as long as the screen is open.
+    if (tile) tile.textContent = '—';
   }
 }
 
@@ -10322,7 +10609,16 @@ const routeList  = document.getElementById('route-results');
 // planning a trip. The panel switches over on the first character and stays
 // there until the ✕ — a mode that turned itself off again mid-task would be
 // worse than one that never turned on.
+// WHICH ROUTE THE SCREEN IS WAITING FOR.
+// A Citybus stop list arrives five stops at a time, seconds apart on a phone,
+// and nothing stopped one that was no longer wanted: ✕ the lookup, or open
+// another route, and the first still landed — its line on the map, its
+// banner over the 巴士 tab, its stops in place of the route asked for. Every
+// way into or out of a route moves this on; a load paints only while it is
+// still the newest.
+let routeLoadTicket = 0;
 function enterRouteMode() {
+  routeLoadTicket++;
   const panel = document.getElementById('panel');
   panel.classList.remove('favmode', 'setmode', 'mtrmode', 'stopmode');
   document.getElementById('favview').style.display = 'none';
@@ -10337,6 +10633,7 @@ function enterRouteMode() {
 }
 
 function leaveRouteMode() {
+  routeLoadTicket++;                     // a route still on its way is not wanted now
   const panel = document.getElementById('panel');
   panel.classList.remove('routemode');
   routeInput.value = '';
@@ -10376,7 +10673,7 @@ function markNearestOnRoute() {
     const stop = routeStopsState.stops[near.index];
     status.textContent = T('rsNearestFound')
       .replace('{s}', plainStopName(lang === 'zh' ? (stop.name_tc || stop.name_en) : stop.name_en))
-      .replace('{m}', Math.round(near.metres));
+      .replace('{m}', distWords(near.metres));
   });
 }
 document.getElementById('route-here').addEventListener('click', markNearestOnRoute);
@@ -10583,6 +10880,7 @@ function endName(record, which) {
 
 
 async function showKmbRoute(route) {
+  const ticket = ++routeLoadTicket;
   routeList.innerHTML = '';
   routeLayer.clearLayers();
   const dir = route.bound === 'O' ? 'outbound' : 'inbound';
@@ -10599,6 +10897,7 @@ async function showKmbRoute(route) {
       cachePut(key, refs);
     }
 
+    if (ticket !== routeLoadTicket) return;   // closed, or another route opened since
     const byId = new Map(allStops.map(s => [s.stop, s]));
     const stops = refs.map(r => byId.get(r.stop)).filter(Boolean);
     paintRoute(route.route, 'KMB', endName(route, 'orig'), endName(route, 'dest'),
@@ -10609,14 +10908,19 @@ async function showKmbRoute(route) {
                { co:'KMB', dir:route.bound, serviceType:route.service_type,
                  destEn:route.dest_en, destTc:route.dest_tc });
   } catch (error) {
+    if (ticket !== routeLoadTicket) return;
     status.textContent = T('couldNotLoadRoute').replace('{r}', route.route);
   }
 }
 
 async function showCtbRoute(route, dir, from, to) {
+  const ticket = ++routeLoadTicket;
   routeList.innerHTML = '';
   routeLayer.clearLayers();
-  status.textContent = T('loadingRoute').replace('{r}', route.route);
+  const loadingText = T('loadingRoute').replace('{r}', route.route);
+  status.textContent = loadingText;
+  // A load given up on leaves no 「正在載入…」 behind it.
+  const dropLoading = () => { if (status.textContent === loadingText) status.textContent = ''; };
   const key = 'ctb-rs-' + route.route + '-' + dir;
 
   try {
@@ -10633,13 +10937,20 @@ async function showCtbRoute(route, dir, from, to) {
     // We fetch five at a time and cache hard, rather than firing 40 at once.
     const stops = [];
     for (let i = 0; i < ids.length; i += 5) {
+      if (ticket !== routeLoadTicket) break;  // not wanted any more: stop asking
       const found = await Promise.all(ids.slice(i, i+5).map(getCtbStop));
       stops.push(...found.filter(Boolean));
     }
+    if (ticket !== routeLoadTicket) { dropLoading(); return; }
     paintRoute(route.route, 'Citybus', from, to, stops, '#fb923c', '#9a3412', route.route,
+               // The terminus in BOTH languages, from the route record. `to` is
+               // already in the reader's language, so a 7 starred in Chinese
+               // saved a Chinese dest_en and showed it to an English reader.
                { co:'CTB', dir: dir === 'outbound' ? 'O' : 'I', serviceType:null,
-                 destEn:to, destTc:to });
+                 destEn: (dir === 'outbound' ? route.dest_en : route.orig_en) || to,
+                 destTc: (dir === 'outbound' ? route.dest_tc : route.orig_tc) || to });
   } catch (error) {
+    if (ticket !== routeLoadTicket) { dropLoading(); return; }
     status.textContent = T('couldNotLoadRoute').replace('{r}', route.route);
   }
 }
@@ -10710,7 +11021,12 @@ function updateChip() {
   button.className = 'wxupdate';
   button.textContent = T('updateReady');
   button.addEventListener('click', () => {
-    if (!updateWaiting || !updateWaiting.waiting) return;
+    if (!updateWaiting) return;
+    // Another window of the app took the update first: the new version is
+    // already in charge and nothing is left waiting. That switch did not
+    // reload THIS window (nobody asked here), so the tap must — otherwise the
+    // button stays on screen and does nothing, for good.
+    if (!updateWaiting.waiting) { location.reload(); return; }
     updateAsked = true;
     button.disabled = true;
     // The new worker takes over, and controllerchange below reloads us into
@@ -10893,6 +11209,23 @@ function routesServing(stopId) {
   servingMemo.set(memoKey, out);
   return out;
 }
+// Can a rider get on this bus HERE? Not at its last stop: at 又一城 the
+// Citybus 22 arriving from 啟德 was listed as 「22 開往又一城」 — a bus that
+// ends where you stand. Display only: clustering and terminus detection read
+// routesServing whole, arrivals included. A loop that returns to its first
+// pole keeps its earlier, boarding entry there (routesServing takes the
+// lowest seq first), so it is not dropped.
+function boardableHere(r) {
+  const list = (routeIndex && routeIndex.get(r.key)) || [];
+  for (const e of list) if (e.seq > r.seq) return true;
+  return !list.length;                       // unknown route: keep it
+}
+// The same question of a live arrival row: the Citybus feed at 又一城 lists
+// the 22 coming in to end its trip there, 「22 九龍塘(又一城) 19 分鐘」.
+function rowBoardableHere(row, stopId) {
+  const key = routeKeyForRow(row);
+  return boardableHere({ key, seq: rowSeq(row, key, stopId) });
+}
 // ============================================================
 // WHICH WAY THE BUSES LEAVE THIS POLE
 // ============================================================
@@ -10984,8 +11317,11 @@ function facingOf(v) {
   // to the sampled direction nearest the mean instead of giving up.
   let best = -1, bestGap = Infinity;
   for (const o of v.octants) {
+    // Degrees from the mean, 0 to 180 — and the SMALLEST wins. This kept the
+    // largest, so the reading above (five SW, three SE) came out SE, and on the
+    // real network 387 poles pointed the minority's way, up to 158° wrong.
     const gap = Math.abs(((o * 45 - mean + 540) % 360) - 180);
-    if (180 - gap < bestGap) { bestGap = 180 - gap; best = o; }
+    if (gap < bestGap) { bestGap = gap; best = o; }
   }
   return best;
 }
@@ -11029,6 +11365,9 @@ function groupDirHtml(ids) {
 
 function poleRoutesLine(stopId, max, destIds) {
   let items;
+  // 「開往尖沙咀東」 runs together in Chinese; English needs the space or the
+  // card reads "Going towardsTSIM SHA TSUI EAST".
+  const towards = T('towards') + (lang === 'en' ? ' ' : '');
   if (destIds && destIds.size) {
     // Shortest ride first. Unsorted, this led with whatever the index happened
     // to hold — 屯門公路轉車站 showed "52P, 18 stops" above the 59X that the
@@ -11037,10 +11376,10 @@ function poleRoutesLine(stopId, max, destIds) {
     items = reachingRoutes(stopId, destIds)
       .sort((a, b) => a.reach.stopsAway - b.reach.stopsAway)
       .map(x => '<b>' + esc(routeTag(x.r)) + '</b> ' +
-      T('stopsAwayShort').replace('{n}', x.reach.stopsAway) + (x.r.dest ? ' · ' + T('towards') + esc(x.r.dest) : ''));
+      T('stopsAwayShort').replace('{n}', x.reach.stopsAway) + (x.r.dest ? ' · ' + towards + esc(x.r.dest) : ''));
   } else {
     const list = Array.isArray(stopId) ? routesServingAny(stopId) : routesServing(stopId);
-    items = list.map(r => '<b>' + esc(routeTag(r)) + '</b>' + (r.dest ? ' ' + T('towards') + esc(r.dest) : ''));
+    items = list.filter(boardableHere).map(r => '<b>' + esc(routeTag(r)) + '</b>' + (r.dest ? ' ' + towards + esc(r.dest) : ''));
   }
   if (!items.length) return '';
   const shown = items.slice(0, max || 4);
@@ -11395,9 +11734,32 @@ function stopsNamed(q) {
 }
 function stopIdsMatching(q) { return stopsNamed(q).ids; }
 // The routes from a pole that stop at any of these places further on.
+// EVERY VARIANT AT THE POLE, not routesServing's one per route and way.
+// That list keeps whichever service type the index met first, which is right
+// for naming the buses at a pole and wrong for "does one go there": in KMB's
+// own data 1,291 pole-route-way pairs have a variant reaching stops the kept
+// one never does. The 24 from 喇沙利道 reaches 啟德(德朗邨) only as a variant,
+// so 往 啟德 there said 冇直達 with the bus going past. Each route and way
+// still comes back once — the variant that gets there in the fewest stops,
+// with its own key and seq, so the fare and the ride are that variant's.
 function reachingRoutes(stopId, destIds) {
-  const list = Array.isArray(stopId) ? routesServingAny(stopId) : routesServing(stopId);
-  return list.map(r => ({ r, reach: routeReaches(r.key, r.seq, destIds) })).filter(x => x.reach);
+  const index = (typeof stopIndex !== 'undefined' && stopIndex) || null;
+  if (!index || !destIds || !destIds.size) return [];
+  const best = new Map();
+  for (const id of (Array.isArray(stopId) ? stopId : [stopId])) {
+    for (const k of (index.get(id) || [])) {
+      const reach = routeReaches(k.routeKey, k.seq, destIds);
+      if (!reach) continue;
+      const [route, bound, type, co] = String(k.routeKey).split('|');
+      const company = (co || '').toUpperCase();
+      const id3 = route + '|' + bound + '|' + company;
+      const had = best.get(id3);
+      if (had && had.reach.stopsAway <= reach.stopsAway) continue;
+      best.set(id3, { r: { route, bound, type, co: company, key: k.routeKey, seq: k.seq,
+                           dest: routeTerminus(k.routeKey) }, reach });
+    }
+  }
+  return [...best.values()];
 }
 // Every route from a set of poles, each route+direction once.
 function routesServingAny(ids) {
@@ -11704,7 +12066,8 @@ function ownGroup(stop) {
   const own = stopCompany(stop.stop);
   const members = [stop];
   let terminus = false;
-  for (const n of stopsNear(Number(stop.lat), Number(stop.long), Math.max(MERGE_SPAN_M, TERMINUS_M))) {
+  // Every pole within reach, not stopsNear's 25 (see there).
+  for (const n of stopsNear(Number(stop.lat), Number(stop.long), Math.max(MERGE_SPAN_M, TERMINUS_M), true)) {
     const other = n.stop;
     if (other.isStation || stopCompany(other.stop) !== own || members.some(m => m.stop === other.stop)) continue;
     const how = poleJoins(members, other, terminus);
@@ -11728,7 +12091,7 @@ function poleGroup(stop) {
   const members = mine.bays.slice();
   let sealed = mine.terminus;
   const tried = new Set(members.map(m => m.stop));
-  for (const n of stopsNear(Number(stop.lat), Number(stop.long), Math.max(MERGE_SPAN_M, TERMINUS_M))) {
+  for (const n of stopsNear(Number(stop.lat), Number(stop.long), Math.max(MERGE_SPAN_M, TERMINUS_M), true)) {
     const other = n.stop;
     if (other.isStation || tried.has(other.stop) || stopCompany(other.stop) === own) continue;
     const theirs = ownGroup(other).bays;
@@ -11816,7 +12179,7 @@ const ARRIVE_MAX_GROUPS = 6;
 // pole, and trimming that would quietly hide routes. The saving comes from the
 // destination filter instead, which the ranking passes and the stop screen
 // does not.
-const arriveRows = new Map();        // stopId -> { at, rows }
+const arriveRows = new Map();        // stopId -> { at, rows, routes } (routes: what was asked; see arriveCachedFor)
 const arriveInFlight = new Set();
 let arriveStamp = '';                // the question these answers were for
 
@@ -11864,31 +12227,58 @@ const ROAD_DRAG = 1.0;
 let tdDetectors = null, tdDetGrid = null;
 let roadSpeeds = null, roadSpeedsAt = 0, roadSpeedsWhen = '';
 
+// ONE DOWNLOAD AT A TIME, AND A FAILED ONE IS NOT THE ANSWER.
+// The picker asks for this on every redraw (ensureArrivals), and until the
+// first download had landed every ask started its own. A failed download was
+// also kept as "no detectors" for the rest of the session, so one dropped
+// request switched the road off until the app was reloaded. Now the next ask
+// tries again — at most once a minute, so a phone with no signal is not asked
+// on every keystroke. Never throws: no detectors simply means no road data.
+let tdDetectorsLoading = null, tdDetectorsFailedAt = 0;
 async function loadTdDetectors() {
   if (tdDetectors) return tdDetectors;
-  try {
-    const response = await fetch('./td-detectors.json', { signal: AbortSignal.timeout(15000) });
-    if (!response.ok) throw new Error('server said ' + response.status);
-    const doc = await response.json();
-    tdDetectors = (doc.detectors || []).map(d =>
-      ({ id: d[0], lat: d[1], lng: d[2], oct: d[3], road_tc: d[4], road_en: d[5] }));
-    // Same grid trick the stop list uses, so "which detector is on this road"
-    // is a couple of cell look-ups rather than a scan of 807.
-    tdDetGrid = new Map();
-    for (const d of tdDetectors) {
-      const k = Math.floor(d.lat / GRID_DEG) + ',' + Math.floor(d.lng / GRID_DEG);
-      if (!tdDetGrid.has(k)) tdDetGrid.set(k, []);
-      tdDetGrid.get(k).push(d);
+  if (tdDetectorsLoading) return tdDetectorsLoading;
+  if (Date.now() - tdDetectorsFailedAt < 60000) return [];
+  tdDetectorsLoading = (async () => {
+    try {
+      const response = await fetch('./td-detectors.json', { signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw new Error('server said ' + response.status);
+      const doc = await response.json();
+      const list = (doc.detectors || []).map(d =>
+        ({ id: d[0], lat: d[1], lng: d[2], oct: d[3], road_tc: d[4], road_en: d[5] }));
+      // Same grid trick the stop list uses, so "which detector is on this road"
+      // is a couple of cell look-ups rather than a scan of 807.
+      const grid = new Map();
+      for (const d of list) {
+        const k = Math.floor(d.lat / GRID_DEG) + ',' + Math.floor(d.lng / GRID_DEG);
+        if (!grid.has(k)) grid.set(k, []);
+        grid.get(k).push(d);
+      }
+      tdDetGrid = grid; tdDetectors = list;
+      return list;
+    } catch (error) {
+      console.warn('TD detectors unavailable:', error);
+      tdDetectorsFailedAt = Date.now();
+      return [];
     }
-  } catch (error) { console.warn('TD detectors unavailable:', error); tdDetectors = []; tdDetGrid = new Map(); }
-  return tdDetectors;
+  })().finally(() => { tdDetectorsLoading = null; });
+  return tdDetectorsLoading;
 }
 
+// One download while one is out, as loadTdDetectors: the feed is 713 KB of
+// XML to fetch and parse, and a cold picker used to ask for it once per
+// keystroke until the first answer landed. fetchRoadSpeeds keeps its own
+// failures (it never rejects), so the shared promise needs no catch.
+let roadSpeedsLoading = null;
+async function loadRoadSpeeds() {
+  if (roadSpeeds && Date.now() - roadSpeedsAt < ROAD_REFRESH_MS) return roadSpeeds;
+  if (!roadSpeedsLoading) roadSpeedsLoading = fetchRoadSpeeds().finally(() => { roadSpeedsLoading = null; });
+  return roadSpeedsLoading;
+}
 // The newest 30-second period in the feed, averaged over the lanes that say
 // they are working. An out-of-service loop reads zero, and a zero would look
 // exactly like a jam, so `valid` is not optional.
-async function loadRoadSpeeds() {
-  if (roadSpeeds && Date.now() - roadSpeedsAt < ROAD_REFRESH_MS) return roadSpeeds;
+async function fetchRoadSpeeds() {
   try {
     const response = await fetch(TD_SPEED_URL, { cache: 'no-store', signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw new Error('server said ' + response.status);
@@ -12057,7 +12447,8 @@ function arriveBest(ids, destIds, walkMin) {
   const now = Date.now();
   let asked = false, noFeed = false, best = null;
   for (const id of ids) {
-    const rows = arriveCached(id);
+    // Only an answer that was asked about THIS place's routes (arriveCachedFor).
+    const rows = arriveCachedFor(id, routesToAsk(id, destIds));
     if (rows === undefined) continue;             // not asked yet
     if (rows === null) { noFeed = true; continue; }   // asked; this operator has no feed
     asked = true;
@@ -12105,6 +12496,30 @@ function arriveBest(ids, destIds, walkMin) {
   return asked ? best : undefined;
 }
 
+// A POLE'S CACHED ANSWER, FOR THIS QUESTION.
+// Citybus, NLB, the MTR's buses and the ferries are asked only about the
+// routes that reach the place typed (fetchPoleRows' wantRoutes), so an answer
+// kept from the place typed before says nothing about the others — and that
+// silence read as "no bus due": a stop with a bus to the new place sank to
+// the bottom, untagged, for the 45 seconds the answer was kept. An answer not
+// asked about every route needed now counts as not asked. Each entry carries
+// `routes`, the routes it was asked about; null means the feed answered for
+// the whole stop, which KMB's and the minibuses' always do.
+function arriveCachedFor(stopId, routes) {
+  const rows = arriveCached(stopId);
+  if (!rows) return rows;                         // not asked, or no feed: as it is
+  const asked = (arriveRows.get(stopId) || {}).routes;
+  if (!asked || !routes) return rows;
+  for (const route of routes) if (!asked.has(route)) return undefined;
+  return rows;
+}
+// The routes a pole is asked about for a place. One rule for the asking
+// (baysToAsk) and for reading the answer back (arriveBest), so the two can
+// never disagree about whether an answer covers the question.
+function routesToAsk(stopId, destIds) {
+  return new Set(reachingRoutes(stopId, destIds).map(x => x.r.route));
+}
+
 // Ask every bay on offer, then redraw. The picker paints immediately with
 // what it already knows and re-orders when the times land, so the screen is
 // never blocked on the network.
@@ -12121,30 +12536,40 @@ async function ensureArrivals(bays, stamp) {
     const id = bay && bay.id;
     if (!id || seen.has(id)) continue;
     seen.add(id);
-    if (arriveCached(id) !== undefined || arriveInFlight.has(id)) continue;
+    if (arriveCachedFor(id, bay.routes) !== undefined || arriveInFlight.has(id)) continue;
     want.push(bay);
     if (want.length >= ARRIVE_MAX_BAYS) break;
   }
   if (!want.length) { await road; return roadSpeedsAt !== roadBefore && stamp === arriveStamp; }
   want.forEach(bay => arriveInFlight.add(bay.id));
-  await road;
-  await Promise.all(want.map(async bay => {
+  // SIDE BY SIDE, NOT ONE AFTER THE OTHER. The buses used to be asked only
+  // once the whole traffic download had landed, so a slow Transport
+  // Department server held every time on this screen for up to its 15 s
+  // timeout. Now they go together, and the road gets the planner's allowance
+  // (ROAD_WAIT_MS) and no more: a rider at a stop must never wait on it. A
+  // road answer later than that is read by the next redraw.
+  const roadOrGiveUp = Promise.race([road, new Promise(done => setTimeout(done, ROAD_WAIT_MS))]);
+  await Promise.all([roadOrGiveUp, Promise.all(want.map(async bay => {
+    let routes = null;
     try {
+      // What this answer will cover (arriveCachedFor): KMB's and the
+      // minibuses' feeds answer for the whole stop whatever is asked.
+      const co = stopCompany(bay.id);
+      if (bay.routes && bay.routes.size && co !== 'KMB' && co !== 'GMB') routes = new Set(bay.routes);
       const stop = findStopById(bay.id);
       // null travels through unchanged: it is the answer "this company
       // publishes no live times", not the absence of an answer.
       const rows = stop ? await fetchPoleRows(stop, bay.routes) : null;
-      arriveRows.set(bay.id, { at: Date.now(), rows });
+      arriveRows.set(bay.id, { at: Date.now(), rows, routes });
     } catch (error) {
-      arriveRows.set(bay.id, { at: Date.now(), rows: [] });   // asked, nothing to say
+      arriveRows.set(bay.id, { at: Date.now(), rows: [], routes });   // asked, nothing to say
     } finally { arriveInFlight.delete(bay.id); }
-  }));
+  }))]);
   return stamp === arriveStamp;      // still the same question?
 }
 // The poles of a group, each with the routes that get the rider there.
 function baysToAsk(stops, destIds) {
-  return stops.map(st => ({ id: st.stop,
-    routes: new Set(reachingRoutes(st.stop, destIds).map(x => x.r.route)) }));
+  return stops.map(st => ({ id: st.stop, routes: routesToAsk(st.stop, destIds) }));
 }
 
 // What the ranking decided, said in one line: the bus, when it goes, and
@@ -12174,7 +12599,12 @@ function arriveTagHtml(best) {
   if (best.noFeed)
     return '<small class="arrivetag nofeed">⏱ ' +
       esc(T('stopNoFeedEta').replace('{r}', tag).replace('{n}', best.stopsAway)) + '</small>';
-  const at = new Date(Date.now() + best.total * 60000);
+  // The clock is the estimate — the wait plus the ride — and never `total`,
+  // which also carries the minutes a Transport Department notice costs a
+  // route in the RANKING (trafficPenalty). That penalty decides the order;
+  // printed as a time it was eight minutes of delay nobody had measured. The
+  // ⚠ on the line already says why the card may sit lower.
+  const at = new Date(Date.now() + (best.wait + best.ride) * 60000);
   const hhmm = at.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
   // "in 0 minutes" is not something anyone says: a bus at the stop now gets
   // its own wording rather than the countdown template with a zero in it.
@@ -12211,14 +12641,35 @@ function routeReaches(routeKey, fromSeq, destIds) {
 }
 // The routeKey for a live arrival row: exact match on service type first,
 // then any variant of the same route and direction.
+//
+// CITYBUS FILES SOME VARIANTS UNDER BOTH DIRECTIONS AT ONCE — 11|OI|1|ctb,
+// 72 of them (the 11, 12, 25, 170, 701, 720…) — while its arrival feed only
+// ever says O or I. At a pole only the OI variant calls at, 11|O matched a
+// route that does not stop there: the 往… filter dropped the bus and
+// 去 X 的路線 called it gone. So when the key found above does not call at
+// the row's own pole, a both-ways variant that does is the bus. Where the
+// old key serves the pole nothing changes, nor for KMB, which has none.
 function routeKeyForRow(row) {
   const co = String(row.co || 'KMB').toLowerCase();
   const dir = row.dir || 'O';
-  const exact = row.route + '|' + dir + '|' + (row.service_type || '1') + '|' + co;
-  if (typeof routeIndex !== 'undefined' && routeIndex && routeIndex.has(exact)) return exact;
-  const head = row.route + '|' + dir + '|';
-  for (const k of (routeIndex ? routeIndex.keys() : [])) if (k.startsWith(head) && k.endsWith('|' + co)) return k;
-  return exact;
+  const type = String(row.service_type || '1');
+  const exact = row.route + '|' + dir + '|' + type + '|' + co;
+  const index = (typeof routeIndex !== 'undefined' && routeIndex) || null;
+  let key = null;
+  if (index && index.has(exact)) key = exact;
+  else {
+    const head = row.route + '|' + dir + '|';
+    for (const k of (index ? index.keys() : [])) if (k.startsWith(head) && k.endsWith('|' + co)) { key = k; break; }
+  }
+  const at = (row.stop && typeof stopIndex !== 'undefined' && stopIndex && stopIndex.get(row.stop)) || null;
+  if (at && !(key && at.some(e => e.routeKey === key))) {
+    const both = at.map(e => String(e.routeKey)).filter(k => {
+      const p = k.split('|');
+      return p[0] === String(row.route) && p[3] === co && p[1].length > 1 && p[1].includes(dir);
+    });
+    if (both.length) return both.find(k => k.split('|')[2] === type) || both[0];
+  }
+  return key || exact;
 }
 
 function findStopById(id) { return lookupStop(id); }
@@ -12438,15 +12889,24 @@ function stopOpenDest(name) {
 // Checked against the whole network: all 476 GMB route numbers we carry are
 // covered.
 const GMB_ETA_URL = 'https://data.etagmb.gov.hk/eta/stop/';
-let gmbRoutes = null;
+// NOT KEPT WHEN IT FAILS. `{}` used to stand in for a failed download for
+// the rest of the session, and with no route_id resolvable every minibus stop
+// then answered "nothing due" — a claim about the street built on a failure
+// to look, which nothing ever corrected. Thrown instead, so fetchGmbRows lands
+// in the same catch a dead connection does ("could not ask"), and the next
+// stop asked tries again. One download while one is out.
+let gmbRoutes = null, gmbRoutesLoading = null;
 async function loadGmbRoutes() {
   if (gmbRoutes) return gmbRoutes;
-  try {
+  if (!gmbRoutesLoading) gmbRoutesLoading = (async () => {
     const response = await fetch('./gmb-routes.json', { signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw new Error('server said ' + response.status);
     gmbRoutes = (await response.json()).routes || {};
-  } catch (error) { console.warn('GMB route map unavailable:', error); gmbRoutes = {}; }
-  return gmbRoutes;
+    return gmbRoutes;
+  })()
+    .catch(error => { console.warn('GMB route map unavailable:', error); throw error; })
+    .finally(() => { gmbRoutesLoading = null; });
+  return gmbRoutesLoading;
 }
 // WHICH DIRECTION THIS SIGHTING BELONGS TO.
 // Guessing that route_seq 1 means outbound would be a guess; the stop's own
@@ -12624,6 +13084,10 @@ function nlbDestById(id, which) {
 // live site, 2 Oct 2026).
 const MTRBUS_URL = 'https://rt.data.gov.hk/v1/transport/mtr/bus/getSchedule';
 const mtrBusAsked = new Map();          // "route|lang" -> { at, answer: Promise }
+// When each answer arrived: its seconds count from then, not from whenever a
+// stop happens to read it. One answer serves every stop for twenty seconds,
+// and read at second 19 it put every bus 19 seconds later than the feed said.
+const mtrBusAnsweredAt = new WeakMap();  // the parsed answer -> Date.now() on arrival
 function mtrBusSchedule(route) {
   const key = route + '|' + lang;
   const recent = mtrBusAsked.get(key);
@@ -12632,7 +13096,8 @@ function mtrBusSchedule(route) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ language: lang === 'zh' ? 'zh' : 'en', routeName: route }),
       signal: AbortSignal.timeout(10000) })
-    .then(response => { if (!response.ok) throw new Error('server said ' + response.status); return response.json(); });
+    .then(response => { if (!response.ok) throw new Error('server said ' + response.status); return response.json(); })
+    .then(json => { if (json && typeof json === 'object') mtrBusAnsweredAt.set(json, Date.now()); return json; });
   // A failure is not kept: the next stop that asks tries again.
   answer.catch(() => { const now = mtrBusAsked.get(key); if (now && now.answer === answer) mtrBusAsked.delete(key); });
   mtrBusAsked.set(key, { at: Date.now(), answer });
@@ -12659,7 +13124,7 @@ async function mtrBusRowsAt(stopId, routeNo, stamp) {
   if (!data || !Array.isArray(data.busStop)) throw new Error('no MTR Bus answer');
   const here = data.busStop.find(b => String(b.busStopId) === String(stopId));
   if (!here || String(here.isSuspended) === '1') return [];
-  const now = Date.now();
+  const now = mtrBusAnsweredAt.get(data) || Date.now();   // when the feed said it
   return (here.bus || []).map(bus => {
     // At a terminus the feed reports when the bus LEAVES, and parks 108000
     // in the arrival field — a placeholder, not a time.
@@ -13009,7 +13474,10 @@ function stopPickerParts() {
           '</button>';
       }).join('') + '</div>';
   }
-  if (st.destQuery && destIds && !destIds.size)
+  // Not for a bus number: 「60X」 names no stop, and the 🚌 60X button above
+  // is the answer — "try a shorter name" under it told the rider they had
+  // typed it wrong.
+  if (st.destQuery && destIds && !destIds.size && !routeMatches(st.destQuery).length)
     rest += '<div class="favempty">' + T('stopDestNoName').replace('{d}', esc(st.destQuery)) + '</div>';
   const hintAt = rest.length;
   if (filtering) rest += '<div class="rshint">' + T('stopShowingTo').replace('{d}', esc(st.destQuery)) + '</div>';
@@ -13117,7 +13585,7 @@ function renderStopView() {
   html += '<div class="mtrsta"><div class="mtrname">🚏 ' + esc(stopName(stop)) +
           (chip ? ' <span class="polecode">' + esc(chip) + '</span>' : '') +
           groupDirHtml(group.map(x => x.stop)) +
-          (here !== null ? '<small>' + T('mtrAway').replace('{m}', here) + '</small>' : '') + '</div>' +
+          (here !== null ? '<small>' + T('mtrAway').replace('{m}', distWords(here)) + '</small>' : '') + '</div>' +
           // Save / unsave is one small star beside 更改 — the full-width
           // 已收藏 bar it replaces was a whole line saying something the
           // rider already knew, on the screen where every line counts.
@@ -13707,8 +14175,14 @@ function tripCandidates(from, place, destIds) {
   const railOk = !!(mtrData && railGraph) && railRunningNow();
   if (railOk) {
     // ---- THE RAILWAY, the 港鐵 tab's own search ----
-    for (const j of railJourneys(from.lat, from.lng, place.lat, place.lng))
+    // Standing in the station, or the place IS the station (太子站): no walk
+    // at that end. The 港鐵 tab's search says a minute there, because
+    // walkingEstimate never says less — 「🚶 1 分」 to the platform itself.
+    for (const j of railJourneys(from.lat, from.lng, place.lat, place.lng)) {
+      for (const end of ['walkOn', 'walkOff'])
+        if (j[end].metres <= SAME_POLE_M) { j.total -= j[end].minutes; j[end] = TRIP_NO_WALK; }
       out.push(Object.assign(j, { kind: 'rail' }));
+    }
 
     // ---- A BUS TO A STATION, THEN THE TRAIN ----
     // Even to a station the phone could walk to: a three-minute bus beats a
@@ -13739,14 +14213,19 @@ function tripCandidates(from, place, destIds) {
       for (const end of ends) {
         if (end.node === code) continue;
         const found = railPathTo(searched, end.node);
-        const rail = found && buildRailJourney(found, TRIP_NO_WALK, walkingEstimate(end.metres));
+        // tripWalkTo: off the train in the very station the place names, no walk.
+        const rail = found && buildRailJourney(found, TRIP_NO_WALK, tripWalkTo(end.metres));
         if (!rail) continue;
         const bus = tripBusLeg(way.key, way.board.seq, way.seq, way.board.stop, offStop);
         const walkOn = tripWalkTo(way.board.metres), toTrain = walkingEstimate(way.metres);
         out.push({ kind: 'busrail', legs: [bus].concat(rail.legs), walkOn, walkOff: rail.walkOff,
                    transferWalks: [addWalks(toTrain, rail.walkOn)].concat(rail.transferWalks),
+                   // rail.total, not found.cost + rail.walkOff: a walk at the
+                   // end of the rail path is inside found.cost AND folded into
+                   // walkOff, so that sum counted it twice. rail.walkOn here is
+                   // only such folded minutes (TRIP_NO_WALK was passed in).
                    total: Math.round(walkOn.minutes + bus.minutes + toTrain.minutes + RAIL_CHANGE_MIN +
-                                     found.cost + rail.walkOff.minutes) });
+                                     rail.total) });
       }
     }
 
@@ -13775,7 +14254,7 @@ function tripCandidates(from, place, destIds) {
           if (sr.o.node === st.code) continue;      // no train ridden: that is a walk and a bus
           const c = sr.costTo.get(st.code);
           if (c === undefined) continue;
-          const total = walkingEstimate(sr.o.metres).minutes + c + walkingEstimate(st.metres).minutes +
+          const total = tripWalkTo(sr.o.metres).minutes + c + walkingEstimate(st.metres).minutes +
                         TRANSFER_PENALTY_MIN + off.ride + off.walk.minutes;
           if (!pick || total < pick.total) pick = { total, sr, st, e, off };
         }
@@ -13785,7 +14264,7 @@ function tripCandidates(from, place, destIds) {
     viaBus.sort((a, b) => a.total - b.total);
     for (const v of viaBus.slice(0, 6)) {
       const found = railPathTo(v.sr.best, v.st.code);
-      const rail = found && buildRailJourney(found, walkingEstimate(v.sr.o.metres), TRIP_NO_WALK);
+      const rail = found && buildRailJourney(found, tripWalkTo(v.sr.o.metres), TRIP_NO_WALK);
       const onStop = lookupStop(v.e.stopId), offStop = lookupStop(v.off.stopId);
       if (!rail || !tripHasPlace(onStop) || !tripHasPlace(offStop)) continue;
       out.push({ kind: 'railbus',
@@ -13870,7 +14349,10 @@ function tripLiveWait(leg, walkMin) {
   let best = null;
   for (const row of rows) {
     if (!row.eta || String(row.route).toUpperCase() !== String(leg.route).toUpperCase()) continue;
-    if (routeKeyForRow(row).split('|')[1] !== leg.bound) continue;   // the other direction
+    // The other direction — except on a both-ways Citybus variant (bound OI,
+    // see routeKeyForRow): the feed says O or I and cannot say which variant.
+    const bound = routeKeyForRow(row).split('|')[1], legBound = String(leg.bound || '');
+    if (bound !== legBound && !(legBound.length > 1 && legBound.includes(row.dir || 'O'))) continue;
     const wait = (new Date(row.eta).getTime() - now) / 60000;
     if (wait < walkMin) continue;             // gone before you get there
     if (best === null || wait < best) best = wait;
@@ -14012,7 +14494,7 @@ function tripPick(cands) {
 // from the picker to a stop and back shows each one's answer at once rather
 // than 「正在找路線…」 while it is worked out again.
 const tripMemos = new Map();         // src -> { key, name, plan }
-let tripTimer = 0, tripTimerKey = '';
+let tripTimer = 0, tripTimerKey = '', tripTimerSrc = '';
 function tripMemoOf(src) { return tripMemos.get(src) || { key: '', name: '', plan: null }; }
 function tripFromHere() {
   return herePoint ? { lat: herePoint.lat, lng: herePoint.lng, src: 'here' } : null;
@@ -14034,11 +14516,17 @@ function tripPlanFor(name, destIds, from, settle) {
   const key = tripKey(name, from);
   const src = from ? from.src || 'here' : '';
   const memo = tripMemoOf(src);
-  if (memo.key === key) return memo.plan;
+  if (memo.key === key) {
+    // A name passed on the way here (太子, typing back to 太子站) may still be
+    // waiting to be worked out for this start. Left to land, it takes this
+    // start's one memo and blinks this answer to 「正在找路線…」.
+    if (tripTimerKey && tripTimerSrc === src) { clearTimeout(tripTimer); tripTimer = 0; tripTimerKey = ''; }
+    return memo.plan;
+  }
   miRailReady();                    // the railway, if it is not here yet; the key changes when it lands
   if (tripTimerKey !== key) {
     clearTimeout(tripTimer);
-    tripTimerKey = key;
+    tripTimerKey = key; tripTimerSrc = src;
     tripTimer = setTimeout(() => {
       tripTimer = 0;
       if (tripTimerKey !== key) return;
@@ -14090,6 +14578,10 @@ function tripRedraw() {
     return;
   }
   const box = document.querySelector('#stop-rest .tripbox');
+  // The 📍 "find me first" box (triplocate) is a .tripbox too, but not a trip
+  // answer to replace: a stop's live times landing after 更改 removed it from
+  // the one rider it is there for — the one with no position.
+  if (box && box.querySelector('[data-stop-act="triplocate"]')) return;
   const name = String(stopState.destQuery || '').trim();
   const destIds = destIdsNow();
   if (box) {
@@ -14304,7 +14796,7 @@ function stopRowsHtml() {
   noteStopRide();
   if (!stop) return '';
   const stamp = st.fetchedAt ? new Date(st.fetchedAt).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }) : '';
-  const destIds = st.destFilter ? stopIdsMatching(st.destFilter) : null;
+  const destIds = String(st.destFilter || '').trim() ? stopIdsMatching(st.destFilter) : null;   // spaces alone are no filter
   const groupIds = stopGroupNow().map(g => g.stop);
   let html = '';
   // WHEN NOTHING IS DUE, SAY WHAT STILL RUNS.
@@ -14314,8 +14806,10 @@ function stopRowsHtml() {
   // already on the phone — the timetable, the fare table and the stop list —
   // so there is no excuse for a blank screen.
   const routeFallbackHtml = (ids, dIds) => {
-    let routes = routesServingAny(ids);
-    if (dIds) routes = routes.filter(r => routeReaches(r.key, r.seq, dIds));
+    // A place named: every variant that gets there (reachingRoutes), not only
+    // the one routesServing happened to keep for each route.
+    const routes = dIds ? reachingRoutes(ids, dIds).map(x => x.r)
+                        : routesServingAny(ids).filter(boardableHere);
     if (!routes.length) return '';
     return '<div class="norun">' + routes.slice(0, 8).map(r => {
       const info = serviceInfoFor({ routeNo: r.route, dir: r.bound, serviceType: r.type, co: r.co });
@@ -14367,10 +14861,11 @@ function stopRowsHtml() {
   // Every bus from this stop, unfiltered — what 此站其他巴士 opens.
   const allRowsHtml = () => {
     if (st.alert) return '<div class="mtralert">⚠ ' + esc(st.alert) + '</div>';
-    if (st.noLive) return '<div class="rshint">' + T('stopNoLive') + '</div>' + routesServingAny(groupIds).map(routeRowHtml).join('');
+    if (st.noLive) return '<div class="rshint">' + T('stopNoLive') + '</div>' + routesServingAny(groupIds).filter(boardableHere).map(routeRowHtml).join('');
     if (!st.rows) return st.loading ? '<div class="favempty">' + T('rsCheckingEta') + '</div>' : '';
     const multiPole = groupIds.length > 1;
-    const arrivals = formatArrivals(st.rows, multiPole ? { arrive: null, destName: '', multiPole } : null);
+    const arrivals = formatArrivals(st.rows.filter(row => rowBoardableHere(row, stop.stop)),
+                                    multiPole ? { arrive: null, destName: '', multiPole } : null);
     let all = arrivals;
     if (!/eta-row/.test(arrivals)) all += routeFallbackHtml(groupIds, null);
     if (stamp) all += '<div class="mtrupdated">' + T('updatedAt').replace('{t}', stamp) + '</div>';
@@ -14390,7 +14885,7 @@ function stopRowsHtml() {
     let out = '<div class="nobushere">' + T('stopFilterNone').replace('{d}', '<b>' + esc(name) + '</b>') + '</div>';
     out += stopTripBoxHtml() || insteadHtml();
     // Routes as a rider counts them: the 46P is one route, not one per direction.
-    const count = new Set(routesServingAny(groupIds).map(r => r.co + ' ' + r.route)).size ||
+    const count = new Set(routesServingAny(groupIds).filter(boardableHere).map(r => r.co + ' ' + r.route)).size ||
                   new Set((st.rows || []).map(r => r.route)).size;
     if (count || st.loading) {
       out += '<button type="button" class="othersbtn" data-stop-act="others" aria-expanded="' + (st.showOthers ? 'true' : 'false') + '">' +
@@ -14402,22 +14897,23 @@ function stopRowsHtml() {
 
   // Decided from the route index, so the answer is on screen at once instead
   // of after the arrivals feed — the same test the rows below apply, route by
-  // route (routeReaches), over every bay of the stop.
+  // route (routeReaches), over every bay of the stop and every variant of
+  // every route at it (reachingRoutes).
   if (destIds && destIds.size && stopIndex && !st.indexing &&
-      !routesServingAny(groupIds).some(r => routeReaches(r.key, r.seq, destIds)))
+      !reachingRoutes(groupIds, destIds).length)
     return noBusHtml();
 
   if (st.loading && !st.rows) return '<div class="favempty">' + T('rsCheckingEta') + '</div>';
   if (st.alert) return '<div class="mtralert">⚠ ' + esc(st.alert) + '</div>';
 
   if (st.noLive) {
-    let routes = routesServingAny(groupIds);
-    if (destIds) routes = routes.filter(r => routeReaches(r.key, r.seq, destIds));
+    const routes = destIds ? reachingRoutes(groupIds, destIds).map(x => x.r)
+                           : routesServingAny(groupIds).filter(boardableHere);
     if (!routes.length && destIds) return noBusHtml();
     return '<div class="rshint">' + T('stopNoLive') + '</div>' + routes.map(routeRowHtml).join('');
   }
   if (st.rows) {
-    let rows = st.rows;
+    let rows = st.rows.filter(row => rowBoardableHere(row, stop.stop));   // not a bus ending here
     let arrive = null;
     if (destIds) {
       arrive = new Map();                       // route key → stops from here to the place
@@ -15176,11 +15672,15 @@ function stationName(code) {
 }
 
 // The running order of this line that passes through this station (some
-// lines have branch variants), so "ahead" means something.
+// lines have branch variants), so "ahead" means something. The LONGEST such
+// variant, not the first: mtr.json writes the 將軍澳綫's 康城 branch as a
+// three-stop stub, 康城 → 將軍澳 → 調景嶺, listed before the line itself, and
+// the first match put that stub on screen at 將軍澳 and 調景嶺.
 function mtrOrderFor(line, station, alsoWith) {
   const variants = (mtrData.lines || {})[line] || [];
-  return variants.find(v => v.includes(station) && (!alsoWith || v.includes(alsoWith)))
-      || variants.find(v => v.includes(station)) || variants[0] || [];
+  const longest = list => list.reduce((a, b) => (!a || b.length > a.length ? b : a), null);
+  return longest(variants.filter(v => v.includes(station) && (!alsoWith || v.includes(alsoWith))))
+      || longest(variants.filter(v => v.includes(station))) || variants[0] || [];
 }
 
 // A saved train is the MTR screen with its three answers already given.
@@ -15248,7 +15748,18 @@ function openMtrView() {
   if (!mtrData) {
     view.innerHTML = '<div class="favhead">🚇 ' + T('mtrTitle') + '</div>' +
                      '<div class="favempty">' + T('loading') + '</div>';
-    loadMtr().then(() => { if (activeMode === 'mtr') openMtrView(); });
+    // ONE TRY PER OPEN, NOT A LOOP. loadMtr never throws — a failed download
+    // just leaves mtrData empty — and this used to call itself again whatever
+    // the answer, so with no connection, or a Wi-Fi sign-in page answering
+    // instead of the file, it asked for mtr.json over and over for as long as
+    // the tab stayed open. A failure now says so and waits for a tap.
+    loadMtr().then(() => {
+      if (activeMode !== 'mtr') return;
+      if (mtrData) { openMtrView(); return; }
+      view.innerHTML = '<div class="favhead">🚇 ' + T('mtrTitle') + '</div>' +
+        '<div class="favempty">' + T('mtrDataFailed') + '</div>' +
+        '<button class="btn" data-mtr-act="mtr-retry" style="width:100%;margin-top:12px">' + T('retryBtn') + '</button>';
+    });
     return;
   }
 
@@ -15323,18 +15834,29 @@ async function mtrLoadBlocks(force) {
       const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
       if (!response.ok) throw new Error('server said ' + response.status);
       const data = await response.json();
-      if (data.status === 0) return { line, block: {}, alert: data.message || T('trainAlert'), delay: data.isdelay === 'Y' };
+      // delay null = the feed did not say. A timeout in a tunnel is not the
+      // delay ending: reading it as "no delay" cleared the flag, and the next
+      // good answer filed the SAME delay again as new, popup and all.
+      if (data.status === 0) return { line, block: {}, alert: data.message || T('trainAlert'),
+                                      delay: typeof data.isdelay === 'string' ? data.isdelay === 'Y' : null };
       return { line, block: (data.data || {})[line + '-' + station] || {}, alert: null, delay: data.isdelay === 'Y' };
     } catch (error) {
-      return { line, block: null, alert: T('etaOffline'), delay: false };
+      return { line, block: null, alert: T('etaOffline'), delay: null };
     }
   }));
   if (mtrState.station !== station) return;             // moved on meanwhile
   mtrState.blocks = {}; mtrState.alerts = {};
-  for (const r of results) { mtrState.blocks[r.line] = r.block; mtrState.alerts[r.line] = r.alert; noteMtrDelay(r.line, r.delay); }
+  for (const r of results) {
+    mtrState.blocks[r.line] = r.block; mtrState.alerts[r.line] = r.alert;
+    if (r.delay !== null) noteMtrDelay(r.line, r.delay);
+  }
   mtrState.blocksFor = station; mtrState.fetchedAt = Date.now(); mtrState.loading = false;
-  // On the chosen line, one direction with trains is not a choice either.
+  // On the chosen line, one direction with trains is not a choice either —
+  // but a train tapped on the plan is settled FIRST. At a terminus there is
+  // only one direction, and this rule used to answer before the plan's stop
+  // could be marked, so 中環 → 旺角 arrived with no stop and no arrival time.
   if (mtrState.line) {
+    mtrSettleWantOff();
     const dirs = mtrDirections(mtrState.line);
     if (!mtrState.dir && dirs.length === 1) mtrState.dir = dirs[0].key;
     if (mtrState.dir && !dirs.some(d => d.key === mtrState.dir)) mtrState.dir = dirs.length === 1 ? dirs[0].key : null;
@@ -15365,19 +15887,55 @@ function mtrDirections(line) {
   return out;
 }
 
+// Where a train to `dest` runs from this station: the longest variant that
+// holds both, and the two positions in it. Null when no variant does.
+function mtrRunOf(line, station, dest) {
+  let best = null;
+  for (const v of (mtrData.lines || {})[line] || []) {
+    const i = v.indexOf(station), d = v.indexOf(dest);
+    if (i >= 0 && d >= 0 && (!best || v.length > best.order.length)) best = { order: v, i, d };
+  }
+  return best;
+}
+
+// The run of the train due this way that goes FURTHEST. The next train is
+// the wrong one to read the line from: at 調景嶺 it is as often a 康城 train
+// as a 寶琳 one, and at 將軍澳 a train that ends at 調景嶺 — and whichever it
+// was decided the whole screen.
+function mtrFurthestRun(line, station, key) {
+  let best = null;
+  for (const t of mtrTrains(key, line)) {
+    const run = mtrRunOf(line, station, t.dest);
+    if (run && run.d !== run.i && (!best || Math.abs(run.d - run.i) > Math.abs(best.d - best.i))) best = run;
+  }
+  return best;
+}
+
 // One line laid out left to right, with this station in the middle. Which
 // direction is "left" is decided by where its terminus sits in the running
 // order, so the two direction buttons underneath sit on the same sides as
-// the stations they lead to. Before the feed answers there are no
-// directions yet; the strip still draws, its chips just wait.
+// the stations they lead to. The order is the run of the train that goes
+// furthest either way, and each direction is placed by ITS furthest train:
+// read from the next train, the 將軍澳綫 strip at 調景嶺 shrank to three
+// stations and the two buttons swapped sides every time a 康城 train came
+// next. Before the feed answers there are no directions yet; the strip
+// still draws, its chips just wait.
 function mtrSides(line) {
   const st = mtrState;
   if (!line || !st.station) return null;
   const dirs = mtrDirections(line);
-  const order = mtrOrderFor(line, st.station, dirs[0] && dirs[0].dest);
+  let best = null;
+  const far = {};
+  for (const d of dirs) {
+    const run = mtrFurthestRun(line, st.station, d.key);
+    if (!run) continue;
+    far[d.key] = run.order[run.d];
+    if (!best || Math.abs(run.d - run.i) > Math.abs(best.d - best.i)) best = run;
+  }
+  const order = best ? best.order : mtrOrderFor(line, st.station);
   const i = order.indexOf(st.station);
   if (i < 0) return null;
-  const at = d => order.indexOf(d.dest);
+  const at = d => order.indexOf(far[d.key] || d.dest);
   const left  = dirs.find(d => at(d) >= 0 && at(d) < i) || null;
   const right = dirs.find(d => d !== left && at(d) > i) || dirs.find(d => d !== left) || null;
   return { order, i, left, right };
@@ -15419,16 +15977,49 @@ function mtrCentreStrip() {
   }
 }
 
-// Every station ahead in the chosen direction, to the end of the line.
-function mtrStationsAhead() {
-  const { line, station, dir } = mtrState;
+// Every station ahead in the chosen direction, to the end of the line, as
+// { code, stops } — how many stops away. Read from EVERY train due that way,
+// furthest first, not from the next one alone: behind a train that ends at
+// 調景嶺 the 將軍澳 list used to be 調景嶺 and nothing else, and at 調景嶺 it
+// held 康城 or 寶琳 depending on which came next. Where a branch splits the
+// line (康城 and 坑口 are both one stop from 將軍澳) two stations share a
+// number, which is the truth.
+function mtrStationsAhead(line = mtrState.line, station = mtrState.station, dir = mtrState.dir) {
   if (!line || !station || !dir) return [];
-  const trains = mtrTrains(dir, line);
-  if (!trains.length) return [];
-  const order = mtrOrderFor(line, station, trains[0].dest);
-  const i = order.indexOf(station), d = order.indexOf(trains[0].dest);
-  if (i < 0 || d < 0 || d === i) return [];
-  return d > i ? order.slice(i + 1) : order.slice(0, i).reverse();
+  const runs = [];
+  for (const t of mtrTrains(dir, line)) {
+    const run = mtrRunOf(line, station, t.dest);
+    if (run && run.d !== run.i && !runs.some(r => r.order === run.order && r.d === run.d)) runs.push(run);
+  }
+  runs.sort((a, b) => Math.abs(b.d - b.i) - Math.abs(a.d - a.i));
+  const out = [], have = new Set();
+  for (const r of runs) {
+    const path = r.d > r.i ? r.order.slice(r.i + 1) : r.order.slice(0, r.i).reverse();
+    path.forEach((code, n) => { if (!have.has(code)) { have.add(code); out.push({ code, stops: n + 1 }); } });
+  }
+  return out.sort((a, b) => a.stops - b.stops);
+}
+
+// Does a train to `trainDest` call at `target` on the way? A train that ends
+// at 上水 does not reach 羅湖, and the arrival time used to be worked out from
+// it anyway. A terminus the file cannot place is trusted, as before.
+function mtrTrainReaches(line, station, trainDest, target) {
+  const run = mtrRunOf(line, station, trainDest);
+  if (!run) return true;
+  const path = run.d > run.i ? run.order.slice(run.i + 1, run.d + 1) : run.order.slice(run.d, run.i).reverse();
+  return path.includes(target);
+}
+
+// A TRAIN TAPPED ON THE PLAN: the direction whose trains reach the stop it is
+// going to, chosen as soon as the feed has answered, with the stop marked.
+// Asked of the stations ahead rather than of the strip's two sides, so a stop
+// on a branch (調景嶺 → 坑口 or → 康城) is found whichever train is next.
+function mtrSettleWantOff() {
+  const st = mtrState;
+  if (!st.wantOff || !st.line || st.dir) return;
+  const want = st.wantOff;
+  const d = mtrDirections(st.line).find(x => mtrStationsAhead(st.line, st.station, x.key).some(a => a.code === want));
+  if (d) { st.dir = d.key; st.dest = want; st.wantOff = null; }
 }
 
 function clockIn(minutes) {
@@ -15582,8 +16173,12 @@ function savedRailMarks() {
 
 // The saved places, as one string, for the cache keys of both the map and the
 // screen that wraps it.
+// Each star's train index and name go in too, not just which stations are
+// starred: saving a second train at a starred station, or deleting one in
+// 收藏, renumbers trainFavs without changing the set of stars, and the cached
+// map kept the old numbers — a star at 旺角 then opened a train at 太子.
 function savedRailKey() {
-  return [...savedRailMarks().keys()].sort().join(',');
+  return [...savedRailMarks()].map(([node, mark]) => node + '=' + mark.fav + '=' + mark.name).sort().join(',');
 }
 
 function railNetworkHtml() {
@@ -15871,7 +16466,11 @@ function lrtLineOf(stopId) {
 // pinch the point between the fingers.
 function keepRailNetAt(mx, my) {
   const box = document.getElementById('rmnet');
-  if (!box) return;
+  // Not while the tab is hidden. A box nobody can see measures 0 × 0 and
+  // scrolled to 0, and writing that down sent the map to its empty top-left
+  // corner — which is what a locate answering after the rider had moved to
+  // another tab did. What was remembered stays remembered.
+  if (!box || !box.clientWidth) return;
   const ax = mx === undefined ? box.clientWidth  / 2 : mx;
   const ay = my === undefined ? box.clientHeight / 2 : my;
   railMapView.focus = { px: box.scrollLeft + ax, py: box.scrollTop + ay,
@@ -16635,14 +17234,7 @@ function renderMtrView() {
   // settled here, on the first redraw after the feed answers: the direction
   // lights up and the station it is going to is marked, with the arrival
   // estimate under it, and the rider has tapped nothing.
-  if (st.wantOff && st.line && !st.dir) {
-    const sides = mtrSides(st.line);
-    if (sides) {
-      const at = sides.order.indexOf(st.wantOff);
-      const d = at < 0 ? null : (at < sides.i ? sides.left : sides.right);
-      if (d) { st.dir = d.key; st.dest = st.wantOff; st.wantOff = null; }
-    }
-  }
+  mtrSettleWantOff();
   // A SEARCH ROW AT THE TOP OF THE STATION SCREEN, as the user asked: the pin
   // on the left jumps to the station you are standing at, the box goes
   // straight to any other, and ✕ on the right resets — back to the plan.
@@ -16665,7 +17257,7 @@ function renderMtrView() {
   const here = herePoint ? Math.round(metresBetween(herePoint.lat, herePoint.lng,
                  mtrData.stations[st.station][2], mtrData.stations[st.station][3])) : null;
   html += '<div class="mtrhead"><div class="mtrsub mtrstation">🚇 ' + esc(stationName(st.station)) +
-          (here !== null ? ' <small>' + T('mtrAway').replace('{m}', here) + '</small>' : '') + '</div>' +
+          (here !== null ? ' <small>' + T('mtrAway').replace('{m}', distWords(here)) + '</small>' : '') + '</div>' +
           '<button class="refreshbtn" data-mtr-act="refresh"' + (st.loading ? ' disabled' : '') + '>' +
           T(st.loading ? 'refreshing' : 'refresh') + '</button>' +
           '<button class="refreshbtn" data-mtr-act="change">' + T('mtrChange') + '</button></div>' +
@@ -16742,19 +17334,25 @@ function renderMtrView() {
                 '</div>' + star + '</div>';
         if (ahead.length) {
           html += '<div class="mtrnexts">' +
-            ahead.map((code, i) => '<button class="mtrnext' + (st.dest === code ? ' on' : '') + '" data-mtr-dest="' + code + '">' +
-              '<span class="n">' + (i + 1) + '</span><span class="nm">' + esc(stationName(code)) + '</span></button>').join('') + '</div>';
-          if (st.dest && ahead.includes(st.dest)) {
-            const stops = ahead.indexOf(st.dest) + 1;
+            ahead.map(a => '<button class="mtrnext' + (st.dest === a.code ? ' on' : '') + '" data-mtr-dest="' + a.code + '">' +
+              '<span class="n">' + a.stops + '</span><span class="nm">' + esc(stationName(a.code)) + '</span></button>').join('') + '</div>';
+          const hit = st.dest ? ahead.find(a => a.code === st.dest) : null;
+          if (hit) {
+            const stops = hit.stops;
             const route = railRoute(st.station, st.dest);
             const ride  = Math.max(1, Math.round(route ? route.cost : stops * 2.5));
-            const wait  = trains[0] ? trains[0].min : 0;
+            // The first train that GETS there, not the first train: at 金鐘
+            // late at night every train ends at 上水, and 羅湖 was given an
+            // arrival time from one of them. None of the ones listed: no
+            // arrival line, rather than a wrong one.
+            const reach = trains.find(t => mtrTrainReaches(line, st.station, t.dest, st.dest));
+            const wait  = reach ? reach.min : null;
             const fare  = railFare(st.station, st.dest);
             html += '<div class="mtrsummary"><div class="big">🚉 ' + esc(stationName(st.dest)) + '</div>' +
               '<div class="line">' + (stops === 1 ? T('mtrOneStop') : T('mtrStops').replace('{n}', stops)) +
               ' · ' + T('mtrRide').replace('{m}', ride) + (fare !== null ? ' · ' + fareText(fare) : '') + '</div>' +
-              '<div class="arrive">' + (wait === 0 ? T('mtrArriveNow') : T('mtrArrive').replace('{w}', wait))
-                .replace('{t}', clockIn(wait + ride)) + '</div></div>';
+              (wait === null ? '' : '<div class="arrive">' + (wait === 0 ? T('mtrArriveNow') : T('mtrArrive').replace('{w}', wait))
+                .replace('{t}', clockIn(wait + ride)) + '</div>') + '</div>';
           }
         }
       }
@@ -16984,6 +17582,7 @@ document.getElementById('mtrview').addEventListener('click', event => {
     case 'geo-yes': rememberGeoChoice('yes'); mtrLocate(); break;
     case 'geo-no':  rememberGeoChoice('no'); renderMtrView(); break;
     case 'trips':   showRailResults(); break;
+    case 'mtr-retry': openMtrView(); break;
     case 'star': {
       const entry = { station: mtrState.station, line: mtrState.line, dir: mtrState.dir, dest: d.dest };
       const added = toggleTrainFav(entry);
@@ -17143,8 +17742,11 @@ function routesOnScreen() {
       if (r) out.add(r);
     }
   } else {
-    let list = routesServingAny(group.map(g => g.stop));
-    if (filtering) list = list.filter(r => routeReaches(r.key, r.seq, destIds));
+    // reachingRoutes, as the stop screen asks it: every variant at the pole,
+    // not only the first one listed — a route only a variant takes there was
+    // left out of the routes whose notices matter.
+    let list = filtering ? reachingRoutes(group.map(g => g.stop), destIds).map(x => x.r)
+                         : routesServingAny(group.map(g => g.stop));
     for (const r of list) out.add(String(r.route).toUpperCase());
   }
   return out;
@@ -17177,7 +17779,13 @@ function noteMtrDelay(line, delayed) {
   if (delayed) { if (!alertFlags.mtr[line]) alertFlags.mtr[line] = { since: Date.now() }; }
   else delete alertFlags.mtr[line];
 }
-function noteBusRemarks(rows, stopIds, labelFor) {
+// A route that was ASKED about and has no row at all — the last bus has
+// gone, or a peak-hour route is off for the day — cannot say the trouble is
+// over, nor that it is still on. Half an hour without a word and the flag
+// goes: it used to stay until the route showed a clean row again, so a jam
+// at eight in the morning was still "affecting" the rider's bus that night.
+const BUS_FLAG_STALE_MS = 30 * 60 * 1000;
+function noteBusRemarks(rows, stopIds, labelFor, routesAsked) {
   const byRoute = new Map();
   for (const r of rows) {
     const route = String(r.route || '').toUpperCase();
@@ -17188,8 +17796,16 @@ function noteBusRemarks(rows, stopIds, labelFor) {
   }
   for (const stopId of stopIds) for (const [route, text] of byRoute) {
     const key = route + '|' + stopId;
-    if (text) alertFlags.bus[key] = Object.assign(alertFlags.bus[key] || { since: Date.now() }, { text, label: labelFor(route) });
+    if (text) alertFlags.bus[key] = Object.assign(alertFlags.bus[key] || { since: Date.now() }, { text, label: labelFor(route), heard: Date.now() });
     else delete alertFlags.bus[key];
+  }
+  for (const asked of routesAsked || []) {
+    const route = String(asked || '').toUpperCase();
+    if (!route || byRoute.has(route)) continue;
+    for (const stopId of stopIds) {
+      const key = route + '|' + stopId, f = alertFlags.bus[key];
+      if (f && Date.now() - (f.heard || f.since) > BUS_FLAG_STALE_MS) delete alertFlags.bus[key];
+    }
   }
 }
 // Saved trains and saved buses are not on screen, so they are asked about
@@ -17199,6 +17815,7 @@ async function fetchTrainDelayFlag(line, station) {
   const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
   if (!response.ok) throw new Error('server said ' + response.status);
   const data = await response.json();
+  if (data.status === 0 && typeof data.isdelay !== 'string') return null;   // the feed did not say
   return data.isdelay === 'Y';
 }
 async function checkSavedTrains() {
@@ -17206,14 +17823,17 @@ async function checkSavedTrains() {
   await Promise.all(trainFavs.map(async t => {
     if (done.has(t.line)) return;
     done.add(t.line);
-    try { noteMtrDelay(t.line, await fetchTrainDelayFlag(t.line, t.station)); } catch (error) {}
+    try {
+      const delayed = await fetchTrainDelayFlag(t.line, t.station);
+      if (delayed !== null) noteMtrDelay(t.line, delayed);
+    } catch (error) {}
   }));
 }
 async function checkSavedBuses() {
   await Promise.all(departures.filter(d => d.stop).map(async dep => {
     try {
       const rows = await fetchPoleRows({ stop: dep.stop, name_tc: dep.stopName_tc, name_en: dep.stopName_en });
-      if (Array.isArray(rows)) noteBusRemarks(rows.filter(r => String(r.route).toUpperCase() === String(dep.route).toUpperCase()), [dep.stop], route => T('alertMyBus').replace('{r}', route));
+      if (Array.isArray(rows)) noteBusRemarks(rows.filter(r => String(r.route).toUpperCase() === String(dep.route).toUpperCase()), [dep.stop], route => T('alertMyBus').replace('{r}', route), [dep.route]);
     } catch (error) {}
   }));
 }
@@ -17256,7 +17876,11 @@ function refreshAlerts() {
   currentAlerts = composeAlerts();
   renderWeatherBar();
   const fresh = currentAlerts.filter(a => !alertsSeen[a.key]);
-  if (fresh.length) { showAlertSheet(fresh); rememberSeen(fresh.map(a => a.key)); }
+  // NOT OVER ANOTHER QUESTION. The sheet is shared with "take this bus
+  // anyway?" and "what do you call this place?", and a notice landing on top
+  // wiped the question — its OK then dropped the tap the rider was holding.
+  // Left unseen, the notices come up at the next check after it closes.
+  if (fresh.length && !document.querySelector('#alertsheet.open')) { showAlertSheet(fresh); rememberSeen(fresh.map(a => a.key)); }
 }
 async function checkAlerts() {
   await loadTdNews();
@@ -17437,10 +18061,11 @@ document.getElementById('alertsheet').addEventListener('click', event => {
 // ============================================================
 // WEATHER — Hong Kong Observatory open data
 // ============================================================
-// Two calls: the current report (temperature per weather station, plus any
-// warning headline) and the warning summary. Both are public, both are
-// free, and neither is worth blocking the app for — if the Observatory is
-// unreachable the bar simply does not appear.
+// One call: the warning summary. The current report (rhrread) used to be
+// asked for too, for the temperature chips; with those gone nothing read it,
+// yet it was the one that had to answer — a timeout on it threw away the
+// warnings that had arrived. Public, free, and not worth blocking the app
+// for: if the Observatory is unreachable the bar keeps what it last had.
 //
 // Fetched once on open and refreshed every 10 minutes, never faster: this
 // app's rule is no background chatter, and the Observatory updates hourly.
@@ -17452,22 +18077,29 @@ const WEATHER_REFRESH_MS = 10 * 60 * 1000;
 // question — which Observatory reading describes THIS stop — and nothing
 // left on the bar asks it.
 
+// Each request takes a number and only the newest may paint. A language
+// switch asks again while the last request can still be out, and the old
+// language arriving second used to put its warnings back on the bar.
+let weatherTicket = 0;
+
 async function loadWeather() {
   const langParam = lang === 'zh' ? (script === 'sc' ? 'sc' : 'tc') : 'en';
+  let ticket = 0;
   try {
-    const [report, warnings] = await Promise.all([
-      fetch(HKO_BASE + '?dataType=rhrread&lang=' + langParam,
-            { signal: AbortSignal.timeout(10000) }).then(r => r.ok ? r.json() : null),
-      fetch(HKO_BASE + '?dataType=warnsum&lang=' + langParam,
-            { signal: AbortSignal.timeout(10000) }).then(r => r.ok ? r.json() : null)
-        .catch(() => null)
-    ]);
-    if (!report) throw new Error('no report');
-    weatherData = { report, warnings };
+    ticket = ++weatherTicket;
+    const response = await fetch(HKO_BASE + '?dataType=warnsum&lang=' + langParam,
+                                 { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error('server said ' + response.status);
+    const warnings = await response.json();
+    if (ticket !== weatherTicket) return;      // a newer request owns the bar
+    weatherData = { warnings: warnings && typeof warnings === 'object' ? warnings : {} };
     renderWeatherBar();
   } catch (error) {
+    if (ticket && ticket !== weatherTicket) return;
     // Quietly absent rather than an error the rider cannot act on. The bus
-    // times are the job; the weather is a courtesy.
+    // times are the job; the weather is a courtesy. The warnings already on
+    // the bar stay: one failed request is not news that a black rainstorm
+    // is over, and taking it off said exactly that.
     console.warn('Weather unavailable:', error.message);
     // The bar is redrawn anyway: unreachable usually means no connection,
     // and THAT is worth saying — it explains the missing live times too.
@@ -17677,6 +18309,11 @@ function weatherParts() {
   for (const key of Object.keys(warnings)) {
     const warning = warnings[key];
     if (!warning || !warning.name) continue;
+    // The summary also lists warnings just CANCELLED: actionCode "CANCEL",
+    // and a typhoon signal's code itself becomes "CANCEL". Shown, a black
+    // rainstorm that is over went on telling riders the buses might stop.
+    if (String(warning.actionCode || '').toUpperCase() === 'CANCEL' ||
+        String(warning.code || '').toUpperCase() === 'CANCEL') continue;
     const code = String(warning.code || '');
     // Rainstorm black/red and typhoon 8+ are the ones that stop buses.
     const severe = /^(WRAINB|WRAINR|TC8|TC9|TC10)/.test(code) || /BLACK|RED/i.test(code);
@@ -17713,7 +18350,11 @@ function weatherParts() {
 function showWeatherBar() {
   const bar = document.getElementById('weatherbar');
   bar.style.display = 'flex';
-  document.documentElement.style.setProperty('--wxh', bar.offsetHeight + 'px');
+  // Rounded DOWN, from the real fractional height. The bar is often 40.5px;
+  // offsetHeight (or a ceil) makes that 41 and leaves half a pixel of bare
+  // page between the bar and the panel. Rounded down, the panel's top padding
+  // tucks a fraction under the bar instead, which is drawn above it.
+  document.documentElement.style.setProperty('--wxh', Math.floor(bar.getBoundingClientRect().height) + 'px');
 }
 
 // ============================================================
@@ -17883,13 +18524,14 @@ function renderRouteStops(context, stops) {
   refresh.textContent = T('refresh');
   refresh.addEventListener('click', () => {
     if (!routeStopsState) return;
+    // autoMetres too, or the restored mark wears the redraw's fresh guess.
     const keep = { context: routeStopsState.context, stops: routeStopsState.stops,
                    boardAt: routeStopsState.boardAt, alightAt: routeStopsState.alightAt,
-                   autoBoard: routeStopsState.autoBoard };
+                   autoBoard: routeStopsState.autoBoard, autoMetres: routeStopsState.autoMetres };
     const panel = document.getElementById('panel');
     const scrollWas = panel ? panel.scrollTop : 0;
     renderRouteStops(keep.context, keep.stops);
-    if (routeStopsState) { Object.assign(routeStopsState, { boardAt: keep.boardAt, alightAt: keep.alightAt, autoBoard: keep.autoBoard }); paintStopCounts(); syncRideWatch(); }
+    if (routeStopsState) { Object.assign(routeStopsState, { boardAt: keep.boardAt, alightAt: keep.alightAt, autoBoard: keep.autoBoard, autoMetres: keep.autoMetres }); paintStopCounts(); syncRideWatch(); }
     if (panel) panel.scrollTop = scrollWas;
     status.textContent = T('refreshing');
   });
@@ -18159,7 +18801,7 @@ function paintStopCounts() {
       note.className = 'rsboardtag';
       const st = routeStopsState;
       note.textContent = !st.autoBoard ? T('rsBoarding')
-        : (st.autoMetres > RS_AUTO_BOARD_M ? T('rsBoardNear').replace('{m}', Math.round(st.autoMetres)) : T('rsBoardAuto'));
+        : (st.autoMetres > RS_AUTO_BOARD_M ? T('rsBoardNear').replace('{m}', distWords(st.autoMetres)) : T('rsBoardAuto'));
     } else if (alight !== null && index === alight) {
       note.className = 'rsalighttag';
       note.textContent = T('rsAlight');
@@ -18315,7 +18957,7 @@ function rsLocateNow(asked) {
       const near = nearestRouteStop(herePoint);
       if (!near) return;
       const found = T('rsNearestFound').replace('{s}', rsStopName(near.index))
-                                       .replace('{m}', Math.round(near.metres));
+                                       .replace('{m}', distWords(near.metres));
       // The rider tapped a stop while the phone was still looking — chose
       // one, or cleared the one the app had guessed: their choice stands.
       // The nearest stop is still worth saying, not marking.
@@ -18869,14 +19511,18 @@ function watchForVisibleRows() {
   const box = document.getElementById('routestops');
   if (!box || !routeStopsState) return;
 
+  // Bound to THIS list. Read from the global, a reply for the list just
+  // replaced (更新班次, a language switch, another route) took one off the
+  // new list's count and started one of its rows: eight requests at once,
+  // then twelve, where four was the limit — and KMB refuses bursts.
+  const mine = routeStopsState;
   const pump = () => {
-    while (routeStopsState && routeStopsState.inFlight < 4 && routeStopsState.queue.length) {
-      const row = routeStopsState.queue.shift();
-      routeStopsState.inFlight++;
+    while (routeStopsState === mine && mine.inFlight < 4 && mine.queue.length) {
+      const row = mine.queue.shift();
+      mine.inFlight++;
       loadStopEta(row).finally(() => {
-        if (!routeStopsState) return;
-        routeStopsState.inFlight--;
-        pump();
+        mine.inFlight--;
+        if (routeStopsState === mine) pump();
       });
     }
   };
@@ -19576,8 +20222,8 @@ function resetTrip(opts) {
 // ============================================================
 // LAST OF ALL
 // ============================================================
-// The Observatory, once now and then every ten minutes. Two small requests
-// that never block anything: if they fail the bar simply stays hidden.
+// The Observatory, once now and then every ten minutes. One small request
+// that never blocks anything: if it fails the bar keeps what it last had.
 //
 // This runs at the very bottom, not with the other start-up calls, because
 // its constants are declared further down the file than those calls are —
@@ -19633,7 +20279,17 @@ function stopTick() {
   if (Date.now() - stopLastTouch > STOP_IDLE_MS) return;
   if (document.querySelector('#dirsheet.open, #alertsheet.open')) return;
   const rowsBox = document.getElementById('stop-rows');
-  if (rowsBox) rowsBox.innerHTML = stopRowsHtml();
+  // Only when something on it changed, and never under a focused button.
+  // #stop-rows is a live region: every rewrite was read out again by a screen
+  // reader, every 15 seconds, and a rewrite destroys the button with focus.
+  // Compared through an inert <template>, so both sides are the browser's own
+  // serialisation; 简体 is converted there first, as it is on the page.
+  if (rowsBox && !rowsBox.contains(document.activeElement)) {
+    const probe = document.createElement('template');
+    probe.innerHTML = stopRowsHtml();
+    for (const node of [...probe.content.childNodes]) scConvertTree(node);
+    if (probe.innerHTML !== rowsBox.innerHTML) rowsBox.innerHTML = probe.innerHTML;
+  }
   const typing = document.activeElement && document.activeElement.id === 'stop-filter';
   if (!typing) stopLoadRows();
 }
@@ -20012,18 +20668,29 @@ async function lookupSpotPlaces(query) {
                                  { signal: AbortSignal.timeout(10000) });
     if (!response.ok) throw new Error('server said ' + response.status);
     const json = await response.json();
-    spotPlaces = (Array.isArray(json) ? json : []).slice(0, 6).map(entry => ({
+    const found = (Array.isArray(json) ? json : []).slice(0, 6).map(entry => ({
       name: (lang === 'zh' ? entry.nameZH : entry.nameEN) || entry.nameEN || entry.nameZH || typed,
       sub:  (lang === 'zh' ? entry.addressZH : entry.addressEN) || '',
       ...placeLatLngOrNaN(entry.x, entry.y),
     })).filter(place => isFinite(place.lat) && isFinite(place.lng));
+    if (!spotStillAsking(typed)) return;
+    spotPlaces = found;
     spotPlacesFor = typed;
   } catch (error) {
     // The bundled matches are already on screen, so a failure here costs the
     // rider nothing they can see.
     console.warn('Place lookup unavailable:', error);
+    if (!spotStillAsking(typed)) return;
     spotPlaces = []; spotPlacesFor = '';
   }
+}
+// ONLY WHILE IT IS STILL THE QUESTION.
+// The typing goes on while the gazetteer answers. A slow answer to "IF" that
+// lands after the answer to "IFC" used to take its place — or, timing out,
+// empty it — and the next redraw (the hotel list arriving, say) then showed
+// neither. An answer to anything but what is in the box now is dropped.
+function spotStillAsking(typed) {
+  return String(spotQuery || '').trim() === typed;
 }
 
 // FROM WHERE YOU ARE STANDING TO THERE, BY BUS OR BY TRAIN.
@@ -20038,6 +20705,13 @@ function planFromHere(lat, lng, label) {
     routeFromMap = true;
     setPoint('start', here.lat, here.lng, T('myLocationLabel'));
     setPoint('end', Number(lat), Number(lng), label || '');
+    // WHAT IS COMPARED BELOW HAS TO BE THIS SEARCH'S.
+    // findBuses gives up early when no stop is within a walk of either end
+    // (110 of the places are like that) or when a search is already running,
+    // and the last trip's options were then still in these lists: a reservoir
+    // dam could open on the PREVIOUS trip's train. Emptied first, an early
+    // return leaves nothing to compare; a real search fills them again.
+    busPicks = []; railPicks = []; railOptions = [];
     findBuses().then(() => {
       // OPEN ON WHICHEVER ACTUALLY GETS THEM THERE.
       // findBuses always lands on the bus when there is one, which is the
@@ -20122,10 +20796,12 @@ function goToSpot(s) {
 
 // --------------------------------------------------------- the place sheet
 let spotSheetFor = null;
+let hereSheetFor = null;       // the point the 📍 sheet is about, while it is open
 
 function openSpotSheet(s) {
   if (!s) return;
   spotSheetFor = s;
+  hereSheetFor = null;
   const card = document.getElementById('spotcard');
   if (!card) return;
   card.innerHTML = '<div class="sheetgrip" aria-hidden="true"></div>' + spotCardHtml(s);
@@ -20184,6 +20860,7 @@ function openSpotSheet(s) {
 
 function closeSpotSheet() {
   spotSheetFor = null;
+  hereSheetFor = null;
   const sheet = document.getElementById('spotsheet');
   if (sheet) sheet.classList.remove('open');
 }
@@ -20267,6 +20944,25 @@ async function ensureSpotNetwork() {
   ]);
   await buildIndexes().catch(error => console.warn('Index unavailable:', error));
   if (stopIndex) addOperatorsToIndexes();
+}
+
+// ONE LOAD FOR BOTH SHEETS, AND WHATEVER IS OPEN WHEN IT LANDS IS REDRAWN.
+// The place card and the 📍 sheet share this load (spotIndexing), and each
+// used to redraw only itself when it finished. Tap 📍, then a place near
+// you: the place card was drawn from the half-loaded network — no Citybus,
+// so "no stop within a short walk" at the Peak again — and the finished load
+// then answered a 📍 sheet that had gone. Still one attempt per open, and a
+// redraw only when the attempt brought something back.
+function spotNetworkLoad() {
+  if (spotIndexing || (stopIndex && ctbStops.length)) return;
+  spotIndexing = true;
+  const had = spotNetworkSize();
+  ensureSpotNetwork().then(() => {
+    spotIndexing = false;
+    if (spotNetworkSize() <= had) return;
+    if (spotSheetFor) loadSpotTransport(spotSheetFor);
+    else if (hereSheetFor) loadHereTransport(hereSheetFor);
+  });
 }
 
 // The nearest bus stops as STOPS rather than as poles. poleGroup is the same
@@ -20383,15 +21079,8 @@ async function loadSpotTransport(s) {
   // network, redraws, loads the network, redraws, for ever. 168,000 console
   // lines in one sitting while testing, and on a phone that is the battery.
   // One attempt per open, and the redraw happens only when the attempt
-  // brought something back.
-  if (!spotIndexing && (!stopIndex || !ctbStops.length)) {
-    spotIndexing = true;
-    const had = spotNetworkSize();
-    ensureSpotNetwork().then(() => {
-      spotIndexing = false;
-      if (spotNetworkSize() > had && spotSheetFor === s) loadSpotTransport(s);
-    });
-  }
+  // brought something back. (spotNetworkLoad, shared with the 📍 sheet.)
+  spotNetworkLoad();
 
   const box = () => (spotSheetFor === s ? document.getElementById('spotgo') : null);
   if (!box()) return;
@@ -20503,13 +21192,14 @@ function showHere(point) {
 
 function openHereSheet(point) {
   spotSheetFor = null;
+  hereSheetFor = point;
   const card = document.getElementById('spotcard');
   if (!card) return;
   const accuracy = Math.round(Number(point.accuracy) || 0);
   card.innerHTML =
     '<div class="spothead"><span class="sh-icon">📍</span>' +
       '<span class="sh-name"><b>' + T('hereTitle') + '</b>' +
-      (accuracy ? '<small>' + T('hereAccuracy').replace('{m}', accuracy) + '</small>' : '') +
+      (accuracy ? '<small>' + T('hereAccuracy').replace('{m}', distWords(accuracy)) + '</small>' : '') +
       '</span></div>' +
     '<div class="spotgohead">' + T('hereSpots') + '</div>' +
     '<div id="herego"><div class="spotwait">' + T('spotFinding') + '</div></div>' +
@@ -20519,14 +21209,7 @@ function openHereSheet(point) {
 }
 
 async function loadHereTransport(point) {
-  if (!spotIndexing && (!stopIndex || !ctbStops.length)) {
-    spotIndexing = true;
-    const had = spotNetworkSize();          // see loadSpotTransport above
-    ensureSpotNetwork().then(() => {
-      spotIndexing = false;
-      if (spotNetworkSize() > had && document.getElementById('herego')) loadHereTransport(point);
-    });
-  }
+  spotNetworkLoad();                        // see loadSpotTransport above
   const box = () => document.getElementById('herego');
   if (!box()) return;
 
@@ -20993,10 +21676,18 @@ function bugLoadShooter() {
 // (bugHold), and a picture that never finishes must not leave it held.
 const BUG_SHOT_MAX_MS = 15000;
 async function bugCapture() {
-  const shooter = await bugLoadShooter();
-  if (!shooter) return null;
   let timer = 0;
+  // The clock starts BEFORE the tool is fetched. Since each new version
+  // empties the app's cache, the first report after an update fetches
+  // html2canvas again — and on a connection that is up but going nowhere
+  // (a tunnel, a hotel's sign-in page) that fetch can hang for a minute,
+  // with every tap held.
+  const deadline = new Promise((resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('took over ' + BUG_SHOT_MAX_MS / 1000 + ' s')), BUG_SHOT_MAX_MS);
+  });
   try {
+    const shooter = await Promise.race([bugLoadShooter(), deadline]);
+    if (!shooter) return null;
     return await Promise.race([
       shooter(document.body, {
         useCORS: true, logging: false, backgroundColor: '#ffffff', imageTimeout: 4000,
@@ -21005,9 +21696,7 @@ async function bugCapture() {
         windowWidth: window.innerWidth, windowHeight: window.innerHeight,
         ignoreElements: el => el.id === 'bugbtn' || el.id === 'bugshot' || el.id === 'bugsheet',
       }),
-      new Promise((resolve, reject) => {
-        timer = setTimeout(() => reject(new Error('took over ' + BUG_SHOT_MAX_MS / 1000 + ' s')), BUG_SHOT_MAX_MS);
-      }),
+      deadline,
     ]);
   } catch (e) {
     bugNoteError('screenshot failed: ' + (e && e.message ? e.message : e), 'bugCapture');
@@ -21302,14 +21991,20 @@ function bugPaintVoice() {
 // phone's own memory. iPhones record AAC (audio/mp4), Android/Chrome Opus.
 async function bugStartRecording() {
   const d = bugDraft;
-  if (!d || d.recorder) return;
+  if (!d || d.recorder || d.recAsking) return;
   bugSheetSay('');
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
     bugSheetSay(T('bugNoMic')); return;
   }
+  // ONE ASK AT A TIME. The 🎙 button stays as it is until the phone hands
+  // over the microphone, so a double tap asked twice and started two
+  // recorders: only the second was ever stopped, and the first kept the
+  // microphone — and its red light — on until the app was closed.
+  d.recAsking = true;
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
   catch (e) { bugSheetSay(T(e && e.name === 'NotAllowedError' ? 'bugMicDenied' : 'bugNoMic')); return; }
+  finally { d.recAsking = false; }
   if (bugDraft !== d) { stream.getTracks().forEach(t => t.stop()); return; }   // cancelled meanwhile
   const type = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
     .find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
@@ -21413,6 +22108,10 @@ async function bugSave() {
   bugPaintList();
   if (!BUG_INBOX_URL) { status.textContent = T('bugNoInbox'); return; }
   if (!navigator.onLine) { status.textContent = T('bugSavedOffline'); return; }
+  // A send already under way read its list before this report was stored,
+  // and would have left it waiting until the app is next opened. Let that
+  // send finish, then go again.
+  if (bugSending) await bugSending.catch(() => {});
   bugSendAll(true);
 }
 

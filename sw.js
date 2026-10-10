@@ -43,7 +43,7 @@
    halfway through reading.
    ========================================================================= */
 
-const VERSION = 'gohk-2026-10-10b';
+const VERSION = 'gohk-2026-10-10c';
 const CACHE   = VERSION;
 
 // Fetched at install, before the app is ever called ready. Kept small on
@@ -113,8 +113,12 @@ self.addEventListener('install', event => {
 // ----------------------------------------------------------------- activate
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
+    // Only OUR old caches. Cache storage belongs to the whole origin —
+    // agsm26.github.io also hosts Car Park HK — and deleting every name but
+    // ours wiped the other app's offline copy (and its worker did the same to
+    // ours, so GoHK opened to "Offline" on a platform with no signal).
     for (const name of await caches.keys()) {
-      if (name !== CACHE) await caches.delete(name);
+      if (name !== CACHE && name.startsWith('gohk-')) await caches.delete(name);
     }
     await self.clients.claim();
   })());
@@ -153,41 +157,63 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // The page asked for a fresh copy (mtr.json, cache:'no-cache', because new
+  // code reading old station data priced every trip as undefined): honour it,
+  // with the stored copy only as the offline fallback. Answered from storage,
+  // a deploy got the new page with the old worker's old data.
+  if (sameOrigin && (request.cache === 'no-cache' || request.cache === 'reload')) {
+    event.respondWith(networkFirst(request, true));
+    return;
+  }
+
   if (sameOrigin || STORABLE_HOSTS.has(url.hostname)) {
-    event.respondWith(cacheFirst(request));
+    // Started here, not inside cacheFirst, so the worker can be told to stay
+    // alive until the refresh is stored — otherwise the browser may stop it
+    // the moment the stored copy has been handed over.
+    const refresh = fetchAndStore(request);
+    event.waitUntil(refresh);
+    event.respondWith(cacheFirst(request, refresh));
   }
 });
 
 
-async function networkFirst(request) {
+// `dataFile`: a data file, not the page — offline it falls back to its own
+// stored copy only, never to gohk.html.
+async function networkFirst(request, dataFile) {
   const cache = await caches.open(CACHE);
   try {
     const response = await fetch(request);
-    if (keepable(response)) cache.put(request, response.clone());
+    if (keepable(response)) await cache.put(request, response.clone());
     return response;
   } catch (e) {
     // Offline. Any stored copy of this exact page, then the page we know we
     // stored at install — a rider opening the app from their home screen with
     // no signal must land on the app, not on the browser's dinosaur.
     return (await cache.match(request))
-        || (await cache.match('./gohk.html'))
+        || (dataFile ? null : await cache.match('./gohk.html'))
         || new Response('Offline', { status: 503, statusText: 'Offline' });
   }
+}
+
+// One network fetch, stored if it is worth keeping. Resolves to the response
+// (or null offline) only once the copy is in the cache.
+function fetchAndStore(request) {
+  return fetch(request).then(async response => {
+    if (keepable(response)) {
+      const cache = await caches.open(CACHE);
+      await cache.put(request, response.clone());
+    }
+    return response;
+  }).catch(() => null);
 }
 
 // Stored copy first, then quietly refresh it for next time. The route, fare
 // and station files are day-stamped by the app itself in IndexedDB, so being
 // one load behind costs nothing, and answering from storage is what makes the
 // app open instantly instead of waiting on 2 MB of route data.
-async function cacheFirst(request) {
+async function cacheFirst(request, fromNetwork) {
   const cache = await caches.open(CACHE);
   const stored = await cache.match(request);
-
-  const fromNetwork = fetch(request).then(response => {
-    if (keepable(response)) cache.put(request, response.clone());
-    return response;
-  }).catch(() => null);
-
   if (stored) return stored;
 
   const fresh = await fromNetwork;
